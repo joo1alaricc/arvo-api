@@ -36,5 +36,6 @@ const tile = (n, color = '') => `<span class="ico ${color}">${ico(n)}</span>`
 const flash = (btn, text = 'Tersalin') => { const o = btn.innerHTML; btn.innerHTML = ico('check') + (btn.dataset.txt === '1' ? ' ' + text : ''); setTimeout(() => (btn.innerHTML = o), 1500) }
 const fmtDT = (t) => (t ? new Date(t).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '–')
 const toast = (t) => {
-  const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 2600)
+  const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.append(d)
+  setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 300) }, 2400)
 }
