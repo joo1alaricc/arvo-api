@@ -109,8 +109,8 @@ svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .pc-top .badge.vip{color:#e6b422;border-color:#e6b422}
 .pc-mid{display:flex;flex-direction:column;align-items:center;text-align:center;padding:10px 0 2px}
 .pc-photo{position:relative;width:88px;height:88px;margin:6px 0 2px}
-.pc-ring{position:absolute;inset:-5px;border-radius:50%;background:var(--ring);animation:spin 3.2s linear infinite;will-change:transform}
-.pc-img{position:relative;width:100%;height:100%;border-radius:50%;overflow:hidden;display:grid;place-items:center;border:3px solid var(--card);background:linear-gradient(135deg,var(--ac),#e16bff);transition:opacity .4s,filter .4s,border-color .25s}
+.pc-ring{position:absolute;inset:-3px;border-radius:50%;background:var(--ring);animation:spin 3.2s linear infinite;will-change:transform}
+.pc-img{position:relative;width:100%;height:100%;border-radius:50%;overflow:hidden;display:grid;place-items:center;border:2px solid var(--card);background:linear-gradient(135deg,var(--ac),#e16bff);transition:opacity .4s,filter .4s,border-color .25s}
 .pc-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;-webkit-user-select:none;user-select:none;animation:imgIn .6s var(--ease) both}
 @keyframes imgIn{from{opacity:0;transform:scale(1.1)}to{opacity:1;transform:none}}
 .pc-ini{font:800 36px/1 inherit;color:#fff;text-transform:uppercase}
@@ -120,9 +120,10 @@ svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .pc-hi{margin:12px 0 2px;color:var(--mut);font-size:12.5px;font-weight:600}
 .pc-name{display:flex;align-items:center;justify-content:center;gap:6px;max-width:100%;font-size:21px;font-weight:800;line-height:1.2;letter-spacing:-.01em;margin:0 0 8px}
 .pc-name .nm{overflow-wrap:anywhere}
-.pc-name.gold .nm{background:linear-gradient(110deg,#a8780a 25%,#ffe27a 42%,#fffbe0 50%,#ffe27a 58%,#a8780a 75%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:goldShine 3s linear infinite}
-[data-theme=light] .pc-name.gold .nm{background-image:linear-gradient(110deg,#7a5200 25%,#c88a00 42%,#f2c230 50%,#c88a00 58%,#7a5200 75%);background-size:250% 100%}
-@keyframes goldShine{from{background-position:150% 0}to{background-position:-100% 0}}
+@property --gp{syntax:'<percentage>';inherits:false;initial-value:-30%}
+.pc-name.gold .nm{--gp:50%;--gb:#c8920a;--gh:#fff4bf;background-image:linear-gradient(110deg,var(--gb) calc(var(--gp) - 28%),var(--gh) var(--gp),var(--gb) calc(var(--gp) + 28%));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:goldShine 3.2s ease-in-out infinite}
+[data-theme=light] .pc-name.gold .nm{--gb:#8a5d00;--gh:#f2c230}
+@keyframes goldShine{0%{--gp:-30%}70%,100%{--gp:130%}}
 .pc-chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:0 0 6px;max-width:100%}
 .pc-chips .chip{display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:4px 10px;border-radius:999px;font:500 12px 'JetBrains Mono',monospace;overflow-wrap:anywhere;color:var(--blue);background:color-mix(in srgb,var(--tx) 6%,transparent);border:1px solid var(--line)}
 .pc-chips .chip .i{width:13px;height:13px;flex:none}
@@ -145,3 +146,12 @@ svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .pf{display:grid;gap:4px;margin:2px 0 10px;font-size:12.5px;color:var(--mut)}.pf b{color:var(--tx)}
 .sub-tag{font-size:11.5px;color:var(--mut);display:block;font-weight:400;line-height:1.3}
 @media(prefers-reduced-motion:reduce){.pc-ring,.vb,.vb .shine,.pc-name.gold .nm{animation:none}}
+
+/* grafik pemakaian 14 hari */
+.chart{display:flex;gap:4px;align-items:stretch;height:130px;margin:10px 0 12px}
+.cb{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px}
+.cb .cv{font-size:10px;color:var(--mut);height:13px;line-height:13px}.cb em{font-style:normal;font-size:10px;color:var(--mut);height:13px;line-height:13px}
+.cb .bw{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center}
+.cb i{display:block;width:100%;max-width:20px;background:var(--ac);border-radius:4px 4px 0 0;min-height:2px;opacity:.85;transform-origin:bottom;animation:growY .8s var(--ease) both}
+.cb.today i{background:var(--g);opacity:1}.cb.today em{color:var(--tx);font-weight:700}
+@keyframes growY{from{transform:scaleY(0)}}
