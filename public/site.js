@@ -9,13 +9,15 @@ document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => {
 $('#snip').textContent = SN.curl
 
 fetch('/docs').then(async (r) => {
-  const l = r.headers.get('x-ratelimit-limit'), m = r.headers.get('x-ratelimit-remaining')
-  $('#s-rl').textContent = l === 'UNLIMITED' ? 'Unlimited' : m ? `${m}/${l}` : '–'
   $('#s-ep').textContent = Object.keys((await r.json()).paths || {}).length
   $('#dot').className = 'dot up'; $('#status').textContent = 'Semua sistem berjalan'
 }).catch(() => { $('#dot').className = 'dot down'; $('#status').textContent = 'Server tidak dapat dijangkau' })
 let session = {}
-ready.then((s) => { session = s; $('#s-ip').textContent = s.who.ip })
+ready.then((s) => {
+  session = s; $('#s-ip').textContent = s.who.ip
+  const q = s.who.quota
+  $('#s-rl').textContent = !q ? '–' : q.unlimited ? 'Unlimited' : `${q.remaining}/${q.limit}`
+})
 
 const price = (p, d, perm) => perm ? p.permanentPrice : Math.max(1000, Math.ceil(p.basePrice * d / p.baseDays / 100) * 100)
 const feats = (p) => [
