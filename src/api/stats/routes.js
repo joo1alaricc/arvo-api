@@ -1,31 +1,30 @@
 import { createRoute, z } from '@hono/zod-openapi'
-import os from 'os'
 
 export const statsRoute = createRoute({
     method: 'get',
     path: '/api/stats',
     tags: ['stats'],
-    description: 'Get detailed server system information (CPU, RAM, OS, etc)',
+    description: 'Get runtime information exposed by the Cloudflare Workers platform.',
     'x-status': 'ONLINE',
     responses: {
         200: {
             content: {
                 'application/json': {
                     schema: z.object({
-                        status: z.string().openapi({ example: 'online' }),
+                        status: z.string(),
                         system: z.object({
                             platform: z.string(),
                             release: z.string(),
                             type: z.string(),
                             arch: z.string(),
                             hostname: z.string(),
-                            uptime: z.string()
+                            uptime: z.string(),
                         }),
                         cpu: z.object({
                             model: z.string(),
                             speed: z.string(),
                             cores: z.number(),
-                            load_avg: z.array(z.number())
+                            load_avg: z.array(z.number()),
                         }),
                         memory: z.object({
                             total: z.string(),
@@ -33,86 +32,67 @@ export const statsRoute = createRoute({
                             used: z.string(),
                             active_process_rss: z.string(),
                             heap_total: z.string(),
-                            heap_used: z.string()
+                            heap_used: z.string(),
                         }),
-                        network: z.record(z.array(z.object({
+                        network: z.record(z.string(), z.array(z.object({
                             address: z.string(),
                             netmask: z.string(),
                             family: z.string(),
                             mac: z.string(),
-                            internal: z.boolean()
+                            internal: z.boolean(),
                         }))),
                         process: z.object({
                             pid: z.number(),
                             node_version: z.string(),
                             uptime: z.string(),
-                            title: z.string()
+                            title: z.string(),
                         }),
                         time: z.string(),
-                        date: z.string()
+                        date: z.string(),
                     }),
                 },
             },
-            description: 'Retrieve detailed server statistics',
+            description: 'Retrieve Cloudflare Workers runtime information. Host-level CPU, memory, and network-interface metrics are not exposed by Workers.',
         },
     },
 })
 
 export const statsHandler = (c) => {
-
-    const formatUptime = (seconds) => {
-        const d = Math.floor(seconds / (3600 * 24))
-        const h = Math.floor(seconds % (3600 * 24) / 3600)
-        const m = Math.floor(seconds % 3600 / 60)
-        const s = Math.floor(seconds % 60)
-        return `${d}d ${h}h ${m}m ${s}s`
-    }
-
-    const formatBytes = (bytes) => `${(bytes / 1024 / 1024).toFixed(2)} MB`
-
-    const cpus = os.cpus()
-    const cpuModel = cpus[0].model
-    const cpuSpeed = `${cpus[0].speed} MHz`
-    const cpuCores = cpus.length
-
-    const totalMem = os.totalmem()
-    const freeMem = os.freemem()
-    const usedMem = totalMem - freeMem
-    const processMem = process.memoryUsage()
-
+    const now = new Date()
+    const unavailable = 'Not exposed by Cloudflare Workers'
     const data = {
         status: 'online',
         system: {
-            platform: os.platform(),
-            release: os.release(),
-            type: os.type(),
-            arch: os.arch(),
-            hostname: os.hostname(),
-            uptime: formatUptime(os.uptime())
+            platform: 'cloudflare',
+            release: 'Workers Runtime',
+            type: 'Cloudflare Workers',
+            arch: 'managed',
+            hostname: new URL(c.req.url).hostname,
+            uptime: 'Not exposed by Cloudflare Workers',
         },
         cpu: {
-            model: cpuModel,
-            speed: cpuSpeed,
-            cores: cpuCores,
-            load_avg: os.loadavg()
+            model: 'Cloudflare Workers Runtime',
+            speed: 'Not exposed',
+            cores: 1,
+            load_avg: [0, 0, 0],
         },
         memory: {
-            total: formatBytes(totalMem),
-            free: formatBytes(freeMem),
-            used: formatBytes(usedMem),
-            active_process_rss: formatBytes(processMem.rss),
-            heap_total: formatBytes(processMem.heapTotal),
-            heap_used: formatBytes(processMem.heapUsed)
+            total: unavailable,
+            free: unavailable,
+            used: unavailable,
+            active_process_rss: unavailable,
+            heap_total: unavailable,
+            heap_used: unavailable,
         },
-        network: os.networkInterfaces(),
+        network: {},
         process: {
-            pid: process.pid,
-            node_version: process.version,
-            uptime: formatUptime(process.uptime()),
-            title: process.title
+            pid: 0,
+            node_version: 'Not applicable',
+            uptime: 'Per-request isolate',
+            title: 'Cloudflare Workers',
         },
-        time: new Date().toLocaleTimeString('id-ID', { hour12: false }),
-        date: new Date().toLocaleDateString('id-ID')
+        time: now.toLocaleTimeString('id-ID', { hour12: false, timeZone: 'Asia/Jakarta' }),
+        date: now.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' }),
     }
 
     return c.json(data, 200)
