@@ -15,8 +15,6 @@ const FIELDS = {
   password: { label: 'Password', icon: 'lock', color: 'amber', show: () => (me.has_password ? '••••••••' : muted('Belum dibuat (akun Google)')),
     inputs: () => [...(me.has_password ? [{ id: 'cp', type: 'password', ph: 'Password lama', ac: 'current-password' }] : []), { id: 'np', type: 'password', ph: 'Password baru (min. 8)', ac: 'new-password' }],
     save: (v) => put('/auth/me/password', { current_password: v.cp, new_password: v.np }) },
-  avatar_url: { label: 'Profile Photo', icon: 'image', color: 'amber', mono: 1, show: () => (me.avatar_url ? esc(me.avatar_url) : muted('Belum diatur')), inputs: () => [{ id: 'v', value: me.avatar_url || '', ph: 'https://…/foto.png (kosongkan untuk hapus)' }], save: profileSave('avatar_url') },
-  banner_url: { label: 'Banner Photo', icon: 'image', color: 'amber', mono: 1, show: () => (me.banner_url ? esc(me.banner_url) : muted('Belum diatur')), inputs: () => [{ id: 'v', value: me.banner_url || '', ph: 'https://…/banner.jpg (kosongkan untuk hapus)' }], save: profileSave('banner_url') },
   api_key: { label: 'API Key', icon: 'key', mono: 1, show: () => `<span id="kv">${esc(reveal ? me.api_key : maskKey(me.api_key))}</span>`, edit: () => me.custom_key,
     btns: () => `<button class="ib" data-eye aria-label="Tampilkan key">${ico(reveal ? 'eyeoff' : 'eye')}</button><button class="ib" data-copyk aria-label="Salin key">${ico('copy')}</button>`,
     inputs: () => [{ id: 'v', value: me.api_key, ph: '10-40 karakter: huruf, angka, _ atau -' }], save: (v) => put('/auth/me/key', { new_key: v.v }) },
@@ -77,19 +75,91 @@ const panelManage = () => `<div class="danger-box">${tile('userx', 'red')}<h4>Ha
 
 const TABS = [['events', 'gift', 'Events', panelEvents], ['settings', 'shield', 'Settings', panelSettings], ['manage', 'userx', 'Management', panelManage]]
 
+/* ---------- kartu profil: foto bulat di tengah, aksen latar mengikuti warna foto ---------- */
+const DESC = 'API simpel dan cepat. Mulai gratis, upgrade ke Premium atau VIP kapan saja.'
+const hueOf = (t) => [...t].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 360, 7)
+
+const photoRow = () => `<div class="field" data-f="photo">${tile('image', 'amber')}<div class="fb"><small>Foto profil</small><div class="fv" id="phv">${photoText()}</div></div>
+  <button class="ib" data-pick aria-label="Pilih file foto" title="Pilih file">${ico('folder')}</button><button class="ib" data-rmphoto aria-label="Hapus foto" title="Hapus foto" ${me.avatar_url ? '' : 'hidden'}>${ico('trash')}</button></div><p class="fmsg" id="fm-photo"></p>`
+const photoText = () => (me.avatar_url ? 'Foto dari file kamu' : muted('Belum ada. Pilih file JPG, PNG, atau WebP'))
+
+function setAccent(card, h, s) {
+  card.style.setProperty('--ph', h); card.style.setProperty('--ps', s + '%')
+}
+function paintCard() {
+  const card = $('#pcard'), box = $('#pimg'); if (!card || !box) return
+  const fallback = () => { box.innerHTML = `<span class="pc-ini">${esc(me.username[0])}</span>`; card.style.removeProperty('--img'); setAccent(card, hueOf(me.username), 72) }
+  if (!me.avatar_url) return fallback()
+  const im = new Image()
+  if (!me.avatar_url.startsWith('/')) im.crossOrigin = 'anonymous'
+  im.onload = () => {
+    box.innerHTML = ''; im.alt = ''; im.draggable = false; box.append(im)
+    card.style.setProperty('--img', `url("${me.avatar_url}")`)
+    const a = accentOf(im); a ? setAccent(card, a.h, a.s) : setAccent(card, hueOf(me.username), 18)
+    card.classList.add('has-img')
+  }
+  im.onerror = fallback
+  im.src = me.avatar_url
+}
+
+/* sedikit miring mengikuti kursor (hanya perangkat dengan mouse) */
+function tiltCard() {
+  const c = $('#pcard'); if (!c || !matchMedia('(hover:hover) and (pointer:fine)').matches || matchMedia('(prefers-reduced-motion:reduce)').matches) return
+  c.onpointermove = (e) => { const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5
+    c.style.setProperty('--rx', (-y * 4).toFixed(2) + 'deg'); c.style.setProperty('--ry', (x * 5).toFixed(2) + 'deg'); c.style.setProperty('--mx', (x * 100 + 50).toFixed(1) + '%'); c.style.setProperty('--my', (y * 100 + 50).toFixed(1) + '%') }
+  c.onpointerleave = () => { c.style.setProperty('--rx', '0deg'); c.style.setProperty('--ry', '0deg') }
+}
+
+/* potong tengah jadi persegi 320px lalu kompres, supaya ringan disimpan */
+const toAvatar = (file) => new Promise((res, rej) => {
+  if (!/^image\//.test(file.type)) return rej(new Error('File harus berupa gambar.'))
+  if (file.size > 15 * 1024 * 1024) return rej(new Error('Ukuran file maksimal 15 MB.'))
+  const url = URL.createObjectURL(file), im = new Image()
+  im.onload = () => {
+    const s = Math.min(im.naturalWidth, im.naturalHeight), c = document.createElement('canvas'); c.width = c.height = 320
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, 320, 320)
+    x.drawImage(im, (im.naturalWidth - s) / 2, (im.naturalHeight - s) / 2, s, s, 0, 0, 320, 320); URL.revokeObjectURL(url)
+    let q = 0.88, out = c.toDataURL('image/jpeg', q)
+    while (out.length > 150000 && q > 0.45) out = c.toDataURL('image/jpeg', (q -= 0.1))
+    res(out)
+  }
+  im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('File gambar tidak bisa dibaca.')) }
+  im.src = url
+})
+async function refreshPhoto(msg) {
+  me = await api('/auth/me'); paintCard()
+  const t = $('#phv'); if (t) t.innerHTML = photoText()
+  const rm = el.querySelector('[data-rmphoto]'); if (rm) rm.hidden = !me.avatar_url
+  if (msg) toast(msg)
+}
+async function pickPhoto(file) {
+  if (!file) return
+  const card = $('#pcard'); card.classList.add('busy')
+  try { await put('/auth/me/avatar', { data: await toAvatar(file) }); await refreshPhoto('Foto profil diperbarui') }
+  catch (e) { fsay('fm-photo', e.message, 1); toast(e.message) }
+  card.classList.remove('busy'); $('#pf').value = ''
+}
+
 /* ---------- render utama ---------- */
 async function render() {
   me = await api('/auth/me')
+  const joined = new Date(me.created_at || Date.now())
   const pct = me.daily_limit ? Math.min(100, (me.used_today / me.daily_limit) * 100) : 0
   el.innerHTML = `
-  <section class="card hero-c">
-    <div class="banner">${me.banner_url ? `<img data-fb src="${esc(me.banner_url)}" alt="" referrerpolicy="no-referrer">` : ''}</div>
-    <div class="hero-b">
-      <div class="avatar">${esc(me.username[0])}${me.avatar_url ? `<img data-fb src="${esc(me.avatar_url)}" alt="" referrerpolicy="no-referrer">` : ''}</div>
-      <div class="hname"><h1>${esc(me.username)}</h1><span class="badge ${me.role}">${me.role === 'member' ? 'Free User' : esc(me.plan_name || me.role)}</span></div>
-      <p class="since">Sejak ${fmtDate(me.created_at)}${me.email ? ' · ' + esc(me.email) : ''}</p>
-      <div class="row"><a class="btn go sm" href="/#paket">${ico('bag')} ${me.active ? 'Perpanjang paket' : 'Lihat paket'}</a><a class="btn ghost sm" href="/playground.html">${ico('play')} Playground</a><button class="btn ghost sm" id="out">${ico('logout')} Keluar</button></div>
+  <section class="pcard" id="pcard">
+    <div class="pc-bg"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div>
+    <div class="pc-top"><span class="pc-brand"><span class="logo">${LOGO}</span>Arvo</span><span class="badge ${me.role}">${me.role === 'member' ? 'Free User' : esc(me.plan_name || me.role)}</span></div>
+    <div class="pc-mid">
+      <div class="pc-photo"><span class="pc-halo"></span><div class="pc-img" id="pimg"></div><button class="pc-cam" data-pick aria-label="Ganti foto profil">${ico('camera')}</button></div>
+      <h1 class="pc-name">${esc(me.username.toUpperCase())}</h1>
+      <p class="pc-desc">${esc(DESC)}</p>
     </div>
+    <div class="pc-foot">
+      <div><small>Bergabung</small><b>${joined.getFullYear()}</b></div>
+      <div class="r"><small>Tanggal</small><b>${joined.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}</b></div>
+    </div>
+    <div class="pc-act"><a class="btn go sm" href="/#paket">${ico('bag')} ${me.active ? 'Perpanjang paket' : 'Lihat paket'}</a><a class="btn ghost sm" href="/playground.html">${ico('play')} Playground</a><button class="btn ghost sm" id="out">${ico('logout')} Keluar</button></div>
+    <input type="file" id="pf" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
   </section>
 
   <section class="card"><div class="card-h">${ico('trend')} Request Metrics</div><div class="card-b">
@@ -106,7 +176,7 @@ async function render() {
   <div class="dash-grid">
     <div>
       <section class="card"><div class="card-h">${ico('user')} Personal Info</div><div class="card-b">
-        <div class="sec">Account</div>${['username', 'email', 'phone', 'password', 'avatar_url', 'banner_url'].map(row).join('')}
+        <div class="sec">Account</div>${['username', 'email', 'phone', 'password'].map(row).join('')}${photoRow()}
         <div class="sec" style="margin-top:18px">API</div>${row('api_key')}
         ${me.custom_key ? '' : '<p class="hint" style="margin-top:-2px">Custom API key tersedia di Premium 2 ke atas.</p>'}
         ${READONLY.map(roRow).join('')}
@@ -121,7 +191,7 @@ async function render() {
     </div>
   </div>`
 
-  el.querySelectorAll('img[data-fb]').forEach((i) => (i.onerror = () => i.remove()))
+  paintCard(); tiltCard()
   wireTabs(); loadSide(); loadTrial()
 }
 
@@ -202,7 +272,11 @@ el.onclick = async (e) => {
   else if ('eye' in t.dataset) { reveal = !reveal; $('#kv').textContent = reveal ? me.api_key : maskKey(me.api_key); t.innerHTML = ico(reveal ? 'eyeoff' : 'eye') }
   else if ('copyk' in t.dataset) navigator.clipboard.writeText(me.api_key).then(() => flash(t))
   else if (t.dataset.delip) { t.disabled = true; try { await api('/auth/me/ips/' + encodeURIComponent(t.dataset.delip), { method: 'DELETE' }); loadIps() } catch (err) { say($('#ipm'), err.message, 1); t.disabled = false } }
+  else if ('pick' in t.dataset) $('#pf').click()
+  else if ('rmphoto' in t.dataset) { t.disabled = true; try { await api('/auth/me/avatar', { method: 'DELETE' }); await refreshPhoto('Foto profil dihapus') } catch (err) { toast(err.message) } t.disabled = false }
   else if (t.id === 'out') { await put('/auth/logout', {}, 'POST'); location.href = '/' }
 }
+
+el.onchange = (e) => { if (e.target.id === 'pf') pickPhoto(e.target.files[0]) }
 
 ready.then(({ user, who: w }) => { who = w; return user ? render() : (location.href = '/login.html?next=/profile.html') })
