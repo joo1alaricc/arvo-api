@@ -9,20 +9,13 @@
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
-<header class="nav"><div class="wrap nav-in">
-  <a class="brand" href="/">Arvo</a>
-  <nav>
-    <a href="#paket">Paket</a><a href="#cara">Cara kerja</a><a href="/explorer.html">Playground</a><a href="#kelola">Kelola key</a><a href="#faq">FAQ</a>
-  </nav>
-  <button id="theme" class="btn ghost" aria-label="Ganti tema">Terang</button>
-</div></header>
 
 <main>
 <section class="hero wrap">
   <p class="pill"><i class="dot" id="dot"></i><span id="status">Memeriksa server…</span></p>
   <h1>API yang simpel,<br>kuota yang jelas.</h1>
   <p class="lead">Coba gratis tanpa daftar. Butuh kuota lebih besar, whitelist IP, atau key sendiri? Pilih paket, bayar via QRIS, key langsung aktif.</p>
-  <div class="row"><a class="btn" href="#paket">Lihat paket</a><a class="btn ghost" href="/explorer.html">Coba di Playground</a></div>
+  <div class="row"><a class="btn" href="#paket">Lihat paket</a><a class="btn ghost" href="/playground.html">Coba di Playground</a></div>
   <div class="stats">
     <div><b id="s-ep">–</b><span>Endpoint</span></div>
     <div><b id="s-rl">–</b><span>Sisa kuota IP kamu</span></div>
@@ -33,9 +26,9 @@
 <section id="cara" class="wrap">
   <h2>Empat langkah, key langsung aktif</h2>
   <ol class="steps">
-    <li><h3>Pilih paket &amp; durasi</h3><p>Atur sendiri berapa hari, atau ambil permanen.</p></li>
-    <li><h3>Bayar QRIS</h3><p>Scan QR dengan nominal unik dari e-wallet atau m-banking apa saja.</p></li>
-    <li><h3>Terima API key</h3><p>Muncul otomatis setelah pembayaran terkonfirmasi.</p></li>
+    <li><h3>Masuk atau daftar</h3><p>Pakai Google atau username. Setiap akun otomatis dapat API key.</p></li>
+    <li><h3>Pilih paket &amp; bayar QRIS</h3><p>Atur durasi sendiri. Scan QR dari e-wallet atau m-banking apa saja.</p></li>
+    <li><h3>Paket aktif otomatis</h3><p>Kelola key, whitelist IP, dan riwayat pemakaian di halaman Profil.</p></li>
     <li><h3>Pakai di request</h3><p>Kirim header <code>x-api-key</code>. Selesai.</p></li>
   </ol>
   <div class="code">
@@ -46,35 +39,22 @@
 
 <section id="paket" class="wrap">
   <h2>Pilih paket yang pas</h2>
-  <p class="sub">Harga dihitung per hari mengikuti durasi yang kamu pilih. Limit direset tiap 00:00 WIB.</p>
-  <label class="renew">Perpanjang / upgrade key yang sudah ada (opsional)
-    <input id="renew" placeholder="arvo_xxxxxxxx" autocomplete="off"></label>
+  <p class="sub">Semua akun boleh beli, member, premium, VIP, maupun owner. Harga dihitung per hari mengikuti durasi yang kamu pilih. Limit direset tiap 00:00 WIB.</p>
   <div id="plans" class="plans"><p class="sub">Memuat paket…</p></div>
-</section>
-
-<section id="kelola" class="wrap">
-  <h2>Kelola API key</h2>
-  <div class="panel">
-    <div class="row"><input id="mkey" placeholder="Tempel API key kamu" autocomplete="off"><button class="btn" id="mload">Muat</button></div>
-    <div id="minfo"></div>
-  </div>
-  <div id="owner" class="panel" hidden>
-    <h3>Panel owner · order masuk</h3><div id="orders"></div>
-  </div>
 </section>
 
 <section id="faq" class="wrap">
   <h2>Pertanyaan umum</h2>
-  <details><summary>Bagaimana pembayaran dikonfirmasi?</summary><p>Setelah kamu membayar nominal persis (termasuk kode unik), order dikonfirmasi lewat webhook mutasi atau manual oleh owner. Key tampil di halaman pembayaran begitu terkonfirmasi.</p></details>
+  <details><summary>Bagaimana pembayaran dikonfirmasi?</summary><p>Bayar nominal persis (termasuk kode unik). Setelah terkonfirmasi, paket di akunmu aktif otomatis dan halaman pembayaran berubah.</p></details>
   <details><summary>Apa itu whitelist IP?</summary><p>Key hanya bisa dipakai dari IP yang kamu daftarkan. Kalau daftar kosong, key bisa dipakai dari IP mana saja.</p></details>
   <details><summary>Kapan limit harian reset?</summary><p>Setiap pukul 00:00 WIB. Paket unlimited tidak punya batas harian.</p></details>
-  <details><summary>Key hilang, bagaimana?</summary><p>Simpan key saat muncul. Kalau paket kamu mendukung custom key, kamu bisa menggantinya di panel Kelola key.</p></details>
+  <details><summary>Key hilang, bagaimana?</summary><p>Simpan key saat muncul. Kalau paket kamu mendukung custom key, kamu bisa menggantinya di halaman Profil.</p></details>
 </section>
 </main>
 
-<footer><div class="wrap foot"><b>Arvo</b><span>© 2026 · <a href="/docs">OpenAPI</a> · <a href="/explorer.html">Playground</a></span></div></footer>
 
 <dialog id="pay"><div id="paybody"></div><button class="btn ghost" id="payclose">Tutup</button></dialog>
+<script src="common.js"></script>
 <script src="site.js"></script>
 </body>
 </html>
