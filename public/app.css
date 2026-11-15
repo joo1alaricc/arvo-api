@@ -157,3 +157,11 @@ svg.i.gi{stroke:none}
 .cb i{display:block;width:100%;max-width:20px;background:var(--ac);border-radius:4px 4px 0 0;min-height:2px;opacity:.85;transform-origin:bottom;animation:growY .8s var(--ease) both}
 .cb.today i{background:var(--g);opacity:1}.cb.today em{color:var(--tx);font-weight:700}
 @keyframes growY{from{transform:scaleY(0)}}
+
+/* ---------- kartu Claim Trial di atas profil ---------- */
+.trialcard[hidden]{display:none}
+.trialcard{border-color:color-mix(in srgb,var(--g) 55%,var(--line));background:linear-gradient(135deg,color-mix(in srgb,var(--g) 13%,var(--card)),var(--card) 70%)}
+.tc-in{display:flex;align-items:center;gap:12px;padding:13px 14px;flex-wrap:wrap}
+.tc-tx{flex:1;min-width:150px;display:grid;gap:1px}.tc-tx b{font-size:14.5px}.tc-tx span{font-size:12.5px;color:var(--mut)}
+.trialcard .msg{padding:0 14px 12px;margin:-4px 0 0}.trialcard .btn{flex:none}
+@media(max-width:480px){.tc-in .btn{width:100%}}
