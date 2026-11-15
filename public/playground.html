@@ -4,14 +4,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="site.css"><link rel="stylesheet" href="app.css"></head>
 <body><main class="pg">
-  <h1>Playground</h1><p class="sub">Coba endpoint langsung dari browser. Isi API key untuk endpoint premium.</p>
-  <section class="card keycard">
-    <div class="lbl" style="margin:0"><span><span data-ico="key"></span> Header <span class="mono">x-api-key</span></span></div>
-    <div class="row"><input id="pk" placeholder="arvo_xxxxxxxx (opsional)" autocomplete="off" spellcheck="false">
-      <button class="btn ghost sm" id="mine" hidden><span data-ico="user"></span> Pakai key akunku</button>
-      <button class="btn ghost sm" id="dl"><span data-ico="download"></span> Unduh spec</button></div>
-  </section>
-  <div class="sbar"><span data-ico="search"></span><input id="sq" placeholder="Cari endpoint…" autocomplete="off"></div>
+  <h1>Playground</h1><p class="sub">Coba endpoint langsung dari browser. Isi apikey di setiap endpoint (otomatis dipakai ke endpoint lain).</p>
+  <div class="row bar2"><div class="sbar" style="flex:1;margin:0;min-width:0"><span data-ico="search"></span><input id="sq" placeholder="Cari endpoint…" autocomplete="off"></div><button class="btn ghost sm" id="dl"><span data-ico="download"></span> Unduh spec</button></div>
   <div id="list"><p class="sub">Memuat…</p></div>
 </main>
 <script src="common.js"></script><script src="ui.js"></script><script src="playground.js"></script></body></html>
