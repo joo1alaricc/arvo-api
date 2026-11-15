@@ -34,7 +34,7 @@ export class StoreDO extends DurableObject {
             CREATE TABLE IF NOT EXISTS endpoints(id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT, slug TEXT, name TEXT, description TEXT DEFAULT '',
                 method TEXT DEFAULT 'GET', access TEXT DEFAULT 'free', status TEXT DEFAULT 'online', mode TEXT DEFAULT 'proxy', code TEXT DEFAULT '',
                 headers TEXT DEFAULT '{}', inputs TEXT DEFAULT '[]', created_at INTEGER, updated_at INTEGER, UNIQUE(category,slug));`)
-        for (const col of ['phone', 'avatar_url', 'banner_url', 'reg_ip', 'last_ip']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`) } catch {} }
+        for (const col of ['phone', 'avatar_url', 'banner_url', 'reg_ip', 'last_ip', 'avatar_data', 'avatar_ver']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`) } catch {} }
         try { this.sql.exec('ALTER TABLE users ADD COLUMN last_seen INTEGER') } catch {}
         if (!this.q('SELECT 1 FROM plans LIMIT 1').length) {
             DEFAULT_PLANS.forEach((p, i) => this.sql.exec('INSERT INTO plans VALUES(?,?,?,?,?,?,?,?,?,1,?)', p.id, p.tier, p.name, p.daily, p.maxIps, p.customKey ? 1 : 0, p.baseDays, p.basePrice, p.permanentPrice, i))
@@ -66,7 +66,7 @@ export class StoreDO extends DurableObject {
             active: !!p, expired: !!u.plan && !p, expires_at: u.expires_at, daily_limit: p ? p.daily : null,
             max_ips: p ? p.maxIps : 0, custom_key: !!p?.customKey, ips: JSON.parse(u.ips),
             used_today: u.usage_day === jakartaDay(now) ? u.usage_count : 0, total_requests: u.total, created_at: u.created_at,
-            phone: u.phone || null, avatar_url: u.avatar_url || null, banner_url: u.banner_url || null, last_ip: u.last_ip || null }
+            phone: u.phone || null, avatar_url: u.avatar_data ? `/api/auth/me/avatar?v=${u.avatar_ver || 1}` : (u.avatar_url || null), last_ip: u.last_ip || null }
     }
 
     /* ---------- akun & sesi ---------- */
@@ -81,12 +81,13 @@ export class StoreDO extends DurableObject {
         return { ok: true, id: this.insertUser(o) }
     }
     googleLogin({ sub, email, now, ip }) {
-        const [u] = this.q('SELECT id FROM users WHERE google_sub=?', sub)
-        if (u) { this.touchIp(u.id, ip, now, 'web'); return { ok: true, id: u.id } }
+        const [u] = this.q('SELECT id,avatar_data,avatar_url,avatar_ver FROM users WHERE google_sub=?', sub)
+        /* avatar_ver terisi = user pernah mengatur/menghapus foto sendiri, jangan ditimpa foto Google lagi */
+        if (u) { this.touchIp(u.id, ip, now, 'web'); return { ok: true, id: u.id, needAvatar: !u.avatar_data && !u.avatar_url && u.avatar_ver == null } }
         const base = (email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 14) || 'user').padEnd(3, '0')
         let name = base
         while (this.q('SELECT 1 FROM users WHERE username=?', name).length) name = base + Math.floor(Math.random() * 9000 + 1000)
-        return { ok: true, id: this.insertUser({ username: name, email, sub, now, ip }) }
+        return { ok: true, id: this.insertUser({ username: name, email, sub, now, ip }), needAvatar: true }
     }
     authInfo({ username, id }) {
         const [u] = id ? this.q('SELECT * FROM users WHERE id=?', id) : this.q('SELECT * FROM users WHERE username=?', username)
@@ -167,6 +168,29 @@ export class StoreDO extends DurableObject {
     }
 
     /* ---------- profil, whitelist (tabel), redeem, hapus akun ---------- */
+    /* ---------- foto profil (file diunggah, disimpan sebagai data URL kecil) ---------- */
+    setAvatar(id, data, now) {
+        data = String(data || '')
+        if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(data)) return fail(400, 'bad_image', 'File harus gambar JPG, PNG, atau WebP.')
+        if (data.length > 200000) return fail(413, 'image_big', 'Gambar terlalu besar. Pakai foto yang lebih kecil.')
+        this.sql.exec('UPDATE users SET avatar_data=?,avatar_ver=?,avatar_url=NULL WHERE id=?', data, String(now), id)
+        return { ok: true, avatar_url: `/api/auth/me/avatar?v=${now}` }
+    }
+    clearAvatar(id) {
+        this.sql.exec("UPDATE users SET avatar_data=NULL,avatar_url=NULL,avatar_ver='0' WHERE id=?", id)
+        return { ok: true, avatar_url: null }
+    }
+    getAvatar(id) {
+        const u = this.user(id)
+        return u && u.avatar_data ? { ok: true, data: u.avatar_data } : fail(404, 'no_avatar', 'Belum ada foto.')
+    }
+    /* Foto dari Google: hanya mengisi jika user belum pernah mengatur foto. */
+    setAvatarIfEmpty(id, data, now) {
+        const u = this.user(id)
+        if (!u || u.avatar_data || u.avatar_url || u.avatar_ver != null) return { ok: true, skipped: true }
+        return this.setAvatar(id, data, now)
+    }
+
     setProfile(id, b) {
         const u = this.user(id), out = {}
         const url = (v, name) => {
@@ -186,8 +210,6 @@ export class StoreDO extends DurableObject {
                 if (ph && !/^\+?\d{8,15}$/.test(ph)) throw new Error('Nomor telepon 8-15 digit, boleh diawali +.')
                 out.phone = ph || null
             }
-            if ('avatar_url' in b) out.avatar_url = url(b.avatar_url, 'Foto profil')
-            if ('banner_url' in b) out.banner_url = url(b.banner_url, 'Banner')
         } catch (e) { return fail(400, 'bad_profile', e.message) }
         const keys = Object.keys(out)
         if (!keys.length) return fail(400, 'bad_profile', 'Tidak ada data yang diubah.')
