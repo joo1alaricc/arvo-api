@@ -6,6 +6,7 @@ export const statsRoute = createRoute({
     tags: ['stats'],
     description: 'Get runtime information exposed by the Cloudflare Workers platform.',
     'x-status': 'ONLINE',
+    'x-access': 'free',
     responses: {
         200: {
             content: {
