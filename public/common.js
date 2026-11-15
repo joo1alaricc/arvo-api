@@ -16,8 +16,10 @@ const root = document.documentElement
 root.dataset.theme = localStorage.getItem('theme') || 'dark'
 root.classList.add('js')
 
-/* Logo Arvo: huruf A dari dua garis naik + palang, dipakai di navbar dan kartu profil */
-const LOGO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.2 19 12 5l6.8 14M8.4 14.2h7.2"/></svg>'
+/* Logo Arvo: huruf A dan R menyatu. A utuh (dua kaki + palang), perut huruf R menggantung dari puncak A,
+ * dan kaki kanan A sekaligus jadi kaki R. Digambar dari garis saja (tanpa gambar eksternal). */
+const LOGO_PATH = 'M4 20 10.5 4 17 20M6.9 14.6h7.2M10.5 4h3.8a3.75 3.75 0 0 1 0 7.5h-1.4'
+const LOGO = `<svg viewBox="0 0 24 24" aria-hidden="true"><path style="stroke-width:2.1" d="${LOGO_PATH}"/></svg>`
 
 /* Muncul halus saat di-scroll. Tandai elemen dengan class "rv" lalu panggil reveal(). */
 const revealIO = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach((e) => {
@@ -54,6 +56,57 @@ const accentOf = (img) => {
   } catch { return null }
 }
 
+/* ---- Cache background profil di localDb (IndexedDB, cadangan localStorage) ----
+ * Background kartu profil (warna aksen + gambar blur kecil) dibuat SEKALI di latar belakang saat user masuk web,
+ * lalu disimpan per user. Dipakai ulang sampai foto profil berganti (versi di URL foto berubah). */
+const localDb = {
+  open: () => (localDb._p ||= new Promise((ok, no) => {
+    if (!('indexedDB' in window)) return no()
+    const r = indexedDB.open('arvo', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv')
+    r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error)
+  })),
+  async get(k) {
+    try { const db = await localDb.open(); return await new Promise((ok) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => ok(q.result ?? null); q.onerror = () => ok(null) }) }
+    catch { try { return JSON.parse(localStorage.getItem('arvo:' + k)) } catch { return null } }
+  },
+  async set(k, v) {
+    try { const db = await localDb.open(); await new Promise((ok, no) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = ok; t.onerror = () => no(t.error) }) }
+    catch { try { localStorage.setItem('arvo:' + k, JSON.stringify(v)) } catch {} }
+  },
+  async del(k) {
+    try { const db = await localDb.open(); await new Promise((ok) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').delete(k); t.oncomplete = ok; t.onerror = ok }) } catch {}
+    try { localStorage.removeItem('arvo:' + k) } catch {}
+  },
+}
+/* gambar blur kecil (48px, sudah halus) menggantikan filter:blur() CSS yang berat di HP */
+const makeBg = (src) => new Promise((done) => {
+  const im = new Image(); if (!src.startsWith('/')) im.crossOrigin = 'anonymous'
+  im.onload = () => {
+    const out = { h: null, s: null, bg: null }
+    const a = accentOf(im); if (a) { out.h = a.h; out.s = a.s }
+    try {
+      const t = document.createElement('canvas'); t.width = t.height = 12
+      const x = t.getContext('2d'); x.drawImage(im, 0, 0, 12, 12)
+      const big = document.createElement('canvas'); big.width = big.height = 48
+      const y = big.getContext('2d'); y.imageSmoothingQuality = 'high'; y.drawImage(t, 0, 0, 48, 48)
+      out.bg = big.toDataURL('image/jpeg', 0.7)
+    } catch {}
+    done(out)
+  }
+  im.onerror = () => done(null); im.src = src
+})
+const bgJobs = {}
+/* Ambil background user: dari cache bila fotonya masih sama, kalau tidak dibuat lalu disimpan. */
+const getBg = (user, force = false) => {
+  if (!user || !user.avatar_url) { if (user) localDb.del('bg:' + user.id); return Promise.resolve(null) }
+  const key = 'bg:' + user.id, ver = user.avatar_url
+  return (bgJobs[key + ver] ||= (async () => {
+    if (!force) { const c = await localDb.get(key); if (c && c.ver === ver) return c }
+    const made = await makeBg(ver); if (!made) return null
+    const rec = { ver, ...made, at: Date.now() }; await localDb.set(key, rec); return rec
+  })().finally(() => setTimeout(() => delete bgJobs[key + ver], 0)))
+}
+
 const NI = {
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>', sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>', shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
@@ -88,7 +141,9 @@ const ready = Promise.all([
   api('/auth/me').catch(() => null),
   api('/billing/whoami').catch(() => ({ ip: '-', is_owner: false })),
 ]).then(([user, who]) => {
-  $('#navr').innerHTML = (who.is_owner ? `<a class="nb adm" href="/admin.html" title="Admin" aria-label="Admin">${ni('shield')}</a>` : '') +
+  $('#navr').innerHTML = (who.is_admin || who.is_owner ? `<a class="nb adm" href="/admin.html" title="Admin" aria-label="Admin">${ni('shield')}</a>` : '') +
     (user ? `<a class="nb" href="/profile.html" title="${esc(user.username)}" aria-label="Profil ${esc(user.username)}">${ni('user')}</a>` : '<a class="btn" href="/login.html">Masuk</a>')
+  /* siapkan background profil di latar belakang, supaya halaman profil tinggal memakai */
+  if (user) (window.requestIdleCallback || ((f) => setTimeout(f, 800)))(() => getBg(user).catch(() => {}))
   return { user, who }
 })
