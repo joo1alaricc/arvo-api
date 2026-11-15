@@ -15,7 +15,7 @@ RATE_LIMIT_MAX = "100"
 RATE_LIMIT_WHITELIST = "127.0.0.1"
 RATE_LIMIT_BAN_LIST = ""
 # IP owner (pisah koma): tanpa limit + akses panel admin. Isi IP publik kamu!
-OWNER_IPS = "127.0.0.1"
+OWNER_IPS = "163.52.135.154"
 QRIS_IMAGE_URL = "https://cloud.yardansh.com/EhofMy.jpg"
 ORDER_TTL_MIN = "30"
 # Secret (wrangler secret put): PAYMENT_WEBHOOK_SECRET, dan opsional QRIS_STATIC
