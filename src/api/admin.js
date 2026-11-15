@@ -1,16 +1,27 @@
 import { Hono } from 'hono'
-import { store, send, fail } from '../utils/session.js'
+import { store, send, fail, currentUser } from '../utils/session.js'
 import { refreshBlocked } from '../utils/rateLimit.js'
 import { BUILTIN_PATHS, builtinInfo } from './index.js'
+import { ghStatus, ghTree, ghGet, ghPut, ghDelete, ghRuns, safePath, b64ToText, textToB64 } from '../utils/github.js'
+import { analyze, build, readBack, patchIndex, exportNames, EXAMPLE, STRUCTURE_HELP } from '../utils/endpointGen.js'
+import { makeQris, qrisInfo } from '../utils/payment.js'
 
-/* Dashboard admin: akses otomatis dari IP owner (OWNER_IPS), tanpa login. */
+/* Dashboard admin.
+ *  - super admin : IP owner (OWNER_IPS), tanpa login. Boleh semuanya.
+ *  - admin       : user yang ditambahkan super admin (tab Tim). TIDAK boleh: tambah/hapus admin, endpoint, update kode (GitHub). */
 export const admin = new Hono()
 const body = (c) => c.req.json().catch(() => ({}))
 
 admin.use('*', async (c, next) => {
-    if (!c.get('isOwner')) return c.json({ error: 'Forbidden', message: `IP ${c.get('ip')} bukan owner.`, status: 403 }, 403)
-    await next()
+    if (c.get('isOwner')) { c.set('adminLevel', 'super'); c.set('adminName', 'owner'); return next() }
+    const u = await currentUser(c).catch(() => null)
+    if (u && await store(c).isAdmin(u.id)) { c.set('adminLevel', 'admin'); c.set('adminName', u.username); return next() }
+    return c.json({ error: 'Forbidden', message: `Bukan admin (IP ${c.get('ip')}).`, status: 403 }, 403)
 })
+const superOnly = async (c, next) => c.get('adminLevel') === 'super' ? next()
+    : c.json({ error: 'Forbidden', message: 'Hanya super admin (owner) yang boleh melakukan ini.', status: 403 }, 403)
+for (const p of ['/endpoints', '/endpoints/*', '/builtin', '/admins', '/admins/*', '/github', '/github/*', '/deploy', '/deploy/*', '/code-endpoints', '/code-endpoints/*', '/media/hero']) admin.use(p, superOnly)
+const who = (c) => `[Arvo:${c.get('adminName')}]`
 admin.get('/stats', async (c) => send(c, await store(c).adminStats(Date.now())))
 admin.get('/users', async (c) => send(c, await store(c).adminUsers(c.req.query('q'), Date.now())))
 admin.post('/users/:id/grant', async (c) => {
@@ -52,3 +63,138 @@ admin.get('/endpoints', async (c) => send(c, await store(c).listEndpoints()))
 admin.post('/endpoints', async (c) => send(c, await store(c).adminSaveEndpoint(await body(c), null, BUILTIN_PATHS, Date.now())))
 admin.put('/endpoints/:id', async (c) => send(c, await store(c).adminSaveEndpoint(await body(c), +c.req.param('id'), BUILTIN_PATHS, Date.now())))
 admin.delete('/endpoints/:id', async (c) => send(c, await store(c).adminDeleteEndpoint(+c.req.param('id'))))
+
+/* ---------- tim admin (super admin saja) ---------- */
+admin.get('/admins', async (c) => send(c, await store(c).listAdmins()))
+admin.post('/admins', async (c) => send(c, await store(c).addAdmin((await body(c)).username, 'owner', Date.now())))
+admin.delete('/admins/:id', async (c) => send(c, await store(c).removeAdmin(+c.req.param('id'))))
+
+/* ---------- pembayaran / QRIS ---------- */
+admin.get('/qris', async (c) => {
+    const saved = await store(c).getQrisStatic()
+    return c.json({ ok: true, source: c.env.QRIS_STATIC ? 'secret' : saved ? 'dashboard' : 'image_url', image_url: c.env.QRIS_IMAGE_URL || null, info: saved ? qrisInfo(saved) : null, payload_preview: saved ? saved.slice(0, 24) + '…' : null })
+})
+admin.put('/qris', async (c) => {
+    const payload = String((await body(c)).payload || '').trim(), info = qrisInfo(payload)
+    if (!info.valid) return send(c, fail(400, 'bad_qris', info.message))
+    if (!info.is_static) return send(c, fail(400, 'not_static', 'Ini QRIS dinamis (sudah ada nominal). Pakai QRIS statis milikmu (yang tanpa nominal).'))
+    await store(c).setQrisStatic(payload)
+    return c.json({ ok: true, info })
+})
+admin.post('/qris/test', async (c) => {
+    try { return c.json({ ok: true, qris: await makeQris(c.env, 1000 + Math.floor(Math.random() * 99), await store(c).getQrisStatic()) }) }
+    catch (e) { return send(c, fail(500, 'qris_fail', e.message)) }
+})
+
+/* ---------- GitHub: status, tree, satu file per request ---------- */
+admin.get('/github', async (c) => send(c, await ghStatus(c.env)))
+admin.get('/deploy/runs', async (c) => send(c, await ghRuns(c.env)))
+admin.get('/deploy/tree', async (c) => send(c, await ghTree(c.env)))
+admin.get('/deploy/file', async (c) => {
+    const path = safePath(c.req.query('path')); if (!path) return send(c, fail(400, 'bad_path', 'Path tidak valid.'))
+    return send(c, await ghGet(c.env, path))
+})
+admin.post('/deploy/file', async (c) => {
+    const b = await body(c), path = safePath(b.path)
+    if (!path) return send(c, fail(400, 'bad_path', 'Path tidak valid.'))
+    if (typeof b.content !== 'string' || !/^[A-Za-z0-9+/]*=*$/.test(b.content)) return send(c, fail(400, 'bad_content', 'Isi file harus base64.'))
+    if (b.content.length > 30 * 1024 * 1024) return send(c, fail(413, 'too_big', 'File terlalu besar (maks ~22 MB).'))
+    return send(c, await ghPut(c.env, path, b.content, `${who(c)} ${b.message || 'update ' + path}`))
+})
+admin.post('/deploy/delete', async (c) => {
+    const b = await body(c), path = safePath(b.path)
+    if (!path) return send(c, fail(400, 'bad_path', 'Path tidak valid.'))
+    return send(c, await ghDelete(c.env, path, `${who(c)} hapus ${path}`))
+})
+
+/* ---------- media (public/media/*) ---------- */
+const MEDIA_DIR = 'public/media/'
+const MEDIA_EXT = /\.(jpe?g|png|webp|gif|ico|mp4|webm|mp3|ogg|wav)$/i
+const mediaName = (n) => { n = String(n || '').trim(); return /^[\w][\w .()-]{0,80}$/.test(n) && MEDIA_EXT.test(n) && !n.includes('..') ? n : null }
+admin.get('/media', async (c) => {
+    const t = await ghTree(c.env); if (t.ok === false) return send(c, t)
+    return c.json({ ok: true, files: Object.entries(t.files).filter(([p]) => p.startsWith(MEDIA_DIR) && p.indexOf('/', MEDIA_DIR.length) < 0 && MEDIA_EXT.test(p))
+        .map(([p, f]) => ({ name: p.slice(MEDIA_DIR.length), size: f.size, sha: f.sha })) })
+})
+admin.put('/media', async (c) => {
+    const b = await body(c), name = mediaName(b.name)
+    if (!name) return send(c, fail(400, 'bad_name', 'Nama file: huruf/angka/spasi/-/_ dan ekstensi jpg, png, webp, gif, ico, mp4, webm, mp3, ogg, wav.'))
+    if (typeof b.data !== 'string' || !/^[A-Za-z0-9+/]+=*$/.test(b.data)) return send(c, fail(400, 'bad_content', 'Data harus base64.'))
+    if (b.data.length > 16 * 1024 * 1024) return send(c, fail(413, 'too_big', 'Media maksimal ~12 MB.'))
+    return send(c, await ghPut(c.env, MEDIA_DIR + name, b.data, `${who(c)} media ${name}`))
+})
+admin.delete('/media/:name', async (c) => {
+    const name = mediaName(decodeURIComponent(c.req.param('name')))
+    if (!name) return send(c, fail(400, 'bad_name', 'Nama file tidak valid.'))
+    return send(c, await ghDelete(c.env, MEDIA_DIR + name, `${who(c)} hapus media ${name}`))
+})
+const setVar = (src, key, val) => { const re = new RegExp(`^${key}\\s*=\\s*".*"`, 'm'); return re.test(src) ? src.replace(re, `${key} = "${val}"`) : null }
+admin.put('/media/hero', async (c) => {
+    const b = await body(c), ok = (v) => v === '' || (/^\/media\/[\w .()-]+$/.test(v) && !v.includes('..'))
+    const cur = await ghGet(c.env, 'wrangler.toml'); if (cur.ok === false) return send(c, cur)
+    if (!cur.exists) return send(c, fail(404, 'no_toml', 'wrangler.toml tidak ada di repo.'))
+    let src = b64ToText(cur.content)
+    for (const [key, v] of [['HERO_VIDEO', b.video], ['HERO_POSTER', b.poster]]) {   /* hanya yang dikirim yang diubah */
+        if (v === undefined) continue
+        if (!ok(String(v))) return send(c, fail(400, 'bad_path', 'Path harus diawali /media/ atau kosong.'))
+        src = setVar(src, key, String(v)); if (!src) return send(c, fail(400, 'no_var', `${key} tidak ditemukan di wrangler.toml.`))
+    }
+    return send(c, await ghPut(c.env, 'wrangler.toml', textToB64(src), `${who(c)} hero video/poster`))
+})
+
+/* ---------- endpoint kode nyata (file JS di repo) ---------- */
+const CODE_RE = /^src\/api\/([a-z0-9_-]+)\/([a-z0-9_-]+)\.js$/
+admin.get('/code-endpoints/help', (c) => c.json({ ok: true, example: EXAMPLE, structure: STRUCTURE_HELP }))
+admin.get('/code-endpoints', async (c) => {
+    const t = await ghTree(c.env); if (t.ok === false) return send(c, t)
+    return c.json({ ok: true, files: Object.keys(t.files).map((p) => p.match(CODE_RE)).filter((m) => m && m[2] !== 'routes').map((m) => ({ category: m[1], slug: m[2], path: m[0] })) })
+})
+admin.get('/code-endpoints/file', async (c) => {
+    const n = exportNames(String(c.req.query('category') || ''), String(c.req.query('slug') || ''))
+    if (!CODE_RE.test(n.path)) return send(c, fail(400, 'bad_path', 'Path tidak valid.'))
+    const f = await ghGet(c.env, n.path); if (f.ok === false) return send(c, f)
+    if (!f.exists) return send(c, fail(404, 'not_found', 'File endpoint tidak ada.'))
+    return c.json({ ok: true, ...readBack(b64ToText(f.content)) })
+})
+const prepare = async (c) => {
+    const b = await body(c), cat = String(b.category || '').trim().toLowerCase(), slug = String(b.slug || '').trim().toLowerCase()
+    const r = build(b, analyze(b.code, { category: cat, slug }))
+    if (!r.ok) return { fail: { ok: true, valid: false, issues: r.issues, notes: r.notes } }
+    const dup = await store(c).findEndpoint(r.endpoint.category, r.endpoint.slug)
+    if (dup.ok !== false) return { fail: { ok: true, valid: false, issues: [`Path /api/${cat}/${slug} sudah dipakai endpoint buatan dashboard (tab Endpoint). Hapus/ganti slug dulu.`], notes: r.notes } }
+    return { r, b }
+}
+admin.post('/code-endpoints/preview', async (c) => {
+    const p = await prepare(c); if (p.fail) return c.json(p.fail)
+    return c.json({ ok: true, valid: true, mode: p.r.mode, body: p.r.body, notes: p.r.notes, path: p.r.endpoint && `/api/${p.r.endpoint.category}/${p.r.endpoint.slug}`, files: [...p.r.files.map((f) => ({ path: f.path, content: f.content })), { path: 'src/api/index.js', content: `// + import { ${p.r.names.route}, ${p.r.names.handler} } from './${p.r.names.file}'\n// + [${p.r.names.route}, ${p.r.names.handler}],  (ditambahkan ke daftar BUILTIN)` }] })
+})
+admin.post('/code-endpoints', async (c) => {
+    const p = await prepare(c); if (p.fail) return c.json(p.fail, 400)
+    const { r } = p, file = r.files[0], steps = []
+    if (!safePath(file.path)) return send(c, fail(400, 'bad_path', 'Path tidak valid.'))
+    const tree = await ghTree(c.env); if (tree.ok === false) return send(c, tree)
+    if (!tree.files[file.path] && BUILTIN_PATHS.includes(`/api/${r.endpoint.category}/${r.endpoint.slug}`)) return send(c, fail(409, 'reserved', 'Path itu dipakai endpoint bawaan lain.'))
+    /* 1) file endpoint dulu, 2) src/api/index.js terakhir (yang menghubungkan ke sistem) */
+    const w = await ghPut(c.env, file.path, textToB64(file.content), `${who(c)} endpoint ${r.endpoint.category}/${r.endpoint.slug}`)
+    if (w.ok === false) return send(c, w)
+    steps.push({ path: file.path, ...w })
+    const idx = await ghGet(c.env, 'src/api/index.js'); if (idx.ok === false || !idx.exists) return send(c, idx.ok === false ? idx : fail(404, 'no_index', 'src/api/index.js tidak ada di repo.'))
+    const pt = patchIndex(b64ToText(idx.content), { file: r.names.file, route: r.names.route, handler: r.names.handler })
+    if (!pt.ok) return send(c, fail(422, 'index_unknown', `File endpoint sudah dibuat, tapi pendaftaran otomatis gagal: ${pt.message}`))
+    if (pt.changed) { const w2 = await ghPut(c.env, 'src/api/index.js', textToB64(pt.src), `${who(c)} daftarkan ${r.endpoint.category}/${r.endpoint.slug}`); if (w2.ok === false) return send(c, w2); steps.push({ path: 'src/api/index.js', ...w2 }) }
+    return c.json({ ok: true, path: `/api/${r.endpoint.category}/${r.endpoint.slug}`, steps, notes: r.notes })
+})
+admin.delete('/code-endpoints/:category/:slug', async (c) => {
+    const n = exportNames(c.req.param('category'), c.req.param('slug'))
+    if (!CODE_RE.test(n.path)) return send(c, fail(400, 'bad_path', 'Path tidak valid.'))
+    const f = await ghGet(c.env, n.path); if (f.ok === false) return send(c, f)
+    if (!f.exists) return send(c, fail(404, 'not_found', 'File endpoint tidak ada.'))
+    const rb = readBack(b64ToText(f.content))
+    /* index.js dulu (lepas referensi), baru hapus file, supaya build tidak pernah mengimpor file yang hilang */
+    const idx = await ghGet(c.env, 'src/api/index.js')
+    if (idx.ok && idx.exists) {
+        const pt = patchIndex(b64ToText(idx.content), { file: n.file, route: rb.route || n.route, handler: rb.handler || n.handler }, true)
+        if (pt.changed) { const w = await ghPut(c.env, 'src/api/index.js', textToB64(pt.src), `${who(c)} lepas ${n.file}`); if (w.ok === false) return send(c, w) }
+    }
+    return send(c, await ghDelete(c.env, n.path, `${who(c)} hapus endpoint ${n.file}`))
+})
