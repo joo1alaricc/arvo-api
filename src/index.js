@@ -6,6 +6,8 @@ import { setupRoutes } from './api/index.js'
 import { logApiRequest } from './utils/logApiRequest.js'
 import { rateLimiter } from './utils/rateLimit.js'
 import { billing } from './api/billing.js'
+import { auth } from './api/auth.js'
+import { admin } from './api/admin.js'
 import { prettyPrint } from './utils/pretty.js'
 
 const createApp = () => {
@@ -18,6 +20,8 @@ const createApp = () => {
     app.use('*', prettyPrint)
 
     app.route('/api/billing', billing)
+    app.route('/api/auth', auth)
+    app.route('/api/admin', admin)
     setupRoutes(app)
 
     app.doc('/docs', {
