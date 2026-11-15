@@ -6,18 +6,14 @@ let me = null
 const keyInputs = () => document.querySelectorAll('.pg-ep [data-k="apikey"]')
 const setKey = (v, from) => { savedKey = v; try { localStorage.setItem('arvo_key', v) } catch {} ; keyInputs().forEach((i) => { if (i !== from) i.value = v }); document.querySelectorAll('.pg-ep').forEach((e) => e._r?.()) }
 ready.then(({ user }) => { me = user; document.querySelectorAll('[data-mine]').forEach((b) => (b.hidden = !user)) })
-$('#dl').onclick = async () => {
-  const a = document.createElement('a'); a.href = URL.createObjectURL(await (await fetch('/docs')).blob()); a.download = 'openapi.json'; a.click()
-}
-
 const LANGS = { curl: 'cURL', js: 'JavaScript (fetch)', py: 'Python (requests)', php: 'PHP (cURL)' }
-const snippets = (method, url, body) => {
-  const h = { ...(body ? { 'Content-Type': 'application/json' } : {}) }
-  const hc = Object.entries(h).map(([k, v]) => ` \\\n  -H '${k}: ${v}'`).join('')
+const snippets = (method, url, body, key) => {
+  const h = { 'x-api-key': key || 'KEY_KAMU', ...(body ? { 'Content-Type': 'application/json' } : {}) }
+  const hc = Object.entries(h).map(([k, v]) => ` \\\n  --header '${k}: ${v}'`).join('')
   const hp = Object.entries(h).map(([k, v]) => `    '${k}: ${v}'`).join(',\n')
   return {
-    curl: `curl -X ${method} '${url}'${hc}${body ? ` \\\n  -d '${body}'` : ''}`,
-    js: `const res = await fetch('${url}', {\n  method: '${method}',\n  headers: ${JSON.stringify(h)}${body ? `,\n  body: JSON.stringify(${body})` : ''}\n})\nconsole.log(await res.json())`,
+    curl: `curl${method === 'GET' ? '' : ' -X ' + method} '${url}'${hc}${body ? ` \\\n  --data '${body}'` : ''}`,
+    js: `const res = await fetch('${url}', {\n  method: '${method}',\n  headers: ${JSON.stringify(h, null, 2).replace(/\n/g, '\n  ')}${body ? `,\n  body: JSON.stringify(${body})` : ''}\n})\nconsole.log(await res.json())`,
     py: `import requests\n\nr = requests.${method.toLowerCase()}('${url}', headers=${JSON.stringify(h)}${body ? `, json=${body}` : ''})\nprint(r.json())`,
     php: `<?php\n$ch = curl_init('${url}');\ncurl_setopt_array($ch, [\n  CURLOPT_CUSTOMREQUEST => '${method}',\n  CURLOPT_RETURNTRANSFER => true,\n  CURLOPT_HTTPHEADER => [\n${hp}\n  ],${body ? `\n  CURLOPT_POSTFIELDS => '${body}',` : ''}\n]);\necho curl_exec($ch);`,
   }
@@ -28,7 +24,7 @@ function card(path, method, d, tag) {
   const params = (d.parameters || []).filter((p) => p.name !== 'apikey'), bodyProps = d.requestBody?.content?.['application/json']?.schema
   const access = d['x-access'] || (d['x-premium'] ? 'premium' : 'free'), paid = access !== 'free', offline = d['x-status'] === 'OFFLINE'
   const bodyKeys = Object.keys(bodyProps?.properties || {}), bodyReq = bodyProps?.required || []
-  const chips = [`<span class="chip ${paid ? '' : 'opt'}">apikey</span>`, ...params.map((p) => `<span class="chip ${p.required ? '' : 'opt'}">${esc(p.name)}</span>`), ...bodyKeys.map((k) => `<span class="chip ${bodyReq.includes(k) ? '' : 'opt'}">${esc(k)}</span>`)]
+  const chips = [`<span class="chip ${paid ? '' : 'opt'}">x-api-key</span>`, ...params.map((p) => `<span class="chip ${p.required ? '' : 'opt'}">${esc(p.name)}</span>`), ...bodyKeys.map((k) => `<span class="chip ${bodyReq.includes(k) ? '' : 'opt'}">${esc(k)}</span>`)]
   const m = method.toLowerCase()
   el._txt = `${path} ${d.summary || ''} ${d.description || ''} ${tag}`.toLowerCase()
   const field = (name, label, extra, ph, req, kind) => `<div><div class="lbl"><span>${esc(label)}${req ? ' <em>*</em>' : ''}</span><span>${esc(extra)}</span></div><input data-k="${esc(name)}" data-in="${kind}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false"></div>`
@@ -36,8 +32,8 @@ function card(path, method, d, tag) {
   <div class="pg-b"><div class="in">
     ${d.summary || d.description ? `<p class="desc">${esc(d.summary || '')}${d.summary && d.description ? ' · ' : ''}${esc(d.description || '')}</p>` : ''}
     <div class="need"><span>Data yang diperlukan dari server:</span>${chips.join('')}</div>
-    <div><div class="lbl"><span>apikey${paid ? ' <em>*</em>' : ''}</span><button class="ib" data-mine hidden title="Pakai key akunku" aria-label="Pakai key akunku" style="width:26px;height:26px">${ico('user')}</button></div>
-      <input data-k="apikey" data-in="query" placeholder="${paid ? 'arvo_xxxxxxxx (wajib)' : 'arvo_xxxxxxxx (opsional)'}" autocomplete="off" spellcheck="false" value="${esc(savedKey)}"></div>
+    <div><div class="lbl"><span>x-api-key <span style="opacity:.6">(header)</span>${paid ? ' <em>*</em>' : ''}</span><button class="ib" data-mine hidden title="Pakai key akunku" aria-label="Pakai key akunku" style="width:26px;height:26px">${ico('user')}</button></div>
+      <input data-k="apikey" data-in="header" placeholder="${paid ? 'arvo_xxxxxxxx (wajib)' : 'arvo_xxxxxxxx (opsional)'}" autocomplete="off" spellcheck="false" value="${esc(savedKey)}"></div>
     ${params.map((p) => field(p.name, p.name, p.in, p.example ?? p.schema?.default ?? p.schema?.type ?? p.name, p.required, p.in)).join('')}
     ${bodyKeys.map((k) => field(k, k, 'body', bodyProps.properties[k].example ?? k, bodyReq.includes(k), 'body')).join('')}
     ${d.requestBody && !bodyKeys.length ? `<div><div class="lbl"><span>Body</span><span>JSON</span></div><textarea data-body rows="4" placeholder='{ "key": "value" }' spellcheck="false"></textarea></div>` : ''}
@@ -46,7 +42,7 @@ function card(path, method, d, tag) {
       <div class="cbox" data-code style="margin-top:8px" hidden><pre></pre></div></div>
     <div><div class="lbl"><span>Request URL (Try it)</span></div><div class="ubox"><code data-ru></code></div></div>
     <button class="btn go block" data-run>${ico('play')} Try it out</button>
-    <p class="warn" data-warn hidden>Endpoint ${access === 'vip' ? 'VIP' : access === 'owner' ? 'owner' : 'premium'}: isi apikey dari paket yang sesuai.</p>
+    <p class="warn" data-warn hidden>Endpoint ${access === 'vip' ? 'VIP' : access === 'owner' ? 'owner' : 'premium'}: isi x-api-key dari paket yang sesuai.</p>
     <div><div class="lbl"><span>Full URL</span></div><div class="ubox"><code data-fu></code><button class="ib" data-cu aria-label="Salin URL">${ico('copy')}</button></div></div>
     <div><div class="rh"><span class="l">Response</span><button class="btn ghost sm" data-cr>${ico('copy')} Copy Result</button></div>
       <div class="cbox" data-out><p class="empty">Belum ada response. Klik Try it out.</p></div><p class="rmeta" data-meta></p></div>
@@ -61,6 +57,7 @@ function card(path, method, d, tag) {
     let p = path; const qs = new URLSearchParams(), bd = {}
     el.querySelectorAll('[data-k]').forEach((i) => {
       const v = i.value.trim(); if (!v) return
+      if (i.dataset.in === 'header') return
       if (i.dataset.in === 'path') p = p.replace(`{${i.dataset.k}}`, encodeURIComponent(v))
       else if (i.dataset.in === 'body') bd[i.dataset.k] = v
       else qs.append(i.dataset.k, v)
@@ -71,7 +68,7 @@ function card(path, method, d, tag) {
   }
   const showCode = () => {
     const l = q('[data-lang]').value, box = q('[data-code]'); box.hidden = !l; q('[data-cc]').hidden = !l
-    if (l) { const { url, body } = build(); box.querySelector('pre').textContent = snippets(method.toUpperCase(), url, body)[l] }
+    if (l) { const { url, body, key } = build(); box.querySelector('pre').textContent = snippets(method.toUpperCase(), url, body, key)[l] }
   }
   el._r = () => {
     const { rel, url, key } = build(); q('[data-ru]').textContent = rel; q('[data-fu]').textContent = url
@@ -86,8 +83,8 @@ function card(path, method, d, tag) {
     else if ('cc' in b.dataset) navigator.clipboard.writeText(q('[data-code] pre').textContent).then(() => flash(b))
     else if ('cr' in b.dataset) { if (last) navigator.clipboard.writeText(last).then(() => flash(b, 'Tersalin')) }
     else if ('run' in b.dataset) {
-      const { url, body } = build(), out = q('[data-out]'), meta = q('[data-meta]')
-      const headers = body ? { 'Content-Type': 'application/json' } : {}
+      const { url, body, key } = build(), out = q('[data-out]'), meta = q('[data-meta]')
+      const headers = { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(key ? { 'x-api-key': key } : {}) }
       b.disabled = true; b.innerHTML = '<i class="spin"></i> Menjalankan…'; const t0 = performance.now()
       try {
         const r = await fetch(url, { method: method.toUpperCase(), headers, body: method.toLowerCase() === 'get' ? undefined : body || undefined })
@@ -117,7 +114,7 @@ function applyFilter() {
   $('#none').hidden = any
 }
 
-fetch('/docs').then((r) => r.json()).then((spec) => {
+fetch('/api/catalog').then((r) => r.json()).then((spec) => {
   const list = $('#list'); list.innerHTML = '<p class="nores" id="none" hidden>Tidak ada endpoint yang cocok.</p>'
   const by = {}
   for (const [path, ms] of Object.entries(spec.paths || {})) for (const [m, d] of Object.entries(ms)) (by[d.tags?.[0] || 'default'] ||= []).push([path, m, d])
