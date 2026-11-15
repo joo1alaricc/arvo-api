@@ -9,6 +9,9 @@ import { billing } from './api/billing.js'
 import { auth } from './api/auth.js'
 import { admin } from './api/admin.js'
 import { prettyPrint } from './utils/pretty.js'
+import { dynamicHandler, mergeSpec } from './api/dynamic.js'
+import { BUILTIN_PATHS } from './api/index.js'
+import { store } from './utils/session.js'
 
 const createApp = () => {
     const app = new OpenAPIHono()
@@ -24,15 +27,20 @@ const createApp = () => {
     app.route('/api/admin', admin)
     setupRoutes(app)
 
-    app.doc('/docs', {
-        openapi: '3.0.0',
-        info: {
-            version: '1.0.0',
-            title: 'Arvo',
-            description: 'About Simple and easy to use API. ⭐️ Star to support our work!',
-        },
-        servers: [{ url: '/' }],
+    /* Spec OpenAPI = endpoint bawaan + endpoint dinamis dari dashboard admin. Tidak mengurangi limit. */
+    app.get('/docs', async (c) => {
+        const doc = app.getOpenAPIDocument({
+            openapi: '3.0.0',
+            info: { version: '1.0.0', title: 'Arvo', description: 'About Simple and easy to use API. ⭐️ Star to support our work!' },
+            servers: [{ url: '/' }],
+        })
+        const r = await store(c).listEndpoints().catch(() => ({ endpoints: [] }))
+        c.header('Cache-Control', 'no-store')
+        return c.json(mergeSpec(doc, r.endpoints || [], !!c.get('isOwner')))
     })
+
+    /* Endpoint buatan admin (harus paling akhir supaya tidak menimpa route bawaan). */
+    app.all('/api/*', dynamicHandler(BUILTIN_PATHS))
 
     app.get('/health', (c) => c.json({ status: 'ok', runtime: 'cloudflare-workers' }))
 
