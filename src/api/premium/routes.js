@@ -3,7 +3,7 @@ import { createRoute, z } from '@hono/zod-openapi'
 export const premiumPingRoute = createRoute({
     method: 'get',
     path: '/api/stats/ping',
-    tags: ['premium'],
+    tags: ['stats'],
     description: 'Contoh endpoint premium. Wajib kirim header x-api-key dari paket Premium/VIP.',
     'x-status': 'ONLINE',
     'x-premium': false,
