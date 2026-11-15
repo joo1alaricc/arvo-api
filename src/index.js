@@ -74,6 +74,8 @@ const createApp = () => {
             return c.json({
                 error: 'Internal Server Error',
                 message: 'An unexpected error occurred.',
+                /* penyebab asli hanya terlihat oleh owner (IP di OWNER_IPS) */
+                ...(c.get('isOwner') ? { detail: String(err?.stack || err?.message || err).slice(0, 600) } : {}),
                 status: 500,
             }, 500)
         }
