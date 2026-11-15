@@ -143,3 +143,50 @@ API/
 <p align="center">
   <b>Built by YeMo Dev</b>
 </p>
+
+---
+
+## AKUN, PREMIUM / VIP & PEMBAYARAN
+
+- Halaman: `/` (landing), `/login.html`, `/profile.html`, `/playground.html`, `/admin.html`.
+- Akun: username + password (PBKDF2), atau Google (isi `GOOGLE_CLIENT_ID` di `wrangler.toml`). Tiap akun dapat API key.
+- Login Google memakai mode redirect (tanpa popup). Di Google Cloud Console > Credentials > OAuth client (Web), isi:
+  - Authorized JavaScript origins: `https://DOMAIN-KAMU` (dan `http://localhost:8787` untuk dev)
+  - Authorized redirect URIs: `https://DOMAIN-KAMU/api/auth/google/callback` (dan versi localhost untuk dev)
+- Foto profil diunggah dari file (disimpan kecil di database). Foto Google otomatis dipakai saat pertama masuk.
+- Video hero beranda: taruh file di `public/media/hero.mp4` lalu atur `HERO_VIDEO` di `wrangler.toml` (kosongkan untuk mematikan).
+- Owner: isi `OWNER_IPS` dengan IP publikmu. Dari IP itu: request unlimited dan `/admin.html` bisa dibuka tanpa login.
+- Paket diatur di `src/utils/plans.js`. Semua akun (member/premium/vip/owner) bisa beli.
+- Pembayaran: QRIS statis (`QRIS_IMAGE_URL`) diubah jadi dinamis via `qris-swap` dengan kode unik.
+  Konfirmasi otomatis: `POST /api/billing/webhook` + `Authorization: Bearer <PAYMENT_WEBHOOK_SECRET>`, body `{"amount": 5037}`.
+  Atau manual dari Admin > Order.
+- Setup: `npm install`, `wrangler secret put PAYMENT_WEBHOOK_SECRET`, `npm run deploy`.
+
+
+---
+
+## Update dashboard (Arvo)
+
+- **Limit hanya berkurang saat endpoint dipanggil.** Middleware global hanya mengenali IP/owner/blokir; kuota (IP gratis & harian key) dihitung di `meter()` ketika endpoint API benar-benar diakses. `/docs`, `/health`, favicon, halaman, dan `/api/auth|billing|admin` tidak memakan limit.
+- **Admin → Paket**: tambah/edit/hapus/sembunyikan paket (tersimpan di DB, seed awal dari `src/utils/plans.js`).
+- **Admin → Claim trial**: atur aktif/nonaktif, paket, dan durasi. Satu kali per akun dan per IP. User claim dari Profil → Events.
+- **Admin → Blokir IP** + kolom IP (daftar, terakhir, riwayat IP + hit) di daftar user. Tombol blokir tersedia per IP.
+- **Admin → Endpoint**: nama fitur, kategori/slug, method, akses (gratis/premium/VIP/owner), mode, kode, input (`url`, `username`, dst), tes, hapus, online/offline.
+  Cloudflare Workers melarang `eval`/`new Function`, jadi "kode" berupa konfigurasi: `proxy` (URL upstream https dengan `{input}`) atau `json` (template respons).
+- Playground: kolom `apikey` ada di setiap endpoint (mengikuti gaya BetaBotz), key otomatis disinkronkan antar endpoint.
+
+---
+
+## DASHBOARD ADMIN: GITHUB, UPDATE ZIP, ENDPOINT KODE, MEDIA
+
+**Setup sekali (super admin = IP di `OWNER_IPS`)**
+1. `wrangler.toml` → isi `GITHUB_REPO = "pemilik/nama-repo"` (dan `GITHUB_BRANCH`).
+2. `wrangler secret put GITHUB_API` → token GitHub (fine-grained: Contents *Read and write*, opsional Actions *Read*).
+3. Auto-deploy: pakai Cloudflare Workers Builds (Connect to Git). Tidak perlu GitHub Actions.
+4. Deploy manual sekali (`npm run deploy`), lalu semua perubahan berikutnya bisa dari dashboard.
+
+**Tab baru**: Update web (ZIP → diff → commit satu per satu, file main terakhir), Endpoint (bagian "Endpoint kode"), Media, Pembayaran (QRIS), Tim admin.
+
+**Hak akses**: super admin (owner) boleh semuanya. Admin tambahan (tab Tim) tidak bisa menambah admin, menambah/ubah endpoint, atau update kode.
+
+**Endpoint kode** dibuat sebagai `src/api/<kategori>/<slug>.js` (createRoute + handler, struktur sama dengan endpoint bawaan) dan didaftarkan otomatis di `src/api/index.js`.
