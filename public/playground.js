@@ -1,15 +1,18 @@
 document.querySelectorAll('[data-ico]').forEach((e) => (e.innerHTML = ico(e.dataset.ico)))
-const pk = $('#pk')
-try { pk.value = localStorage.getItem('arvo_key') || '' } catch {}
-pk.oninput = () => { try { localStorage.setItem('arvo_key', pk.value.trim()) } catch {} ; document.querySelectorAll('.pg-ep').forEach((e) => e._r?.()) }
-ready.then(({ user }) => { if (user) { $('#mine').hidden = false; $('#mine').onclick = () => { pk.value = user.api_key; pk.oninput() } } })
+/* API key disimpan sekali (localStorage) dan dipakai semua endpoint; tiap endpoint punya kolom apikey sendiri. */
+let savedKey = ''
+try { savedKey = localStorage.getItem('arvo_key') || '' } catch {}
+let me = null
+const keyInputs = () => document.querySelectorAll('.pg-ep [data-k="apikey"]')
+const setKey = (v, from) => { savedKey = v; try { localStorage.setItem('arvo_key', v) } catch {} ; keyInputs().forEach((i) => { if (i !== from) i.value = v }); document.querySelectorAll('.pg-ep').forEach((e) => e._r?.()) }
+ready.then(({ user }) => { me = user; document.querySelectorAll('[data-mine]').forEach((b) => (b.hidden = !user)) })
 $('#dl').onclick = async () => {
   const a = document.createElement('a'); a.href = URL.createObjectURL(await (await fetch('/docs')).blob()); a.download = 'openapi.json'; a.click()
 }
 
 const LANGS = { curl: 'cURL', js: 'JavaScript (fetch)', py: 'Python (requests)', php: 'PHP (cURL)' }
-const snippets = (method, url, body, key) => {
-  const h = { ...(key ? { 'x-api-key': key } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }
+const snippets = (method, url, body) => {
+  const h = { ...(body ? { 'Content-Type': 'application/json' } : {}) }
   const hc = Object.entries(h).map(([k, v]) => ` \\\n  -H '${k}: ${v}'`).join('')
   const hp = Object.entries(h).map(([k, v]) => `    '${k}: ${v}'`).join(',\n')
   return {
@@ -22,40 +25,57 @@ const snippets = (method, url, body, key) => {
 
 function card(path, method, d, tag) {
   const el = document.createElement('div'); el.className = 'pg-ep'
-  const params = d.parameters || [], premium = !!d['x-premium'], needs = params.filter((p) => p.required)
-  const chips = [...(premium ? ['<span class="chip">x-api-key</span>'] : []), ...params.map((p) => `<span class="chip ${p.required ? '' : 'opt'}">${esc(p.name)}</span>`)]
+  const params = (d.parameters || []).filter((p) => p.name !== 'apikey'), bodyProps = d.requestBody?.content?.['application/json']?.schema
+  const access = d['x-access'] || (d['x-premium'] ? 'premium' : 'free'), paid = access !== 'free', offline = d['x-status'] === 'OFFLINE'
+  const bodyKeys = Object.keys(bodyProps?.properties || {}), bodyReq = bodyProps?.required || []
+  const chips = [`<span class="chip ${paid ? '' : 'opt'}">apikey</span>`, ...params.map((p) => `<span class="chip ${p.required ? '' : 'opt'}">${esc(p.name)}</span>`), ...bodyKeys.map((k) => `<span class="chip ${bodyReq.includes(k) ? '' : 'opt'}">${esc(k)}</span>`)]
   const m = method.toLowerCase()
   el._txt = `${path} ${d.summary || ''} ${d.description || ''} ${tag}`.toLowerCase()
-  el.innerHTML = `<button class="hd" data-hd><span class="mt ${m}">${esc(method.toUpperCase())}</span><span class="p">${esc(path)}</span>${premium ? '<span class="tag2">premium</span>' : ''}<span class="chev">${ico('chev')}</span></button>
-  <div class="pg-b">
+  const field = (name, label, extra, ph, req, kind) => `<div><div class="lbl"><span>${esc(label)}${req ? ' <em>*</em>' : ''}</span><span>${esc(extra)}</span></div><input data-k="${esc(name)}" data-in="${kind}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false"></div>`
+  el.innerHTML = `<button class="hd" data-hd><span class="mt ${m}">${esc(method.toUpperCase())}</span><span class="p">${esc(path)}</span>${access === 'vip' ? '<span class="tag2">vip</span>' : access === 'premium' ? '<span class="tag2">premium</span>' : access === 'owner' ? '<span class="tag2">owner</span>' : ''}${offline ? '<span class="tag2" style="color:var(--bad);border-color:var(--bad)">offline</span>' : ''}<span class="chev">${ico('chev')}</span></button>
+  <div class="pg-b"><div class="in">
     ${d.summary || d.description ? `<p class="desc">${esc(d.summary || '')}${d.summary && d.description ? ' · ' : ''}${esc(d.description || '')}</p>` : ''}
-    <div class="need"><span>Data yang diperlukan:</span>${chips.join('') || '<span class="chip opt">tidak ada</span>'}</div>
-    ${params.map((p) => `<div><div class="lbl"><span>${esc(p.name)}${p.required ? ' <em>*</em>' : ''}</span><span>${esc(p.in)}</span></div><input data-k="${esc(p.name)}" data-in="${esc(p.in)}" placeholder="${esc(p.example ?? p.schema?.default ?? p.schema?.type ?? p.name)}" autocomplete="off" spellcheck="false"></div>`).join('')}
-    ${d.requestBody ? `<div><div class="lbl"><span>Body</span><span>JSON</span></div><textarea data-body rows="5" placeholder='{ "key": "value" }' spellcheck="false"></textarea></div>` : ''}
+    <div class="need"><span>Data yang diperlukan dari server:</span>${chips.join('')}</div>
+    <div><div class="lbl"><span>apikey${paid ? ' <em>*</em>' : ''}</span><button class="ib" data-mine hidden title="Pakai key akunku" aria-label="Pakai key akunku" style="width:26px;height:26px">${ico('user')}</button></div>
+      <input data-k="apikey" data-in="query" placeholder="${paid ? 'arvo_xxxxxxxx (wajib)' : 'arvo_xxxxxxxx (opsional)'}" autocomplete="off" spellcheck="false" value="${esc(savedKey)}"></div>
+    ${params.map((p) => field(p.name, p.name, p.in, p.example ?? p.schema?.default ?? p.schema?.type ?? p.name, p.required, p.in)).join('')}
+    ${bodyKeys.map((k) => field(k, k, 'body', bodyProps.properties[k].example ?? k, bodyReq.includes(k), 'body')).join('')}
+    ${d.requestBody && !bodyKeys.length ? `<div><div class="lbl"><span>Body</span><span>JSON</span></div><textarea data-body rows="4" placeholder='{ "key": "value" }' spellcheck="false"></textarea></div>` : ''}
+    <div><div class="lbl"><span>Pilih contoh kode</span><button class="ib" data-cc aria-label="Salin kode" hidden>${ico('copy')}</button></div>
+      <select data-lang><option value="">Pilih</option>${Object.entries(LANGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+      <div class="cbox" data-code style="margin-top:8px" hidden><pre></pre></div></div>
     <div><div class="lbl"><span>Request URL (Try it)</span></div><div class="ubox"><code data-ru></code></div></div>
     <button class="btn go block" data-run>${ico('play')} Try it out</button>
-    <p class="warn" data-warn hidden>Endpoint premium: isi API key di bagian atas halaman.</p>
+    <p class="warn" data-warn hidden>Endpoint ${access === 'vip' ? 'VIP' : access === 'owner' ? 'owner' : 'premium'}: isi apikey dari paket yang sesuai.</p>
     <div><div class="lbl"><span>Full URL</span></div><div class="ubox"><code data-fu></code><button class="ib" data-cu aria-label="Salin URL">${ico('copy')}</button></div></div>
-    <div><div class="lbl"><span>Contoh kode</span><button class="ib" data-cc aria-label="Salin kode" hidden>${ico('copy')}</button></div>
-      <select data-lang><option value="">Pilih contoh kode</option>${Object.entries(LANGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
-      <div class="cbox" data-code style="margin-top:8px" hidden><pre></pre></div></div>
     <div><div class="rh"><span class="l">Response</span><button class="btn ghost sm" data-cr>${ico('copy')} Copy Result</button></div>
       <div class="cbox" data-out><p class="empty">Belum ada response. Klik Try it out.</p></div><p class="rmeta" data-meta></p></div>
-  </div>`
+  </div></div>`
   const q = (s) => el.querySelector(s)
+  const keyEl = q('[data-k="apikey"]')
+  keyEl.addEventListener('input', () => setKey(keyEl.value.trim(), keyEl))
+  q('[data-mine]').onclick = () => { if (me) { keyEl.value = me.api_key; setKey(me.api_key, keyEl) } }
+  q('[data-mine]').hidden = !me
+  /* query (apikey di depan, mirip betabotz) dan body dipisah */
   const build = () => {
-    let p = path; const qs = new URLSearchParams()
-    el.querySelectorAll('[data-k]').forEach((i) => { if (!i.value.trim()) return; i.dataset.in === 'path' ? (p = p.replace(`{${i.dataset.k}}`, encodeURIComponent(i.value.trim()))) : qs.append(i.dataset.k, i.value.trim()) })
+    let p = path; const qs = new URLSearchParams(), bd = {}
+    el.querySelectorAll('[data-k]').forEach((i) => {
+      const v = i.value.trim(); if (!v) return
+      if (i.dataset.in === 'path') p = p.replace(`{${i.dataset.k}}`, encodeURIComponent(v))
+      else if (i.dataset.in === 'body') bd[i.dataset.k] = v
+      else qs.append(i.dataset.k, v)
+    })
+    const raw = q('[data-body]')?.value.trim()
     const rel = p + (qs.toString() ? '?' + qs : '')
-    return { rel, url: location.origin + rel, body: q('[data-body]')?.value.trim() }
+    return { rel, url: location.origin + rel, body: raw || (Object.keys(bd).length ? JSON.stringify(bd) : ''), key: keyEl.value.trim() }
   }
   const showCode = () => {
     const l = q('[data-lang]').value, box = q('[data-code]'); box.hidden = !l; q('[data-cc]').hidden = !l
-    if (l) { const { url, body } = build(); box.querySelector('pre').textContent = snippets(method.toUpperCase(), url, body, pk.value.trim())[l] }
+    if (l) { const { url, body } = build(); box.querySelector('pre').textContent = snippets(method.toUpperCase(), url, body)[l] }
   }
   el._r = () => {
-    const { rel, url } = build(); q('[data-ru]').textContent = rel; q('[data-fu]').textContent = url
-    q('[data-warn]').hidden = !(premium && !pk.value.trim()); showCode()
+    const { rel, url, key } = build(); q('[data-ru]').textContent = rel; q('[data-fu]').textContent = url
+    q('[data-warn]').hidden = !(paid && !key); showCode()
   }
   el.addEventListener('input', el._r); el._r()
   let last = ''
@@ -66,9 +86,9 @@ function card(path, method, d, tag) {
     else if ('cc' in b.dataset) navigator.clipboard.writeText(q('[data-code] pre').textContent).then(() => flash(b))
     else if ('cr' in b.dataset) { if (last) navigator.clipboard.writeText(last).then(() => flash(b, 'Tersalin')) }
     else if ('run' in b.dataset) {
-      const { url, body } = build(), out = q('[data-out]'), meta = q('[data-meta]'), key = pk.value.trim()
-      const headers = { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(key ? { 'x-api-key': key } : {}) }
-      b.disabled = true; b.innerHTML = 'Menjalankan…'; const t0 = performance.now()
+      const { url, body } = build(), out = q('[data-out]'), meta = q('[data-meta]')
+      const headers = body ? { 'Content-Type': 'application/json' } : {}
+      b.disabled = true; b.innerHTML = '<i class="spin"></i> Menjalankan…'; const t0 = performance.now()
       try {
         const r = await fetch(url, { method: method.toUpperCase(), headers, body: method.toLowerCase() === 'get' ? undefined : body || undefined })
         const ct = r.headers.get('content-type') || '', ms = Math.round(performance.now() - t0)
@@ -102,9 +122,9 @@ fetch('/docs').then((r) => r.json()).then((spec) => {
   const by = {}
   for (const [path, ms] of Object.entries(spec.paths || {})) for (const [m, d] of Object.entries(ms)) (by[d.tags?.[0] || 'default'] ||= []).push([path, m, d])
   Object.entries(by).forEach(([tag, eps], i) => {
-    const g = document.createElement('section'); g.className = 'grp' + (i === 0 ? ' open' : '')
-    g.innerHTML = `<button class="grp-h">${tile('folder')}<span>${esc(tag)}</span><span class="cnt"></span><span class="chev">${ico('chev')}</span></button><div class="grp-b"></div>`
-    const els = eps.map(([p, m, d]) => card(p, m, d, tag)); g.querySelector('.grp-b').append(...els)
+    const g = document.createElement('section'); g.className = 'grp' + (i === 0 ? ' open' : ''); g.style.animationDelay = i * 0.05 + 's'
+    g.innerHTML = `<button class="grp-h">${tile('folder')}<span>${esc(tag)}</span><span class="cnt"></span><span class="chev">${ico('chev')}</span></button><div class="grp-b"><div class="in"></div></div>`
+    const els = eps.map(([p, m, d]) => card(p, m, d, tag)); g.querySelector('.in').append(...els)
     g.querySelector('.grp-h').onclick = () => g.classList.toggle('open')
     list.insertBefore(g, $('#none')); groups.push({ el: g, eps: els, cnt: g.querySelector('.cnt') })
   })
