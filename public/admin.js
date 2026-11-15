@@ -1,7 +1,23 @@
-const MENU = { ringkasan: 'Ringkasan', pengguna: 'Pengguna', order: 'Order', paket: 'Paket', kode: 'Kode redeem' }
+const MENU = {
+  ringkasan: ['Ringkasan', 'grid'], pengguna: ['Pengguna', 'user'], endpoint: ['Endpoint', 'link'], paket: ['Paket', 'shield'],
+  trial: ['Claim trial', 'gift'], blokir: ['Blokir IP', 'lock'], order: ['Order', 'bag'], kode: ['Kode redeem', 'key'],
+}
 const view = () => (location.hash.slice(1) in MENU ? location.hash.slice(1) : 'ringkasan')
 const out = () => $('#v')
 const load = async (fn) => { try { await fn() } catch (e) { out().innerHTML = `<p class="err">${esc(e.message)}</p>` } }
+const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v))
+const val = (id) => $('#' + id).value.trim()
+const loading = () => (out().innerHTML = '<div class="sk" style="height:18px;width:40%;margin-bottom:12px"></div><div class="sk" style="height:120px"></div>')
+
+/* dialog generik */
+function modal(html, cls = '') {
+  const d = document.createElement('dialog'); d.className = cls
+  d.innerHTML = html; document.body.append(d); d.addEventListener('close', () => d.remove())
+  d.addEventListener('click', (e) => { if (e.target === d) d.close() })
+  d.showModal(); return d
+}
+const accessBadge = (a) => `<span class="badge ${a === 'vip' || a === 'owner' ? 'vip' : a === 'premium' ? 'premium' : ''}">${{ free: 'Gratis', premium: 'Premium', vip: 'VIP', owner: 'Owner' }[a] || a}</span>`
+const roleBadge = (r) => `<span class="badge ${r}">${r}</span>`
 
 const V = {
   async ringkasan() {
@@ -10,37 +26,112 @@ const V = {
       <div><b>${s.users}</b><span>Total user</span></div><div><b>${s.premium}</b><span>Premium aktif</span></div><div><b>${s.vip}</b><span>VIP aktif</span></div>
       <div><b>${s.requests_today.toLocaleString('id-ID')}</b><span>Request hari ini (key)</span></div>
       <div><b>${rp(s.revenue)}</b><span>Pendapatan (${s.paid_orders} order)</span></div><div><b>${s.pending_orders}</b><span>Order pending</span></div></div>
-      <div class="panel"><h3>Endpoint teratas hari ini</h3><table>${s.top_paths.map((p) => `<tr><td class="mono">${esc(p.path)}</td><td>${p.n}</td></tr>`).join('') || '<tr><td class="sub">Belum ada data</td></tr>'}</table></div>`
+      <div class="panel"><h3>Endpoint teratas hari ini</h3><div class="tw"><table>${s.top_paths.map((p) => `<tr><td class="mono">${esc(p.path)}</td><td>${p.n}</td></tr>`).join('') || '<tr><td class="sub">Belum ada data</td></tr>'}</table></div></div>`
   },
+
+  /* ---------- pengguna (dengan IP) ---------- */
   async pengguna(q = '') {
-    const { users } = await api('/admin/users?q=' + encodeURIComponent(q)), { plans } = await api('/billing/plans')
-    out().innerHTML = `<h1>Pengguna</h1><div class="row" style="margin-bottom:12px"><input id="q" placeholder="Cari username/email" value="${esc(q)}" style="flex:1"><button class="btn" id="qs">Cari</button></div>
-      <div class="panel tw"><table><tr><th>User</th><th>Role</th><th>Paket</th><th>Berakhir</th><th>Request</th><th>Aksi</th></tr>${users.map((u) => `<tr>
-        <td>${esc(u.username)}<br><span class="sub">${esc(u.email || '')}</span></td><td><span class="badge ${u.role}">${u.role}</span></td><td>${esc(u.plan_name || '-')}</td>
-        <td>${u.plan_name ? fmtDate(u.expires_at) : '-'}</td><td>${u.total_requests}</td>
-        <td><div class="row"><select data-p="${u.id}">${plans.map((p) => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
-          <input data-d="${u.id}" type="number" value="30" min="1" style="width:70px" title="hari (0 = permanen)"><button class="btn" data-g="${u.id}">Beri</button>
-          <button class="btn ghost" data-r="${u.id}">Cabut</button></div></td></tr>`).join('')}</table></div>`
+    const [{ users }, { plans }] = await Promise.all([api('/admin/users?q=' + encodeURIComponent(q)), api('/admin/plans')])
+    out().innerHTML = `<h1>Pengguna</h1><div class="row" style="margin-bottom:10px"><input id="q" placeholder="Cari username, email, atau IP" value="${esc(q)}" style="flex:1"><button class="btn" id="qs">Cari</button></div>
+      <div class="panel tw" style="padding:6px 10px"><table><tr><th>User</th><th>IP</th><th>Paket</th><th>Request</th><th>Aktif</th><th>Aksi</th></tr>${users.map((u) => `<tr>
+        <td><b>${esc(u.username)}</b><br><span class="sub" style="margin:0;font-size:11.5px">${esc(u.email || '')}</span></td>
+        <td><span class="ipc ${u.last_ip_blocked ? 'bl' : ''}">${esc(u.last_ip || '–')}</span>${u.reg_ip && u.reg_ip !== u.last_ip ? `<br><span class="sub ipc" style="margin:0" title="IP saat daftar">daftar: ${esc(u.reg_ip)}</span>` : ''}</td>
+        <td>${roleBadge(u.role)} ${esc(u.plan_name || '')}<br><span class="sub" style="margin:0;font-size:11.5px">${u.plan_name ? fmtDate(u.expires_at) : ''}</span></td>
+        <td>${u.used_today}${u.daily_limit ? '/' + u.daily_limit : ''} <span class="sub" style="margin:0">· ${u.total_requests}</span></td>
+        <td class="sub" style="font-size:11.5px;white-space:nowrap">${u.last_seen ? fmtDT(u.last_seen) : '–'}</td>
+        <td><div class="acts"><select data-p="${u.id}">${plans.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select>
+          <input data-d="${u.id}" type="number" value="30" min="0" style="width:62px" title="hari (0 = permanen)"><button class="btn" data-g="${u.id}">Beri</button>
+          <button class="btn ghost" data-r="${u.id}">Cabut</button><button class="btn ghost" data-ip="${u.id}" data-name="${esc(u.username)}">IP</button></div></td></tr>`).join('') || '<tr><td colspan="6" class="sub">Tidak ada user.</td></tr>'}</table></div>`
     $('#qs').onclick = () => load(() => V.pengguna($('#q').value))
+    $('#q').onkeydown = (e) => { if (e.key === 'Enter') $('#qs').click() }
     out().querySelectorAll('[data-g]').forEach((b) => (b.onclick = async () => {
       const id = b.dataset.g, d = +$(`[data-d="${id}"]`).value
-      try { await put(`/admin/users/${id}/grant`, { plan: $(`[data-p="${id}"]`).value, days: d, permanent: d === 0 }, 'POST'); V.pengguna(q) } catch (e) { alert(e.message) }
+      try { await put(`/admin/users/${id}/grant`, { plan: $(`[data-p="${id}"]`).value, days: d, permanent: d === 0 }, 'POST'); toast('Paket diberikan'); V.pengguna(q) } catch (e) { toast(e.message) }
     }))
     out().querySelectorAll('[data-r]').forEach((b) => (b.onclick = async () => { if (confirm('Cabut paket user ini?')) { await put(`/admin/users/${b.dataset.r}/revoke`, {}, 'POST'); V.pengguna(q) } }))
+    out().querySelectorAll('[data-ip]').forEach((b) => (b.onclick = () => userIps(b.dataset.ip, b.dataset.name, () => V.pengguna(q))))
   },
+
+  /* ---------- endpoint ---------- */
+  async endpoint() {
+    const { endpoints } = await api('/admin/endpoints')
+    EPS = Object.fromEntries(endpoints.map((e) => [e.id, e]))
+    out().innerHTML = `<div class="bar"><h1>Endpoint</h1><button class="btn" id="add">${ico('plus')} Tambah fitur</button></div>
+      <p class="sub">Endpoint bawaan (<span class="mono">/api/stats</span>, <span class="mono">/api/premium/ping</span>) ada di kode. Fitur di bawah ini dibuat dari dashboard dan langsung muncul di Playground.</p>
+      <div class="panel tw" style="padding:6px 10px"><table><tr><th>Fitur</th><th>Path</th><th>Akses</th><th>Mode</th><th>Online</th><th>Aksi</th></tr>${endpoints.map((e) => `<tr>
+        <td><b>${esc(e.name)}</b><br><span class="sub" style="margin:0;font-size:11.5px">${e.inputs.map((i) => esc(i.name)).join(', ') || 'tanpa input'}</span></td>
+        <td><span class="mt ${e.method.toLowerCase()}" style="font-size:10px">${e.method}</span> <span class="mono" style="font-size:12px">${esc(e.path)}</span></td>
+        <td>${accessBadge(e.access)}</td><td>${e.mode}</td>
+        <td><label class="sw"><input type="checkbox" data-on="${e.id}" ${e.status === 'online' ? 'checked' : ''}><i></i></label></td>
+        <td><div class="acts"><button class="btn go" data-t="${e.id}">Tes</button><button class="btn ghost" data-e="${e.id}">Edit</button><button class="btn ghost red" data-x="${e.id}">Hapus</button></div></td></tr>`).join('') || '<tr><td colspan="6" class="sub">Belum ada endpoint buatan admin.</td></tr>'}</table></div>`
+    $('#add').onclick = () => epForm()
+    out().querySelectorAll('[data-e]').forEach((b) => (b.onclick = () => epForm(EPS[b.dataset.e])))
+    out().querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => epTest(EPS[b.dataset.t])))
+    out().querySelectorAll('[data-on]').forEach((b) => (b.onchange = async () => {
+      try { await put('/admin/endpoints/' + b.dataset.on, { ...EPS[b.dataset.on], status: b.checked ? 'online' : 'offline' }, 'PUT'); toast(b.checked ? 'Endpoint online' : 'Endpoint offline'); V.endpoint() } catch (e) { toast(e.message); b.checked = !b.checked }
+    }))
+    out().querySelectorAll('[data-x]').forEach((b) => (b.onclick = async () => { if (confirm('Hapus endpoint ' + EPS[b.dataset.x].path + '?')) { await api('/admin/endpoints/' + b.dataset.x, { method: 'DELETE' }); toast('Endpoint dihapus'); V.endpoint() } }))
+  },
+
+  /* ---------- paket ---------- */
+  async paket() {
+    const { plans } = await api('/admin/plans')
+    PL = Object.fromEntries(plans.map((p) => [p.id, p]))
+    out().innerHTML = `<div class="bar"><h1>Paket</h1><button class="btn" id="add">${ico('plus')} Tambah paket</button></div>
+      <div class="panel tw" style="padding:6px 10px"><table><tr><th>Paket</th><th>Tier</th><th>Limit/hari</th><th>Maks IP</th><th>Key custom</th><th>Harga</th><th>User</th><th>Tampil</th><th>Aksi</th></tr>${plans.map((p) => `<tr>
+        <td><b>${esc(p.name)}</b><br><span class="mono sub" style="margin:0;font-size:11px">${esc(p.id)}</span></td><td>${roleBadge(p.tier)}</td><td>${p.daily ?? '∞'}</td><td>${p.maxIps}</td><td>${p.customKey ? 'Ya' : '–'}</td>
+        <td style="white-space:nowrap">${p.basePrice ? `${rp(p.basePrice)} / ${p.baseDays} hr` : ''}${p.basePrice && p.permanentPrice ? '<br>' : ''}${p.permanentPrice ? `${rp(p.permanentPrice)} permanen` : ''}</td>
+        <td>${p.users}</td><td><span class="badge ${p.visible ? 'online' : 'offline'}">${p.visible ? 'ya' : 'sembunyi'}</span></td>
+        <td><div class="acts"><button class="btn ghost" data-e="${esc(p.id)}">Edit</button><button class="btn ghost red" data-x="${esc(p.id)}">Hapus</button></div></td></tr>`).join('')}</table></div>`
+    $('#add').onclick = () => planForm()
+    out().querySelectorAll('[data-e]').forEach((b) => (b.onclick = () => planForm(PL[b.dataset.e])))
+    out().querySelectorAll('[data-x]').forEach((b) => (b.onclick = async () => {
+      if (!confirm('Hapus paket ' + PL[b.dataset.x].name + '? Kode redeem paket ini ikut terhapus.')) return
+      try { await api('/admin/plans/' + b.dataset.x, { method: 'DELETE' }); toast('Paket dihapus'); V.paket() } catch (e) { toast(e.message) }
+    }))
+  },
+
+  /* ---------- claim trial ---------- */
+  async trial() {
+    const [t, { plans }] = await Promise.all([api('/admin/trial'), api('/admin/plans')])
+    out().innerHTML = `<h1>Claim trial</h1><div class="panel"><h3>Pengaturan</h3>
+      <div class="frm"><label class="chk"><span class="sw"><input type="checkbox" id="te" ${t.enabled ? 'checked' : ''}><i></i></span> Claim trial aktif</label>
+        <div><label>Paket trial</label><select id="tp">${plans.map((p) => `<option value="${esc(p.id)}" ${p.id === t.plan ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+        <div><label>Durasi (hari)</label><input id="td" type="number" min="1" max="365" value="${t.days}"></div></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="ts">Simpan</button></div><p class="msg" id="tm">Tiap akun hanya bisa claim sekali dan satu IP hanya sekali. User yang masih punya paket aktif tidak bisa claim.</p></div>
+      <div class="panel tw"><h3>Riwayat claim</h3><table><tr><th>User</th><th>IP</th><th>Paket</th><th>Tanggal</th><th></th></tr>${t.claims.map((c) => `<tr><td>${esc(c.username || '#' + c.user_id)}</td><td class="ipc">${esc(c.ip)}</td><td>${esc(c.plan)} · ${c.days} hr</td><td>${fmtDT(c.at)}</td>
+        <td><button class="btn ghost" data-rc="${c.user_id}">Reset</button></td></tr>`).join('') || '<tr><td class="sub" colspan="5">Belum ada yang claim.</td></tr>'}</table></div>`
+    $('#ts').onclick = async () => {
+      try { await put('/admin/trial', { enabled: $('#te').checked, plan: $('#tp').value, days: +$('#td').value }); say($('#tm'), 'Pengaturan trial disimpan.'); toast('Tersimpan') } catch (e) { say($('#tm'), e.message, 1) }
+    }
+    out().querySelectorAll('[data-rc]').forEach((b) => (b.onclick = async () => { if (confirm('Reset claim user ini supaya bisa claim lagi?')) { await api('/admin/trial/claims/' + b.dataset.rc, { method: 'DELETE' }); V.trial() } }))
+  },
+
+  /* ---------- blokir IP ---------- */
+  async blokir() {
+    const { blocked } = await api('/admin/blocked')
+    out().innerHTML = `<h1>Blokir IP</h1><div class="panel"><h3>Blokir IP baru</h3><div class="row"><input id="bi" placeholder="Contoh: 203.0.113.9" style="flex:1;min-width:150px"><input id="br" placeholder="Alasan (opsional)" style="flex:2;min-width:150px"><button class="btn red" id="bb">Blokir</button></div>
+      <p class="msg" id="bm">IP terblokir ditolak di semua halaman dan endpoint. Perubahan berlaku maksimal ±15 detik. IP owner tidak bisa diblokir.</p></div>
+      <div class="panel tw"><table><tr><th>IP</th><th>Alasan</th><th>User terkait</th><th>Sejak</th><th></th></tr>${blocked.map((b) => `<tr><td class="ipc">${esc(b.ip)}</td><td>${esc(b.reason || '–')}</td><td>${esc(b.users || '–')}</td><td>${fmtDT(b.created_at)}</td>
+        <td><button class="btn ghost" data-u="${esc(b.ip)}">Buka blokir</button></td></tr>`).join('') || '<tr><td class="sub" colspan="5">Tidak ada IP yang diblokir.</td></tr>'}</table></div>`
+    $('#bb').onclick = async () => { try { await put('/admin/blocked', { ip: val('bi'), reason: val('br') }, 'POST'); toast('IP diblokir'); V.blokir() } catch (e) { say($('#bm'), e.message, 1) } }
+    out().querySelectorAll('[data-u]').forEach((b) => (b.onclick = async () => { await api('/admin/blocked/' + encodeURIComponent(b.dataset.u), { method: 'DELETE' }); toast('Blokir dibuka'); V.blokir() }))
+  },
+
   async order() {
     const { orders } = await api('/admin/orders')
     out().innerHTML = `<h1>Order</h1><div class="panel tw"><table><tr><th>Tanggal</th><th>User</th><th>Paket</th><th>Total</th><th>Status</th><th></th></tr>${orders.map((o) => `<tr>
       <td>${fmtDate(o.created_at)}</td><td>${esc(o.username || '-')}</td><td>${esc(o.plan)} ${o.days ? o.days + ' hr' : '∞'}</td><td>${rp(o.total)}</td><td>${esc(o.status)}</td>
-      <td>${o.status === 'pending' ? `<button class="btn" data-c="${o.id}">Konfirmasi</button> <button class="btn ghost" data-x="${o.id}">Batal</button>` : ''}</td></tr>`).join('')}</table></div>`
-    const act = (sel, kind) => out().querySelectorAll(sel).forEach((b) => (b.onclick = async () => { try { await put(`/admin/orders/${b.dataset[kind]}/${kind === 'c' ? 'confirm' : 'cancel'}`, {}, 'POST'); V.order() } catch (e) { alert(e.message) } }))
+      <td>${o.status === 'pending' ? `<div class="acts"><button class="btn" data-c="${o.id}">Konfirmasi</button><button class="btn ghost" data-x="${o.id}">Batal</button></div>` : ''}</td></tr>`).join('')}</table></div>`
+    const act = (sel, kind) => out().querySelectorAll(sel).forEach((b) => (b.onclick = async () => { try { await put(`/admin/orders/${b.dataset[kind]}/${kind === 'c' ? 'confirm' : 'cancel'}`, {}, 'POST'); V.order() } catch (e) { toast(e.message) } }))
     act('[data-c]', 'c'); act('[data-x]', 'x')
   },
+
   async kode() {
-    const [{ codes }, { plans }] = await Promise.all([api('/admin/codes'), api('/billing/plans')])
+    const [{ codes }, { plans }] = await Promise.all([api('/admin/codes'), api('/admin/plans')])
     out().innerHTML = `<h1>Kode redeem</h1><div class="panel"><h3>Buat kode</h3>
-      <div class="row"><input id="kc" placeholder="Kode (kosong = acak)" style="flex:1;min-width:160px"><select id="kp">${plans.map((p) => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
-        <input id="kd" type="number" value="30" min="0" style="width:90px" title="hari (0 = permanen)"><input id="kx" type="number" value="1" min="1" style="width:90px" title="maks pemakaian"><button class="btn" id="kb">Buat</button></div>
+      <div class="row"><input id="kc" placeholder="Kode (kosong = acak)" style="flex:1;min-width:140px"><select id="kp">${plans.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select>
+        <input id="kd" type="number" value="30" min="0" style="width:80px" title="hari (0 = permanen)"><input id="kx" type="number" value="1" min="1" style="width:80px" title="maks pemakaian"><button class="btn" id="kb">Buat</button></div>
       <p class="msg" id="kmsg">Durasi 0 = permanen. Kolom kedua = berapa orang yang boleh memakai kode.</p></div>
       <div class="panel tw"><table><tr><th>Kode</th><th>Paket</th><th>Durasi</th><th>Terpakai</th><th></th></tr>${codes.map((c) => `<tr><td class="mono">${esc(c.code)}</td><td>${esc((plans.find((p) => p.id === c.plan) || {}).name || c.plan)}</td>
         <td>${c.days ? c.days + ' hr' : 'Permanen'}</td><td>${c.used}/${c.max_uses}</td><td><button class="btn ghost" data-dc="${esc(c.code)}">Hapus</button></td></tr>`).join('') || '<tr><td class="sub">Belum ada kode</td></tr>'}</table></div>`
@@ -51,17 +142,113 @@ const V = {
     }
     out().querySelectorAll('[data-dc]').forEach((b) => (b.onclick = async () => { if (confirm('Hapus kode ' + b.dataset.dc + '?')) { await api('/admin/codes/' + encodeURIComponent(b.dataset.dc), { method: 'DELETE' }); V.kode() } }))
   },
-  async paket() {
-    const { plans } = await api('/billing/plans')
-    out().innerHTML = `<h1>Paket</h1><p class="sub">Untuk mengubah harga/limit, edit <span class="mono">src/utils/plans.js</span> lalu deploy ulang.</p>
-      <div class="panel tw"><table><tr><th>Paket</th><th>Limit/hari</th><th>Maks IP</th><th>Custom key</th><th>Harga</th></tr>${plans.map((p) => `<tr><td>${p.name}</td><td>${p.daily ?? '∞'}</td><td>${p.maxIps}</td><td>${p.customKey ? 'Ya' : '-'}</td>
-      <td>${p.basePrice ? `${rp(p.basePrice)} / ${p.baseDays} hr` : ''} ${p.permanentPrice ? `${rp(p.permanentPrice)} permanen` : ''}</td></tr>`).join('')}</table></div>`
-  },
 }
-const draw = () => { document.querySelectorAll('.side nav a').forEach((a) => a.classList.toggle('on', a.hash.slice(1) === view())); load(V[view()]) }
+let EPS = {}, PL = {}
+
+/* ---------- detail IP user ---------- */
+async function userIps(id, name, done) {
+  const d = modal(`<h3>IP · ${esc(name)}</h3><div id="ipb"><div class="sk" style="height:60px"></div></div><button class="btn ghost" id="cl">Tutup</button>`, 'lg')
+  $('#cl', d).onclick = () => d.close()
+  const draw = async () => {
+    const r = await api(`/admin/users/${id}/ips`)
+    $('#ipb', d).innerHTML = `<p class="sub" style="font-size:12px">IP daftar: <span class="ipc">${esc(r.reg_ip || '–')}</span>. Tombol blokir menolak IP itu di seluruh situs, jadi pastikan bukan IP bersama (kantor/kampus).</p>
+      <div class="tw"><table><tr><th>IP</th><th>Sumber</th><th>Pertama</th><th>Terakhir</th><th>Hit</th><th></th></tr>${r.ips.map((i) => `<tr><td class="ipc ${i.blocked ? 'bl' : ''}">${esc(i.ip)}</td><td>${i.src === 'api' ? 'API' : 'Web'}</td><td>${fmtDT(i.first_at)}</td><td>${fmtDT(i.last_at)}</td><td>${i.hits}</td>
+        <td>${i.blocked ? `<button class="btn ghost" data-ub="${esc(i.ip)}">Buka</button>` : `<button class="btn red" data-bl="${esc(i.ip)}">Blokir</button>`}</td></tr>`).join('') || '<tr><td colspan="6" class="sub">Belum ada IP tercatat.</td></tr>'}</table></div>`
+    d.querySelectorAll('[data-bl]').forEach((b) => (b.onclick = async () => { try { await put('/admin/blocked', { ip: b.dataset.bl, reason: 'user ' + name }, 'POST'); toast('IP diblokir'); draw(); done() } catch (e) { toast(e.message) } }))
+    d.querySelectorAll('[data-ub]').forEach((b) => (b.onclick = async () => { await api('/admin/blocked/' + encodeURIComponent(b.dataset.ub), { method: 'DELETE' }); toast('Blokir dibuka'); draw(); done() }))
+  }
+  try { await draw() } catch (e) { $('#ipb', d).innerHTML = `<p class="err">${esc(e.message)}</p>` }
+}
+
+/* ---------- form paket ---------- */
+function planForm(p) {
+  const edit = !!p; p ||= { tier: 'premium', daily: 1000, maxIps: 3, customKey: false, visible: true, baseDays: 30, basePrice: 10000 }
+  const d = modal(`<h3>${edit ? 'Edit paket' : 'Tambah paket'}</h3><div class="frm">
+    <div><label>ID paket</label><input id="pid" value="${esc(p.id || '')}" ${edit ? 'disabled' : ''} placeholder="mis. premium4"></div>
+    <div><label>Nama</label><input id="pn" value="${esc(p.name || '')}" placeholder="Premium 4"></div>
+    <div><label>Tier</label><select id="pt"><option value="premium" ${p.tier === 'premium' ? 'selected' : ''}>Premium</option><option value="vip" ${p.tier === 'vip' ? 'selected' : ''}>VIP</option></select></div>
+    <div><label>Limit / hari (kosong = unlimited)</label><input id="pd" type="number" min="1" value="${p.daily ?? ''}"></div>
+    <div><label>Maks IP whitelist</label><input id="pm" type="number" min="0" value="${p.maxIps}"></div>
+    <div><label>Harga acuan (Rp)</label><input id="pb" type="number" min="1000" value="${p.basePrice ?? ''}" placeholder="kosong = tanpa durasi"></div>
+    <div><label>Hari acuan</label><input id="pbd" type="number" min="1" value="${p.baseDays ?? ''}"></div>
+    <div><label>Harga permanen (Rp)</label><input id="pp" type="number" min="1000" value="${p.permanentPrice ?? ''}" placeholder="kosong = tidak ada"></div>
+    <label class="chk"><input type="checkbox" id="pc" ${p.customKey ? 'checked' : ''}> Boleh custom API key</label>
+    <label class="chk"><input type="checkbox" id="pv" ${p.visible ? 'checked' : ''}> Tampil di halaman paket</label></div>
+    <p class="msg" id="pmsg">Harga per hari dihitung proporsional dari harga acuan. Perubahan limit berlaku langsung ke semua user paket ini.</p>
+    <div class="row" style="margin-top:10px"><button class="btn" id="ps">Simpan</button><button class="btn ghost" id="pc2">Batal</button></div>`, 'lg')
+  $('#pc2', d).onclick = () => d.close()
+  $('#ps', d).onclick = async () => {
+    const g = (id) => $('#' + id, d)
+    const body = { id: g('pid').value.trim(), name: g('pn').value.trim(), tier: g('pt').value, daily: num(g('pd').value), maxIps: num(g('pm').value) ?? 0, customKey: g('pc').checked,
+      basePrice: num(g('pb').value), baseDays: num(g('pbd').value), permanentPrice: num(g('pp').value), visible: g('pv').checked }
+    try { await put(edit ? '/admin/plans/' + p.id : '/admin/plans', body, edit ? 'PUT' : 'POST'); d.close(); toast('Paket disimpan'); V.paket() } catch (e) { say($('#pmsg', d), e.message, 1) }
+  }
+}
+
+/* ---------- form endpoint ---------- */
+function epForm(e) {
+  const edit = !!e; e ||= { category: '', slug: '', name: '', description: '', method: 'GET', access: 'free', status: 'online', mode: 'proxy', code: '', headers: {}, inputs: [{ name: 'url', in: 'query', required: true, example: '' }] }
+  const inRow = (i = {}) => `<div class="inrow"><input data-n placeholder="nama (url, username…)" value="${esc(i.name || '')}"><select data-in><option value="query" ${i.in !== 'body' ? 'selected' : ''}>query</option><option value="body" ${i.in === 'body' ? 'selected' : ''}>body</option></select>
+    <label class="chk" style="padding:0"><input type="checkbox" data-rq ${i.required ? 'checked' : ''}> wajib</label><input data-ex placeholder="contoh nilai" value="${esc(i.example || '')}"><button class="ib" data-rm aria-label="Hapus input">${ico('x')}</button></div>`
+  const d = modal(`<h3>${edit ? 'Edit fitur' : 'Tambah fitur endpoint'}</h3><div class="frm">
+    <div class="full"><label>Nama fitur</label><input id="en" value="${esc(e.name)}" placeholder="CapCut Downloader"></div>
+    <div><label>Kategori</label><input id="ec" value="${esc(e.category)}" placeholder="download"></div>
+    <div><label>Slug</label><input id="es" value="${esc(e.slug)}" placeholder="capcut"></div>
+    <div><label>Method</label><select id="em"><option ${e.method === 'GET' ? 'selected' : ''}>GET</option><option ${e.method === 'POST' ? 'selected' : ''}>POST</option></select></div>
+    <div><label>Akses</label><select id="ea">${[['free', 'Gratis'], ['premium', 'Premium'], ['vip', 'VIP'], ['owner', 'Hanya owner']].map(([v, t]) => `<option value="${v}" ${e.access === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <div><label>Mode kode</label><select id="eo"><option value="proxy" ${e.mode === 'proxy' ? 'selected' : ''}>proxy (panggil URL upstream)</option><option value="json" ${e.mode === 'json' ? 'selected' : ''}>json (balas template JSON)</option></select></div>
+    <div><label>Status</label><select id="et"><option value="online" ${e.status === 'online' ? 'selected' : ''}>Online</option><option value="offline" ${e.status === 'offline' ? 'selected' : ''}>Offline</option></select></div>
+    <div class="full"><label>Deskripsi</label><input id="ed" value="${esc(e.description || '')}" placeholder="Opsional"></div>
+    <div class="full"><label id="ekl">Kode</label><textarea id="ek" rows="4" spellcheck="false">${esc(e.code)}</textarea><p class="msg" id="ekh"></p></div>
+    <div class="full" id="ehw"><label>Headers upstream (JSON, opsional)</label><textarea id="eh" rows="2" spellcheck="false">${esc(Object.keys(e.headers || {}).length ? JSON.stringify(e.headers, null, 2) : '')}</textarea></div>
+    <div class="full"><label>Input endpoint</label><div id="eins">${e.inputs.map(inRow).join('')}</div><button class="btn ghost sm" id="eadd" type="button">${ico('plus')} Tambah input</button></div></div>
+    <p class="msg" id="emsg"></p><div class="row" style="margin-top:10px"><button class="btn" id="es2">Simpan</button><button class="btn ghost" id="ec2">Batal</button></div>`, 'lg')
+  const g = (id) => $('#' + id, d)
+  const hint = () => {
+    const p = g('eo').value === 'proxy'
+    g('ekl').textContent = p ? 'Kode: URL upstream (https://)' : 'Kode: template JSON respons'
+    g('ek').placeholder = p ? 'https://api.example.com/capcut?link={url}' : '{ "halo": "{username}", "ip": "{ip}" }'
+    g('ekh').textContent = p ? 'Pakai {nama_input} untuk nilai input (otomatis di-URL-encode). Workers tidak mengizinkan eval, jadi kode berupa konfigurasi, bukan JavaScript bebas.' : 'Pakai "{nama_input}" di nilai string. Tersedia juga {ip} dan {now}.'
+    g('ehw').hidden = !p
+  }
+  g('eo').onchange = hint; hint()
+  g('em').onchange = () => {}
+  g('eadd').onclick = () => g('eins').insertAdjacentHTML('beforeend', inRow())
+  d.onclick = (ev) => { if (ev.target === d) d.close(); const r = ev.target.closest('[data-rm]'); if (r) r.closest('.inrow').remove() }
+  g('ec2').onclick = () => d.close()
+  g('es2').onclick = async () => {
+    const inputs = [...d.querySelectorAll('.inrow')].map((r) => ({ name: r.querySelector('[data-n]').value.trim(), in: r.querySelector('[data-in]').value, required: r.querySelector('[data-rq]').checked, example: r.querySelector('[data-ex]').value.trim() })).filter((i) => i.name)
+    const body = { name: g('en').value, category: g('ec').value, slug: g('es').value, method: g('em').value, access: g('ea').value, mode: g('eo').value, status: g('et').value,
+      description: g('ed').value, code: g('ek').value, headers: g('eo').value === 'proxy' ? g('eh').value || '{}' : '{}', inputs }
+    try { await put(edit ? '/admin/endpoints/' + e.id : '/admin/endpoints', body, edit ? 'PUT' : 'POST'); d.close(); toast('Endpoint disimpan'); V.endpoint() } catch (er) { say(g('emsg'), er.message, 1) }
+  }
+}
+
+/* ---------- tes endpoint ---------- */
+function epTest(e) {
+  const d = modal(`<h3>Tes ${esc(e.name)}</h3><p class="sub mono" style="font-size:12px">${esc(e.method)} ${esc(e.path)} · ${accessBadge(e.access)}</p>
+    <div class="frm">${e.inputs.map((i) => `<div><label>${esc(i.name)}${i.required ? ' *' : ''} <span style="opacity:.6">(${i.in})</span></label><input data-tk="${esc(i.name)}" data-tin="${i.in}" placeholder="${esc(i.example || i.name)}" value="${esc(i.example || '')}"></div>`).join('') || '<p class="sub">Endpoint ini tidak punya input.</p>'}</div>
+    <div class="row" style="margin:12px 0 8px"><button class="btn go" id="run">${ico('play')} Jalankan</button><button class="btn ghost" id="cl">Tutup</button></div>
+    <p class="rmeta" id="meta" style="font-size:12px;color:var(--mut)"></p><div class="cbox" style="background:var(--bg);border:1px solid var(--line);border-radius:10px;margin-top:6px"><pre id="res" style="max-height:280px;overflow:auto;white-space:pre-wrap;word-break:break-all">Belum dijalankan.</pre></div>`, 'lg')
+  $('#cl', d).onclick = () => d.close()
+  $('#run', d).onclick = async (ev) => {
+    const b = ev.currentTarget, qs = new URLSearchParams(), bd = {}
+    d.querySelectorAll('[data-tk]').forEach((i) => { const v = i.value.trim(); if (v) (i.dataset.tin === 'body' ? (bd[i.dataset.tk] = v) : qs.append(i.dataset.tk, v)) })
+    b.disabled = true; const t0 = performance.now()
+    try {
+      const r = await fetch(e.path + (qs.toString() ? '?' + qs : ''), { method: e.method, headers: e.method === 'POST' ? { 'Content-Type': 'application/json' } : {}, body: e.method === 'POST' ? JSON.stringify(bd) : undefined })
+      const t = await r.text(); let shown = t; try { shown = JSON.stringify(JSON.parse(t), null, 2) } catch {}
+      $('#res', d).textContent = shown.slice(0, 20000)
+      $('#meta', d).innerHTML = `Status <b class="${r.ok ? 'ok' : 'err'}">${r.status}</b> · ${Math.round(performance.now() - t0)} ms · ${esc(r.headers.get('content-type') || '')}`
+    } catch (er) { $('#res', d).textContent = er.message; $('#meta', d).innerHTML = '<b class="err">Gagal</b>' }
+    b.disabled = false
+  }
+}
+
+const draw = () => { document.querySelectorAll('.side>nav a').forEach((a) => a.classList.toggle('on', a.hash.slice(1) === view())); loading(); load(V[view()]) }
 
 ready.then(({ who }) => {
-  if (!who.is_owner) { $('#app').innerHTML = `<div class="panel"><h3>Akses ditolak</h3><p class="sub">IP kamu (${esc(who.ip)}) tidak ada di <span class="mono">OWNER_IPS</span>.</p></div>`; return }
-  $('#app').innerHTML = `<nav>${Object.entries(MENU).map(([k, v]) => `<a href="#${k}">${v}</a>`).join('')}</nav><div id="v"></div>`
+  if (!who.is_owner) { $('#app').innerHTML = `<div class="panel" style="grid-column:1/-1"><h3>Akses ditolak</h3><p class="sub">IP kamu (${esc(who.ip)}) tidak ada di <span class="mono">OWNER_IPS</span>.</p></div>`; return }
+  $('#app').innerHTML = `<nav>${Object.entries(MENU).map(([k, [v, i]]) => `<a href="#${k}">${ico(i)}${v}</a>`).join('')}</nav><div id="v"></div>`
   window.onhashchange = draw; draw()
 })
