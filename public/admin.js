@@ -1,4 +1,4 @@
-const MENU = { ringkasan: 'Ringkasan', pengguna: 'Pengguna', order: 'Order', paket: 'Paket' }
+const MENU = { ringkasan: 'Ringkasan', pengguna: 'Pengguna', order: 'Order', paket: 'Paket', kode: 'Kode redeem' }
 const view = () => (location.hash.slice(1) in MENU ? location.hash.slice(1) : 'ringkasan')
 const out = () => $('#v')
 const load = async (fn) => { try { await fn() } catch (e) { out().innerHTML = `<p class="err">${esc(e.message)}</p>` } }
@@ -35,6 +35,21 @@ const V = {
       <td>${o.status === 'pending' ? `<button class="btn" data-c="${o.id}">Konfirmasi</button> <button class="btn ghost" data-x="${o.id}">Batal</button>` : ''}</td></tr>`).join('')}</table></div>`
     const act = (sel, kind) => out().querySelectorAll(sel).forEach((b) => (b.onclick = async () => { try { await put(`/admin/orders/${b.dataset[kind]}/${kind === 'c' ? 'confirm' : 'cancel'}`, {}, 'POST'); V.order() } catch (e) { alert(e.message) } }))
     act('[data-c]', 'c'); act('[data-x]', 'x')
+  },
+  async kode() {
+    const [{ codes }, { plans }] = await Promise.all([api('/admin/codes'), api('/billing/plans')])
+    out().innerHTML = `<h1>Kode redeem</h1><div class="panel"><h3>Buat kode</h3>
+      <div class="row"><input id="kc" placeholder="Kode (kosong = acak)" style="flex:1;min-width:160px"><select id="kp">${plans.map((p) => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
+        <input id="kd" type="number" value="30" min="0" style="width:90px" title="hari (0 = permanen)"><input id="kx" type="number" value="1" min="1" style="width:90px" title="maks pemakaian"><button class="btn" id="kb">Buat</button></div>
+      <p class="msg" id="kmsg">Durasi 0 = permanen. Kolom kedua = berapa orang yang boleh memakai kode.</p></div>
+      <div class="panel tw"><table><tr><th>Kode</th><th>Paket</th><th>Durasi</th><th>Terpakai</th><th></th></tr>${codes.map((c) => `<tr><td class="mono">${esc(c.code)}</td><td>${esc((plans.find((p) => p.id === c.plan) || {}).name || c.plan)}</td>
+        <td>${c.days ? c.days + ' hr' : 'Permanen'}</td><td>${c.used}/${c.max_uses}</td><td><button class="btn ghost" data-dc="${esc(c.code)}">Hapus</button></td></tr>`).join('') || '<tr><td class="sub">Belum ada kode</td></tr>'}</table></div>`
+    $('#kb').onclick = async () => {
+      const d = +$('#kd').value
+      try { const r = await put('/admin/codes', { code: $('#kc').value, plan: $('#kp').value, days: d, permanent: d === 0, max_uses: +$('#kx').value }, 'POST'); await V.kode(); say($('#kmsg'), 'Kode dibuat: ' + r.code) }
+      catch (e) { say($('#kmsg'), e.message, 1) }
+    }
+    out().querySelectorAll('[data-dc]').forEach((b) => (b.onclick = async () => { if (confirm('Hapus kode ' + b.dataset.dc + '?')) { await api('/admin/codes/' + encodeURIComponent(b.dataset.dc), { method: 'DELETE' }); V.kode() } }))
   },
   async paket() {
     const { plans } = await api('/billing/plans')
