@@ -60,25 +60,27 @@ const NEED_RANK = { free: 0, premium: 1, vip: 2, owner: 3 }
 /* Dipanggil HANYA saat endpoint API benar-benar diakses. Mengembalikan Response bila ditolak, atau null bila lolos. */
 export const meter = async (c, { path, access = 'free' }) => {
     const owner = !!c.get('isOwner'), ip = c.get('ip')
+    const apiKey = c.req.header('x-api-key') || c.req.query('apikey')
     if (owner) {
         c.header('X-RateLimit-Limit', 'UNLIMITED'); c.header('X-RateLimit-Remaining', 'UNLIMITED')
+        /* owner tetap tanpa batas, tapi kalau mengirim key, pemakaian dicatat di riwayat akun pemilik key */
+        if (apiKey && c.env.STORE) await storeOf(c).consume(apiKey, ip, path, Date.now(), access, true).catch((e) => console.error('[Usage]', e))
         return null
     }
     if (access === 'owner') return json(c, 403, 'Forbidden', 'Endpoint ini khusus owner.')
 
-    const apiKey = c.req.header('x-api-key') || c.req.query('apikey')
     if (apiKey) {
         if (!c.env.STORE) return json(c, 503, 'Service Unavailable', 'Store belum dikonfigurasi.')
         const r = await storeOf(c).consume(apiKey, ip, path, Date.now(), access)
         if (r.ok === false) return json(c, r.status, r.error, r.message)
+        c.header('X-RateLimit-Limit', r.limit === null ? 'UNLIMITED' : String(r.limit))
+        c.header('X-RateLimit-Remaining', r.remaining === null ? 'UNLIMITED' : String(r.remaining))
         if (r.premium) {
             c.set('account', { plan: r.plan, name: r.name, premium: true })
             c.header('X-Plan', r.name)
-            c.header('X-RateLimit-Limit', r.limit === null ? 'UNLIMITED' : String(r.limit))
-            c.header('X-RateLimit-Remaining', r.remaining === null ? 'UNLIMITED' : String(r.remaining))
-            return null
-        }
-        c.set('account', { plan: 'member', name: 'Member', premium: false })
+        } else c.set('account', { plan: 'member', name: 'Member', premium: false })
+        /* key valid: kuota dihitung per akun (harian), bukan per IP */
+        return null
     }
 
     /* Endpoint berbayar tanpa key premium: tolak tanpa mengurangi limit IP gratis. */
