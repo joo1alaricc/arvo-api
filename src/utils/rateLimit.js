@@ -20,23 +20,40 @@ const errorPage = async (c, status, fallback, replacements = {}) => {
     return c.text(fallback, status)
 }
 
+const json = (c, status, error, message, extra = {}) => c.json({ error, message, status, ...extra }, status)
+
 export const rateLimiter = () => async (c, next) => {
     const ip = c.req.header('cf-connecting-ip')
         || c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
         || 'unknown'
+    c.set('ip', ip)
 
-    const banList = parseList(c.env.RATE_LIMIT_BAN_LIST)
-    const whitelist = parseList(c.env.RATE_LIMIT_WHITELIST || '127.0.0.1')
+    if (parseList(c.env.RATE_LIMIT_BAN_LIST).includes(ip)) return errorPage(c, 403, 'Forbidden')
 
-    if (banList.includes(ip)) {
-        return errorPage(c, 403, 'Forbidden')
-    }
+    /* Owner: dicek dari IP asli Cloudflare saja (bukan x-forwarded-for yang bisa dipalsukan). */
+    const owner = parseList(c.env.OWNER_IPS).includes(c.req.header('cf-connecting-ip') || '')
+    c.set('isOwner', owner)
+    if (owner) c.set('account', { plan: 'owner', name: 'Owner' })
 
-    if (whitelist.includes(ip)) {
+    if (owner || parseList(c.env.RATE_LIMIT_WHITELIST || '127.0.0.1').includes(ip)) {
         c.header('X-RateLimit-Limit', 'UNLIMITED')
         c.header('X-RateLimit-Remaining', 'UNLIMITED')
-        await next()
-        return
+        return next()
+    }
+
+    /* Endpoint billing punya proteksi sendiri (batas order pending per IP). */
+    if (c.req.path.startsWith('/api/billing/')) return next()
+
+    const apiKey = c.req.header('x-api-key') || c.req.query('apikey')
+    if (apiKey) {
+        if (!c.env.STORE) return json(c, 503, 'Service Unavailable', 'Store belum dikonfigurasi.')
+        const r = await c.env.STORE.get(c.env.STORE.idFromName('main')).consume(apiKey, ip, Date.now())
+        if (r.ok === false) return json(c, r.status, r.error, r.message)
+        c.set('account', { plan: r.plan, name: r.name })
+        c.header('X-Plan', r.name)
+        c.header('X-RateLimit-Limit', r.limit === null ? 'UNLIMITED' : String(r.limit))
+        c.header('X-RateLimit-Remaining', r.remaining === null ? 'UNLIMITED' : String(r.remaining))
+        return next()
     }
 
     const windowMs = Math.max(1000, Number(c.env.RATE_LIMIT_WINDOW_MS) || DEFAULT_WINDOW_MS)
@@ -45,11 +62,10 @@ export const rateLimiter = () => async (c, next) => {
 
     if (!namespace) {
         console.error('[RateLimit] RATE_LIMITER Durable Object binding is missing')
-        return c.json({ error: 'Service Unavailable', message: 'Rate limiter is not configured.', status: 503 }, 503)
+        return json(c, 503, 'Service Unavailable', 'Rate limiter is not configured.')
     }
 
-    const id = namespace.idFromName(ip)
-    const stub = namespace.get(id)
+    const stub = namespace.get(namespace.idFromName(ip))
     const result = await stub.fetch('https://rate-limit.internal/consume', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
