@@ -51,6 +51,22 @@ auth.get('/me', (c) => c.json(c.get('user')))
 auth.get('/me/usage', async (c) => send(c, await store(c).usage(uid(c), Date.now())))
 auth.get('/me/orders', async (c) => send(c, await store(c).userOrders(uid(c))))
 auth.put('/me/ips', async (c) => send(c, await store(c).setIps(uid(c), (await body(c)).ips, Date.now())))
+auth.get('/me/ips', async (c) => send(c, await store(c).listIps(uid(c))))
+auth.post('/me/ips', async (c) => send(c, await store(c).addIp(uid(c), (await body(c)).ip, Date.now())))
+auth.delete('/me/ips/:ip', async (c) => send(c, await store(c).removeIp(uid(c), decodeURIComponent(c.req.param('ip')), Date.now())))
+auth.put('/me/profile', async (c) => send(c, await store(c).setProfile(uid(c), await body(c))))
+auth.post('/me/redeem', async (c) => send(c, await store(c).redeem(uid(c), (await body(c)).code, Date.now())))
+auth.post('/me/delete', async (c) => {
+    const b = await body(c), info = await store(c).authInfo({ id: uid(c) })
+    if (String(b.confirm || '').trim().toLowerCase() !== 'delete') return send(c, fail(400, 'not_confirmed', 'Ketik "delete" untuk konfirmasi.'))
+    if (info.hash) { /* akun dengan password wajib konfirmasi password */
+        const { hash } = await hashPw(String(b.password || ''), info.salt)
+        if (!sameHash(hash, info.hash)) return send(c, fail(403, 'wrong_password', 'Password salah.'))
+    }
+    const r = await store(c).deleteAccount(uid(c))
+    await endSession(c)
+    return send(c, r)
+})
 auth.put('/me/key', async (c) => send(c, await store(c).setKey(uid(c), (await body(c)).new_key, Date.now())))
 
 auth.put('/me/username', async (c) => {
