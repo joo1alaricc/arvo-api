@@ -35,12 +35,27 @@ export class StoreDO extends DurableObject {
                 method TEXT DEFAULT 'GET', access TEXT DEFAULT 'free', status TEXT DEFAULT 'online', mode TEXT DEFAULT 'proxy', code TEXT DEFAULT '',
                 headers TEXT DEFAULT '{}', inputs TEXT DEFAULT '[]', created_at INTEGER, updated_at INTEGER, UNIQUE(category,slug));
             CREATE TABLE IF NOT EXISTS admins(user_id INTEGER PRIMARY KEY, added_by TEXT, added_at INTEGER);`)
+        /* DB lama bisa punya tabel orders dengan skema berbeda (CREATE IF NOT EXISTS tidak mengubahnya): lengkapi kolom yang kurang */
+        this.ensureCols('orders', { user_id: 'INTEGER', plan: 'TEXT', days: 'INTEGER', amount: 'INTEGER', code: 'INTEGER', total: 'INTEGER', status: 'TEXT', ip: 'TEXT',
+            created_at: 'INTEGER', expires_at: 'INTEGER', paid_at: 'INTEGER' },
+        { user_id: ['uid', 'userid', 'user', 'owner_id'], total: ['amount', 'price'], created_at: ['created', 'ts', 'time'] })
         for (const col of ['phone', 'bio', 'avatar_url', 'banner_url', 'reg_ip', 'last_ip', 'avatar_data', 'avatar_ver']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`) } catch {} }
         try { this.sql.exec('ALTER TABLE users ADD COLUMN last_seen INTEGER') } catch {}
         if (!this.q('SELECT 1 FROM plans LIMIT 1').length) {
             DEFAULT_PLANS.forEach((p, i) => this.sql.exec('INSERT INTO plans VALUES(?,?,?,?,?,?,?,?,?,1,?)', p.id, p.tier, p.name, p.daily, p.maxIps, p.customKey ? 1 : 0, p.baseDays, p.basePrice, p.permanentPrice, i))
         }
         this.loadPlans()
+    }
+
+    ensureCols(table, cols, legacy = {}) {
+        let have
+        try { have = this.q(`PRAGMA table_info(${table})`).map((r) => String(r.name).toLowerCase()) } catch { return }
+        for (const [c, type] of Object.entries(cols)) {
+            if (have.includes(c.toLowerCase())) continue
+            try { this.sql.exec(`ALTER TABLE ${table} ADD COLUMN ${c} ${type}`) } catch { continue }
+            const old = (legacy[c] || []).find((n) => have.includes(n))
+            if (old) { try { this.sql.exec(`UPDATE ${table} SET ${c}=${old}`) } catch {} }
+        }
     }
 
     loadPlans() {
