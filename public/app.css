@@ -161,3 +161,20 @@ svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .pc-chips .chip .ib{width:24px;height:24px;border:0;background:none;padding:0}
 .pc-name{letter-spacing:-.01em;padding-left:0;margin:2px 0 10px}
 .pc-desc{margin-top:6px}
+
+/* v7: kartu profil ringkas, senada dengan .card lain */
+.pcard{min-height:0;padding:16px 14px 14px;border-radius:var(--r);border:1px solid var(--line);box-shadow:var(--shadow);transform:none!important;animation:rise .45s var(--ease) both}
+.pc-bg::before{opacity:.1}.pc-bg i{opacity:.16!important;animation:none}.pcard::after{display:none}
+.pc-halo{display:none}
+.pc-top{position:absolute;top:12px;right:12px;z-index:1}
+.pc-mid{padding:4px 0 2px}
+.pc-photo,.pc-photo{width:84px;height:84px}
+.pc-img{border-width:3px;box-shadow:0 0 0 2px var(--pa)}
+.pc-cam{width:28px;height:28px;border-width:2px;right:-2px;bottom:0}.pc-cam svg.i{width:14px;height:14px}
+.pc-hi{margin:10px 0 2px;font-size:12.5px}
+.pc-name{font-size:20px;letter-spacing:-.01em;margin:0 0 8px}
+.pc-chips{margin:0 0 6px;gap:6px}
+.pc-chips .chip{padding:4px 10px;font-size:12px;background:color-mix(in srgb,var(--tx) 6%,transparent);border-color:var(--line);-webkit-backdrop-filter:none;backdrop-filter:none}
+.pc-chips .chip .i{width:13px;height:13px}
+.pc-desc{font-size:12.5px;margin:2px 0 0}
+.pc-act{margin-top:12px}
