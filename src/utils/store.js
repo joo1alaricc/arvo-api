@@ -21,7 +21,11 @@ export class StoreDO extends DurableObject {
             CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, user_id INTEGER, expires_at INTEGER);
             CREATE TABLE IF NOT EXISTS usage(user_id INTEGER, day TEXT, path TEXT, count INTEGER DEFAULT 0, PRIMARY KEY(user_id,day,path));
             CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY, user_id INTEGER, plan TEXT, days INTEGER, amount INTEGER, code INTEGER,
-                total INTEGER, status TEXT, ip TEXT, created_at INTEGER, expires_at INTEGER, paid_at INTEGER);`)
+                total INTEGER, status TEXT, ip TEXT, created_at INTEGER, expires_at INTEGER, paid_at INTEGER);
+            CREATE TABLE IF NOT EXISTS ip_meta(user_id INTEGER, ip TEXT, created_at INTEGER, last_used INTEGER, req INTEGER DEFAULT 0, PRIMARY KEY(user_id,ip));
+            CREATE TABLE IF NOT EXISTS codes(code TEXT PRIMARY KEY, plan TEXT, days INTEGER, max_uses INTEGER DEFAULT 1, used INTEGER DEFAULT 0, created_at INTEGER);
+            CREATE TABLE IF NOT EXISTS redeems(code TEXT, user_id INTEGER, at INTEGER, PRIMARY KEY(code,user_id));`)
+        for (const col of ['phone', 'avatar_url', 'banner_url']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`) } catch {} }
     }
 
     q(sql, ...b) { return this.sql.exec(sql, ...b).toArray() }
@@ -33,7 +37,8 @@ export class StoreDO extends DurableObject {
             api_key: u.api_key, role: p ? p.tier : 'member', plan: u.plan, plan_name: u.plan ? PLANS[u.plan].name : null,
             active: !!p, expired: !!u.plan && !p, expires_at: u.expires_at, daily_limit: p ? p.daily : null,
             max_ips: p ? p.maxIps : 0, custom_key: !!p?.customKey, ips: JSON.parse(u.ips),
-            used_today: u.usage_day === jakartaDay(now) ? u.usage_count : 0, total_requests: u.total, created_at: u.created_at }
+            used_today: u.usage_day === jakartaDay(now) ? u.usage_count : 0, total_requests: u.total, created_at: u.created_at,
+            phone: u.phone || null, avatar_url: u.avatar_url || null, banner_url: u.banner_url || null }
     }
 
     /* ---------- akun & sesi ---------- */
@@ -84,6 +89,9 @@ export class StoreDO extends DurableObject {
         if (bad) return fail(400, 'bad_ip', `Format IP salah: ${bad}`)
         if (list.length > p.max_ips) return fail(400, 'too_many_ips', `Maksimal ${p.max_ips} IP untuk ${p.plan_name}.`)
         this.sql.exec('UPDATE users SET ips=? WHERE id=?', JSON.stringify(list), id)
+        for (const i of list) this.sql.exec('INSERT OR IGNORE INTO ip_meta(user_id,ip,created_at,req) VALUES(?,?,?,0)', id, i, now)
+        const old = this.q('SELECT ip FROM ip_meta WHERE user_id=?', id).map((r) => r.ip).filter((i) => !list.includes(i))
+        for (const i of old) this.sql.exec('DELETE FROM ip_meta WHERE user_id=? AND ip=?', id, i)
         return { ok: true, ips: list }
     }
     setKey(id, newKey, now) {
@@ -104,6 +112,7 @@ export class StoreDO extends DurableObject {
         const hit = () => this.sql.exec('INSERT INTO usage(user_id,day,path,count) VALUES(?,?,?,1) ON CONFLICT(user_id,day,path) DO UPDATE SET count=count+1', u.id, day, path)
         if (!p.active) { hit(); this.sql.exec('UPDATE users SET total=total+1 WHERE id=?', u.id); return { ok: true, premium: false } }
         if (p.ips.length && !p.ips.includes(ip)) return fail(403, 'ip_not_whitelisted', `IP ${ip} tidak ada di whitelist key ini.`)
+        if (p.ips.includes(ip)) this.sql.exec('UPDATE ip_meta SET last_used=?,req=req+1 WHERE user_id=? AND ip=?', now, u.id, ip)
         let used = u.usage_day === day ? u.usage_count : 0
         if (p.daily_limit !== null && used >= p.daily_limit) return fail(429, 'daily_limit', 'Limit harian habis, reset 00:00 WIB.')
         used++
@@ -116,6 +125,64 @@ export class StoreDO extends DurableObject {
         return { ok: true,
             days: this.q('SELECT day,SUM(count) n FROM usage WHERE user_id=? AND day>=? GROUP BY day ORDER BY day DESC', id, from),
             paths: this.q('SELECT path,SUM(count) n FROM usage WHERE user_id=? AND day>=? GROUP BY path ORDER BY n DESC LIMIT 10', id, from) }
+    }
+
+    /* ---------- profil, whitelist (tabel), redeem, hapus akun ---------- */
+    setProfile(id, b) {
+        const u = this.user(id), out = {}
+        const url = (v, name) => {
+            v = String(v ?? '').trim()
+            if (!v) return null
+            if (v.length > 500 || !(/^https:\/\/[^\s]+$/i.test(v) || /^\/(?!\/)[^\s]*$/.test(v))) throw new Error(`${name} harus berupa URL https:// atau path yang diawali /`)
+            return v
+        }
+        try {
+            if ('email' in b) {
+                const e = String(b.email ?? '').trim()
+                if (e && !/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(e)) throw new Error('Format email tidak valid.')
+                out.email = e || null
+            }
+            if ('phone' in b) {
+                const ph = String(b.phone ?? '').replace(/[\s-]/g, '')
+                if (ph && !/^\+?\d{8,15}$/.test(ph)) throw new Error('Nomor telepon 8-15 digit, boleh diawali +.')
+                out.phone = ph || null
+            }
+            if ('avatar_url' in b) out.avatar_url = url(b.avatar_url, 'Foto profil')
+            if ('banner_url' in b) out.banner_url = url(b.banner_url, 'Banner')
+        } catch (e) { return fail(400, 'bad_profile', e.message) }
+        const keys = Object.keys(out)
+        if (!keys.length) return fail(400, 'bad_profile', 'Tidak ada data yang diubah.')
+        this.sql.exec(`UPDATE users SET ${keys.map((k) => k + '=?').join(',')} WHERE id=?`, ...keys.map((k) => out[k]), id)
+        return { ok: true, ...out }
+    }
+    listIps(id) {
+        const u = this.user(id), meta = new Map(this.q('SELECT * FROM ip_meta WHERE user_id=?', id).map((r) => [r.ip, r]))
+        return { ok: true, ips: JSON.parse(u.ips).map((ip) => ({ ip, created_at: meta.get(ip)?.created_at ?? null, last_used: meta.get(ip)?.last_used ?? null, req: meta.get(ip)?.req ?? 0 })) }
+    }
+    addIp(id, ip, now) {
+        const cur = JSON.parse(this.user(id).ips), v = String(ip || '').trim().toLowerCase()
+        return cur.includes(v) ? fail(409, 'ip_exists', 'IP itu sudah ada di whitelist.') : this.setIps(id, [...cur, v], now)
+    }
+    removeIp(id, ip, now) {
+        const cur = JSON.parse(this.user(id).ips), v = String(ip || '').trim().toLowerCase()
+        return cur.includes(v) ? this.setIps(id, cur.filter((i) => i !== v), now) : fail(404, 'not_found', 'IP tidak ada di whitelist.')
+    }
+    redeem(id, code, now) {
+        const c = String(code || '').trim().toUpperCase()
+        if (!c) return fail(400, 'bad_code', 'Masukkan kode redeem.')
+        const [r] = this.q('SELECT * FROM codes WHERE code=?', c)
+        if (!r) return fail(404, 'bad_code', 'Kode tidak ditemukan.')
+        if (r.used >= r.max_uses) return fail(410, 'code_used_up', 'Kode sudah habis dipakai.')
+        if (this.q('SELECT 1 FROM redeems WHERE code=? AND user_id=?', c, id).length) return fail(409, 'code_taken', 'Kamu sudah memakai kode ini.')
+        this.applyPlan(this.user(id), r.plan, r.days, now)
+        this.sql.exec('INSERT INTO redeems VALUES(?,?,?)', c, id, now)
+        this.sql.exec('UPDATE codes SET used=used+1 WHERE code=?', c)
+        return { ok: true, plan: r.plan, name: PLANS[r.plan].name, days: r.days }
+    }
+    deleteAccount(id) {
+        for (const t of ['sessions', 'usage', 'ip_meta', 'redeems']) this.sql.exec(`DELETE FROM ${t} WHERE user_id=?`, id)
+        this.sql.exec('DELETE FROM users WHERE id=?', id)
+        return { ok: true }
     }
 
     /* ---------- order & paket ---------- */
@@ -192,6 +259,19 @@ export class StoreDO extends DurableObject {
         return { ok: true }
     }
     adminRevoke(id) { this.sql.exec('UPDATE users SET plan=NULL,expires_at=NULL,ips=? WHERE id=?', '[]', id); return { ok: true } }
+    adminCreateCode({ code, plan, days, permanent, max_uses }, now) {
+        if (!PLANS[plan]) return fail(400, 'bad_request', 'Paket tidak dikenal.')
+        const d = permanent ? null : Math.floor(Number(days)), m = Math.floor(Number(max_uses) || 1)
+        if (!permanent && !(d >= 1 && d <= 3650)) return fail(400, 'bad_request', 'Durasi 1-3650 hari.')
+        if (!(m >= 1 && m <= 100000)) return fail(400, 'bad_request', 'Maks pemakaian 1-100000.')
+        const c = String(code || '').trim().toUpperCase() || hex(4).toUpperCase()
+        if (!/^[A-Z0-9_-]{4,32}$/.test(c)) return fail(400, 'bad_code', 'Kode 4-32 karakter: huruf, angka, _ atau -.')
+        if (this.q('SELECT 1 FROM codes WHERE code=?', c).length) return fail(409, 'code_exists', 'Kode sudah ada.')
+        this.sql.exec('INSERT INTO codes VALUES(?,?,?,?,0,?)', c, plan, d, m, now)
+        return { ok: true, code: c }
+    }
+    adminCodes() { return { ok: true, codes: this.q('SELECT * FROM codes ORDER BY created_at DESC LIMIT 100') } }
+    adminDeleteCode(code) { this.sql.exec('DELETE FROM codes WHERE code=?', String(code).toUpperCase()); return { ok: true } }
     listOrders() {
         return { ok: true, orders: this.q("SELECT o.id,o.plan,o.days,o.total,o.status,o.created_at,u.username FROM orders o LEFT JOIN users u ON u.id=o.user_id ORDER BY o.status='pending' DESC,o.created_at DESC LIMIT 100") }
     }
