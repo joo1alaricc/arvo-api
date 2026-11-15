@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="dark"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playground · Arvo</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css"></head>
+<body><main class="wrap page">
+  <h1>Playground</h1><p class="sub">Coba endpoint langsung dari browser. Isi API key untuk endpoint premium.</p>
+  <div class="panel"><label style="margin:0 0 4px">Header <span class="mono">x-api-key</span></label>
+    <div class="row"><input id="pk" placeholder="arvo_xxxxxxxx (opsional)" autocomplete="off"><button class="btn ghost" id="mine" hidden>Pakai key akunku</button><button class="btn ghost" id="dl">Unduh spec</button></div></div>
+  <input id="sq" placeholder="Cari endpoint…" style="width:100%;margin-bottom:14px">
+  <div id="list"><p class="sub">Memuat…</p></div>
+</main><script src="common.js"></script><script src="playground.js"></script></body></html>
