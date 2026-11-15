@@ -5,6 +5,7 @@ import { secureHeaders } from 'hono/secure-headers'
 import { setupRoutes } from './api/index.js'
 import { logApiRequest } from './utils/logApiRequest.js'
 import { rateLimiter } from './utils/rateLimit.js'
+import { billing } from './api/billing.js'
 import { prettyPrint } from './utils/pretty.js'
 
 const createApp = () => {
@@ -16,6 +17,7 @@ const createApp = () => {
     app.use('*', rateLimiter())
     app.use('*', prettyPrint)
 
+    app.route('/api/billing', billing)
     setupRoutes(app)
 
     app.doc('/docs', {
@@ -82,3 +84,4 @@ export default {
 }
 
 export { RateLimitDO } from './utils/rateLimit.js'
+export { StoreDO } from './utils/store.js'
