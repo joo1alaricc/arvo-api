@@ -1,10 +1,10 @@
-/* Klien GitHub tipis (REST). Token dari secret GITHUB_API, repo dari var GITHUB_REPO ("owner/repo"), branch dari GITHUB_BRANCH. */
+/* Klien GitHub tipis (REST). Token dari env GITHUB_API (diisi di dashboard Cloudflare), repo dari var GITHUB_REPO ("owner/repo"), branch dari GITHUB_BRANCH. */
 const API = 'https://api.github.com'
 const fail = (status, error, message) => ({ ok: false, status, error, message })
 
 export const ghCfg = (env) => ({ token: env.GITHUB_API || '', repo: env.GITHUB_REPO || '', branch: env.GITHUB_BRANCH || 'main' })
 export const ghReady = (env) => { const c = ghCfg(env); return !!(c.token && /^[\w.-]+\/[\w.-]+$/.test(c.repo)) }
-const notReady = () => fail(503, 'github_off', 'GitHub belum dikonfigurasi. Isi GITHUB_REPO di wrangler.toml dan jalankan: wrangler secret put GITHUB_API')
+const notReady = () => fail(503, 'github_off', 'GitHub belum dikonfigurasi. Isi GITHUB_REPO di wrangler.toml dan tambahkan GITHUB_API di dashboard Cloudflare (Settings > Variables and Secrets)')
 
 const call = async (env, path, init = {}) => {
     const { token } = ghCfg(env)
