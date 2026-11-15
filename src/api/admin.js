@@ -19,3 +19,6 @@ admin.post('/users/:id/revoke', async (c) => send(c, await store(c).adminRevoke(
 admin.get('/orders', async (c) => send(c, await store(c).listOrders()))
 admin.post('/orders/:id/confirm', async (c) => send(c, await store(c).confirmById(c.req.param('id'), Date.now())))
 admin.post('/orders/:id/cancel', async (c) => send(c, await store(c).cancelOrder(c.req.param('id'))))
+admin.get('/codes', async (c) => send(c, await store(c).adminCodes()))
+admin.post('/codes', async (c) => send(c, await store(c).adminCreateCode(await body(c), Date.now())))
+admin.delete('/codes/:code', async (c) => send(c, await store(c).adminDeleteCode(c.req.param('code'))))
