@@ -126,6 +126,7 @@ auth.post('/me/delete', async (c) => {
     await endSession(c)
     return send(c, r)
 })
+auth.put('/me/border', async (c) => send(c, await store(c).setBorder(uid(c), (await body(c)).colors, Date.now())))
 auth.put('/me/key', async (c) => send(c, await store(c).setKey(uid(c), (await body(c)).new_key, Date.now())))
 
 auth.put('/me/username', async (c) => {
