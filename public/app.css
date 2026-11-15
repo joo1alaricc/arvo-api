@@ -129,7 +129,9 @@ svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .pc-chips .chip .i{width:13px;height:13px;flex:none}
 /* chip Google: tanpa border & latar, supaya logo terlihat jelas */
 .pc-chips .chip.gg{border:0;background:none;padding:4px 4px;gap:6px}
-.pc-chips .chip.gg .i{width:18px;height:18px}
+.pc-chips .chip.gg .i{width:18px;height:18px;stroke:none;fill:none}
+/* ikon berwarna (mis. logo Google) jangan ikut garis tepi svg.i */
+svg.i.gi{stroke:none}
 .pc-desc{max-width:350px;color:var(--mut);font-size:12.5px;line-height:1.6;margin:2px 0 0}
 .pc-act{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px}
 /* centang terverifikasi berkilau */
