@@ -33,7 +33,7 @@ export const rateLimiter = () => async (c, next) => {
     /* Owner: dicek dari IP asli Cloudflare saja (bukan x-forwarded-for yang bisa dipalsukan). */
     const owner = parseList(c.env.OWNER_IPS).includes(c.req.header('cf-connecting-ip') || '')
     c.set('isOwner', owner)
-    if (owner) c.set('account', { plan: 'owner', name: 'Owner' })
+    if (owner) c.set('account', { plan: 'owner', name: 'Owner', premium: true })
 
     if (owner || parseList(c.env.RATE_LIMIT_WHITELIST || '127.0.0.1').includes(ip)) {
         c.header('X-RateLimit-Limit', 'UNLIMITED')
@@ -41,19 +41,23 @@ export const rateLimiter = () => async (c, next) => {
         return next()
     }
 
-    /* Endpoint billing punya proteksi sendiri (batas order pending per IP). */
-    if (c.req.path.startsWith('/api/billing/')) return next()
+    /* Endpoint akun/billing/admin punya proteksi sendiri (sesi, owner IP, batas order). */
+    if (/^\/api\/(billing|auth|admin)\//.test(c.req.path)) return next()
 
     const apiKey = c.req.header('x-api-key') || c.req.query('apikey')
     if (apiKey) {
         if (!c.env.STORE) return json(c, 503, 'Service Unavailable', 'Store belum dikonfigurasi.')
-        const r = await c.env.STORE.get(c.env.STORE.idFromName('main')).consume(apiKey, ip, Date.now())
+        const r = await c.env.STORE.get(c.env.STORE.idFromName('main')).consume(apiKey, ip, c.req.path, Date.now())
         if (r.ok === false) return json(c, r.status, r.error, r.message)
-        c.set('account', { plan: r.plan, name: r.name })
-        c.header('X-Plan', r.name)
-        c.header('X-RateLimit-Limit', r.limit === null ? 'UNLIMITED' : String(r.limit))
-        c.header('X-RateLimit-Remaining', r.remaining === null ? 'UNLIMITED' : String(r.remaining))
-        return next()
+        if (r.premium) {
+            c.set('account', { plan: r.plan, name: r.name, premium: true })
+            c.header('X-Plan', r.name)
+            c.header('X-RateLimit-Limit', r.limit === null ? 'UNLIMITED' : String(r.limit))
+            c.header('X-RateLimit-Remaining', r.remaining === null ? 'UNLIMITED' : String(r.remaining))
+            return next()
+        }
+        /* Key member (tanpa paket aktif): tetap kena limiter IP gratis, tanpa akses premium. */
+        c.set('account', { plan: 'member', name: 'Member', premium: false })
     }
 
     const windowMs = Math.max(1000, Number(c.env.RATE_LIMIT_WINDOW_MS) || DEFAULT_WINDOW_MS)
