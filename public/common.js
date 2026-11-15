@@ -18,10 +18,9 @@ const root = document.documentElement
 root.dataset.theme = localStorage.getItem('theme') || 'dark'
 root.classList.add('js')
 
-/* Logo Arvo: huruf A dan R menyatu. A utuh (dua kaki + palang), perut huruf R menggantung dari puncak A,
- * dan kaki kanan A sekaligus jadi kaki R. Digambar dari garis saja (tanpa gambar eksternal). */
-const LOGO_PATH = 'M4 20 10.5 4 17 20M6.9 14.6h7.2M10.5 4h3.8a3.75 3.75 0 0 1 0 7.5h-1.4'
-const LOGO = `<svg viewBox="0 0 24 24" aria-hidden="true"><path style="stroke-width:2.1" d="${LOGO_PATH}"/></svg>`
+/* Logo Arvo (huruf A + R) hasil tracing logo asli ke vektor. Sama dengan /logo.svg; fill=currentColor supaya ikut warna tile. */
+const LOGO_PATH = 'M40.6 0.5L0.1 70.9L14.2 70.9L40.5 25.6L41.7 27.3L56.0 27.3ZM49.3 0.0L56.4 12.5L85.2 12.4L85.5 12.9L72.7 34.9L43.4 34.9L36.3 47.3L53.1 47.4L66.8 70.9L81.1 70.9L67.9 47.5L80.1 47.2L100.0 12.4L92.8 0.0Z'
+const LOGO = `<svg viewBox="0 0 100 70.9" aria-hidden="true"><path d="${LOGO_PATH}"/></svg>`
 
 /* Muncul halus saat di-scroll. Tandai elemen dengan class "rv" lalu panggil reveal(). */
 const revealIO = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach((e) => {
@@ -74,3 +73,26 @@ const ready = Promise.all([
     (user ? `<a class="nb" href="/profile.html" title="${esc(user.username)}" aria-label="Profil ${esc(user.username)}">${ni('user')}</a>` : '<a class="btn" href="/login.html">Masuk</a>')
   return { user, who }
 })
+
+/* ---------- bar atas bereaksi saat scroll + indikator tab yang meluncur ---------- */
+{
+  const bar = $('.nav'); const onScroll = () => bar.classList.toggle('sc', scrollY > 6)
+  addEventListener('scroll', onScroll, { passive: true }); onScroll()
+  const slider = (box) => {
+    const ind = document.createElement('i'); ind.className = 'ind'; box.append(ind); box.classList.add('has-ind')
+    let first = true
+    const move = () => {
+      const on = box.querySelector('button.on'); if (!on || !on.offsetWidth) { ind.style.opacity = 0; return }
+      ind.style.opacity = 1; ind.classList.toggle('red', on.classList.contains('del'))
+      if (first) ind.style.transition = 'none'
+      ind.style.transform = `translate3d(${on.offsetLeft}px,0,0)`; ind.style.width = on.offsetWidth + 'px'
+      if (first) { void ind.offsetWidth; ind.style.transition = ''; first = false }
+    }
+    new MutationObserver(move).observe(box, { subtree: true, attributes: true, attributeFilter: ['class', 'hidden'] })
+    addEventListener('resize', () => { first = true; move() }); move()
+  }
+  let q = false
+  const scan = () => { q = false; document.querySelectorAll('.tabs:not(.has-ind),.seg:not(.has-ind)').forEach(slider) }
+  new MutationObserver(() => { if (!q) { q = true; requestAnimationFrame(scan) } }).observe(document.body, { childList: true, subtree: true })
+  scan()
+}
