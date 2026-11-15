@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
-import { PLANS, MIN_DAYS, MAX_DAYS } from '../utils/plans.js'
+import { MIN_DAYS, MAX_DAYS } from '../utils/plans.js'
+import { peekQuota } from '../utils/rateLimit.js'
 import { makeQris } from '../utils/payment.js'
 import { store, send, requireUser } from '../utils/session.js'
 
@@ -11,8 +12,8 @@ const attachQris = async (c, o) => {
     catch (e) { console.error('[QRIS]', e); return { ok: false, status: 503, error: 'qris_unavailable', message: 'QRIS belum bisa dibuat. Hubungi admin.' } }
 }
 
-billing.get('/plans', (c) => c.json({ min_days: MIN_DAYS, max_days: MAX_DAYS, plans: Object.entries(PLANS).map(([id, p]) => ({ id, ...p })) }))
-billing.get('/whoami', (c) => c.json({ ip: c.get('ip'), is_owner: !!c.get('isOwner') }))
+billing.get('/plans', async (c) => c.json({ min_days: MIN_DAYS, max_days: MAX_DAYS, plans: await store(c).publicPlans() }))
+billing.get('/whoami', async (c) => c.json({ ip: c.get('ip'), is_owner: !!c.get('isOwner'), quota: await peekQuota(c).catch(() => null) }))
 
 /* Dipanggil pembaca mutasi/notifikasi pembayaran: POST {amount} + Bearer PAYMENT_WEBHOOK_SECRET */
 billing.post('/webhook', async (c) => {
