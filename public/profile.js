@@ -7,11 +7,12 @@ const n = (v) => Number(v).toLocaleString('id-ID')
 /* sisa limit hari ini, juga untuk akun gratis (limit per akun, reset 00:00 WIB) */
 const lim = () => (me.daily_limit === null ? 'Unlimited' : `Sisa ${n(me.remaining)} dari ${n(me.daily_limit)} / hari`)
 const DEF_BORDER = ['#f7d774', '#b8860b', '#fff1a8']
-const GOOGLE = ['#4285f4', '#ea4335', '#fbbc05']
 const SILVER_NAVY = ['#0a2463', '#c9d1dc', '#1e3a8a', '#f1f4f8']
 /* warna cincin foto: free = Google, premium = silver & navy, vip = pilihan user */
-const ringColors = () => (me.role === 'vip' ? (me.border_colors && me.border_colors.length ? me.border_colors : DEF_BORDER) : me.role === 'premium' ? SILVER_NAVY : GOOGLE)
 const ringCss = (c) => `conic-gradient(${[...c, c[0]].join(',')})`
+/* free: empat warna Google, potongan tegas (tanpa gradasi) */
+const GOOGLE_RING = 'conic-gradient(#4285f4 0 25%,#ea4335 0 50%,#fbbc05 0 75%,#34a853 0 100%)'
+const ringStyle = () => (me.role === 'vip' ? ringCss(me.border_colors && me.border_colors.length ? me.border_colors : DEF_BORDER) : me.role === 'premium' ? ringCss(SILVER_NAVY) : GOOGLE_RING)
 /* centang terverifikasi: biru (premium) atau gold (vip), dengan kilau yang menyapu */
 const SEAL = (() => { const P = [], N = 14; for (let i = 0; i < N * 2; i++) { const a = (i / (N * 2)) * Math.PI * 2 - Math.PI / 2, r = i % 2 ? 9.3 : 10.8; P.push((12 + r * Math.cos(a)).toFixed(2) + ' ' + (12 + r * Math.sin(a)).toFixed(2)) } return 'M' + P.join('L') + 'Z' })()
 const verified = (kind) => `<svg class="vb ${kind}" viewBox="0 0 24 24" role="img" aria-label="Terverifikasi ${kind === 'gold' ? 'VIP' : 'Premium'}"><defs>
@@ -72,15 +73,14 @@ const panelEvents = () => `<div class="sec">Claim Trial</div><div id="trial"><di
   <div class="iprow"><input id="rc" placeholder="Contoh: ARVO2026" autocapitalize="characters" autocomplete="off"></div>
   <button class="btn go" id="rcb">${ico('check')} Submit</button><p class="msg" id="rcm"></p>`
 
-const panelSettings = () => !me.active
-  ? `<div class="sec">Whitelist IP</div><div class="lockbox">${tile('lock', 'mut')}<div>Whitelist IP aktif setelah kamu punya paket Premium/VIP.<br><a href="/#paket" style="color:var(--blue)">Lihat paket</a></div></div>`
-  : `<div class="sec">Whitelist IP</div>
+const panelSettings = () => `<div class="sec">Whitelist IP</div>
   <p class="hint">IP kamu saat ini: <span class="cur">${esc(who.ip)}</span></p>
-  <div class="hint" style="margin-bottom:0">IP Address (maksimal ${me.max_ips} IP)</div>
+  <p class="hint">Semua request dengan API key hanya diterima dari IP yang ada di daftar ini. Daftar kosong = semua request ditolak.</p>
+  <div class="hint" style="margin-bottom:0">IP Address (maksimal ${me.max_ips} IP${me.active ? '' : ', akun gratis'})</div>
   <div class="iprow"><input id="nip" placeholder="Contoh: 192.168.1.1" autocomplete="off"><button class="btn ghost sm" id="myip" type="button">IP saya</button></div>
-  <p class="hint">Mendukung IPv4 dan IPv6 tunggal. Kalau daftar kosong, key bisa dipakai dari IP mana saja.</p>
+  <p class="hint">Mendukung IPv4 dan IPv6 tunggal.</p>
   <button class="btn go" id="addip">${ico('plus')} Add to Whitelist</button><p class="msg" id="ipm"></p>
-  <div class="tw" id="iplist" style="margin-top:12px"><p class="empty">Memuat…</p></div>`
+  <div class="tw" id="iplist" style="margin-top:12px"><p class="empty">Memuat…</p></div>${me.active ? '' : `<p class="hint">Butuh lebih banyak IP? <a href="/#paket" style="color:var(--blue)">Lihat paket</a></p>`}`
 
 const panelManage = () => `<div class="danger-box">${tile('userx', 'red')}<h4>Hapus Akun</h4>
   <p class="hint">Aksi ini tidak bisa dibatalkan.</p>
@@ -157,7 +157,7 @@ async function render() {
   <section class="pcard" id="pcard">
     <div class="pc-top"><span class="badge ${me.role}">${me.role === 'member' ? 'Free User' : esc(me.plan_name || me.role)}</span></div>
     <div class="pc-mid">
-      <div class="pc-photo"><span class="pc-ring" id="pring" style="--ring:${ringCss(ringColors())}"></span><div class="pc-img" id="pimg"></div><button class="pc-cam" data-pick aria-label="Ganti foto profil">${ico('camera')}</button></div>
+      <div class="pc-photo"><span class="pc-ring" id="pring" style="--ring:${ringStyle()}"></span><div class="pc-img" id="pimg"></div><button class="pc-cam" data-pick aria-label="Ganti foto profil">${ico('camera')}</button></div>
       <p class="pc-hi">Selamat Datang,</p>
       <h1 class="pc-name ${me.role === 'vip' ? 'gold' : ''}"><span class="nm">${esc(me.username)}</span>${vb}</h1>
       <div class="pc-chips"><span class="chip ${me.google ? 'gg' : ''}">${me.google ? `<svg class="i" viewBox="0 0 24 24"><path fill="#4285F4" d="M22 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.6a4.8 4.8 0 0 1-2.1 3.1v2.6h3.4c2-1.8 3.1-4.5 3.1-7.5z"/><path fill="#34A853" d="M12 22c2.8 0 5.2-.9 6.9-2.5l-3.4-2.6c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.7v2.7A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.2 13.6a6 6 0 0 1 0-3.8V7.1H2.7a10 10 0 0 0 0 9z"/><path fill="#EA4335" d="M12 6.1c1.5 0 2.8.5 3.9 1.5l2.9-2.9A10 10 0 0 0 2.7 7.1l3.5 2.7C7 7.9 9.3 6.1 12 6.1z"/></svg> Akun Google` : `${ico('user')} Akun Arvo`}</span>${me.email ? `<span class="chip">${ico('mail')} ${esc(me.email)}</span>` : ''}</div>
@@ -261,8 +261,10 @@ function loadSide() {
   }).catch(() => {})
   api('/auth/me/usage').then(({ days, paths, recent }) => {
     if (!days.length) { $('#use').innerHTML = '<p class="empty">Belum ada request dengan API key ini. Coba endpoint di Playground dengan key kamu.</p>'; return }
-    const max = Math.max(...days.map((d) => d.n)), list = [...days].reverse()
-    $('#use').innerHTML = `<div class="sec">Pemakaian 14 hari</div><div class="bars">${list.map((d) => `<div style="height:${Math.max(3, (d.n / max) * 100)}%" title="${esc(d.day)}: ${d.n}"></div>`).join('')}</div>
+    /* selalu 14 hari penuh (hari kosong = 0) supaya grafik terbaca, bukan satu balok */
+    const key = (off) => new Date(Date.now() + 7 * 3600e3 - off * 864e5).toISOString().slice(0, 10), by = Object.fromEntries(days.map((d) => [d.day, d.n]))
+    const series = Array.from({ length: 14 }, (_, i) => { const k = key(13 - i); return { day: k, n: by[k] || 0 } }), max = Math.max(1, ...series.map((d) => d.n))
+    $('#use').innerHTML = `<div class="sec">Pemakaian 14 hari</div><div class="chart">${series.map((d, i) => `<div class="cb ${i === 13 ? 'today' : ''}" title="${esc(d.day)}: ${d.n} request"><span class="cv">${d.n || ''}</span><div class="bw"><i style="height:${d.n ? Math.max(8, (d.n / max) * 100) : 2}%"></i></div><em>${d.day.slice(8)}</em></div>`).join('')}</div>
       <div class="tw"><table><tr><th>Endpoint</th><th>Request</th></tr>${paths.map((p) => `<tr><td class="mono">${esc(p.path)}</td><td>${p.n.toLocaleString('id-ID')}</td></tr>`).join('')}</table></div>
       ${recent && recent.length ? `<div class="sec" style="margin-top:14px">Riwayat terbaru</div><div class="tw"><table><tr><th>Waktu</th><th>Endpoint</th><th>IP</th></tr>${recent.map((r) => `<tr><td>${fmtDT(r.at)}</td><td class="mono">${esc(r.path)}</td><td class="mono">${esc(r.ip || '-')}</td></tr>`).join('')}</table></div>` : ''}`
   }).catch(() => {})
