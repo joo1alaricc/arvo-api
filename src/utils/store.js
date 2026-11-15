@@ -33,7 +33,8 @@ export class StoreDO extends DurableObject {
             CREATE TABLE IF NOT EXISTS seen_ips(user_id INTEGER, ip TEXT, src TEXT, first_at INTEGER, last_at INTEGER, hits INTEGER DEFAULT 0, PRIMARY KEY(user_id,ip));
             CREATE TABLE IF NOT EXISTS endpoints(id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT, slug TEXT, name TEXT, description TEXT DEFAULT '',
                 method TEXT DEFAULT 'GET', access TEXT DEFAULT 'free', status TEXT DEFAULT 'online', mode TEXT DEFAULT 'proxy', code TEXT DEFAULT '',
-                headers TEXT DEFAULT '{}', inputs TEXT DEFAULT '[]', created_at INTEGER, updated_at INTEGER, UNIQUE(category,slug));`)
+                headers TEXT DEFAULT '{}', inputs TEXT DEFAULT '[]', created_at INTEGER, updated_at INTEGER, UNIQUE(category,slug));
+            CREATE TABLE IF NOT EXISTS admins(user_id INTEGER PRIMARY KEY, added_by TEXT, added_at INTEGER);`)
         for (const col of ['phone', 'avatar_url', 'banner_url', 'reg_ip', 'last_ip', 'avatar_data', 'avatar_ver']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`) } catch {} }
         try { this.sql.exec('ALTER TABLE users ADD COLUMN last_seen INTEGER') } catch {}
         if (!this.q('SELECT 1 FROM plans LIMIT 1').length) {
@@ -480,4 +481,20 @@ export class StoreDO extends DurableObject {
         return { ok: true, id: nid, path: `/api/${e.category}/${e.slug}` }
     }
     adminDeleteEndpoint(id) { this.sql.exec('DELETE FROM endpoints WHERE id=?', id); return { ok: true } }
+
+    /* ---------- tim admin (hanya owner yang boleh menambah; admin tambahan tidak bisa menambah admin/endpoint) ---------- */
+    isAdmin(id) { return this.q('SELECT 1 FROM admins WHERE user_id=?', id).length > 0 }
+    listAdmins() { return { ok: true, admins: this.q('SELECT a.user_id id,u.username,u.email,a.added_by,a.added_at FROM admins a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.added_at') } }
+    addAdmin(username, by, now) {
+        const [u] = this.q('SELECT id,username FROM users WHERE username=?', String(username || '').trim())
+        if (!u) return fail(404, 'no_user', 'User itu belum terdaftar. Minta dia daftar dulu.')
+        if (this.isAdmin(u.id)) return fail(409, 'already_admin', `${u.username} sudah jadi admin.`)
+        this.sql.exec('INSERT INTO admins VALUES(?,?,?)', u.id, String(by || 'owner').slice(0, 60), now)
+        return { ok: true, id: u.id, username: u.username }
+    }
+    removeAdmin(id) { this.sql.exec('DELETE FROM admins WHERE user_id=?', id); return { ok: true } }
+
+    /* ---------- QRIS statis (payload teks hasil baca gambar QR) ---------- */
+    getQrisStatic() { return this.setting('qris_static', null) }
+    setQrisStatic(payload) { this.saveSetting('qris_static', payload); return { ok: true } }
 }
