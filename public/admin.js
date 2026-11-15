@@ -2,7 +2,10 @@ const MENU = {
   ringkasan: ['Ringkasan', 'grid'], pengguna: ['Pengguna', 'user'], endpoint: ['Endpoint', 'link'], paket: ['Paket', 'shield'],
   trial: ['Claim trial', 'gift'], blokir: ['Blokir IP', 'lock'], order: ['Order', 'bag'], kode: ['Kode redeem', 'key'],
 }
-const view = () => (location.hash.slice(1) in MENU ? location.hash.slice(1) : 'ringkasan')
+const SUPER_ONLY = ['endpoint', 'deploy', 'tim']   /* admin tambahan TIDAK boleh: endpoint, update kode (GitHub), tambah admin */
+let LEVEL = 'admin'
+const allowed = (k) => k in MENU && (LEVEL === 'super' || !SUPER_ONLY.includes(k))
+const view = () => (allowed(location.hash.slice(1)) ? location.hash.slice(1) : 'ringkasan')
 const out = () => $('#v')
 const load = async (fn) => { try { await fn() } catch (e) { out().innerHTML = `<p class="err">${esc(e.message)}</p>` } }
 const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v))
@@ -257,7 +260,8 @@ function epTest(e) {
 const draw = () => { document.querySelectorAll('.side>nav a').forEach((a) => a.classList.toggle('on', a.hash.slice(1) === view())); loading(); load(V[view()]) }
 
 ready.then(({ who }) => {
-  if (!who.is_owner) { $('#app').innerHTML = `<div class="panel" style="grid-column:1/-1"><h3>Akses ditolak</h3><p class="sub">IP kamu (${esc(who.ip)}) tidak ada di <span class="mono">OWNER_IPS</span>.</p></div>`; return }
-  $('#app').innerHTML = `<nav>${Object.entries(MENU).map(([k, [v, i]]) => `<a href="#${k}">${ico(i)}${v}</a>`).join('')}</nav><div id="v"></div>`
+  LEVEL = who.admin_level || (who.is_owner ? 'super' : 'admin')
+  if (!who.is_admin && !who.is_owner) { $('#app').innerHTML = `<div class="panel" style="grid-column:1/-1"><h3>Akses ditolak</h3><p class="sub">IP kamu (${esc(who.ip)}) bukan owner dan akunmu belum jadi admin. Login dulu bila kamu admin tambahan.</p></div>`; return }
+  $('#app').innerHTML = `<nav>${Object.entries(MENU).filter(([k]) => allowed(k)).map(([k, [v, i]]) => `<a href="#${k}">${ico(i)}${v}</a>`).join('')}</nav><div id="v"></div>`
   window.onhashchange = draw; draw()
 })
