@@ -160,12 +160,14 @@ async function render() {
       <div class="pc-photo"><span class="pc-ring" id="pring" style="--ring:${ringStyle()}"></span><div class="pc-img" id="pimg"></div><button class="pc-cam" data-pick aria-label="Ganti foto profil">${ico('camera')}</button></div>
       <p class="pc-hi">Selamat Datang,</p>
       <h1 class="pc-name ${me.role === 'vip' ? 'gold' : ''}"><span class="nm">${esc(me.username)}</span>${vb}</h1>
-      <div class="pc-chips"><span class="chip ${me.google ? 'gg' : ''}">${me.google ? `<svg class="i gi" viewBox="0 0 24 24"><path fill="#4285F4" d="M22 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.6a4.8 4.8 0 0 1-2.1 3.1v2.6h3.4c2-1.8 3.1-4.5 3.1-7.5z"/><path fill="#34A853" d="M12 22c2.8 0 5.2-.9 6.9-2.5l-3.4-2.6c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.7v2.7A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.2 13.6a6 6 0 0 1 0-3.8V7.1H2.7a10 10 0 0 0 0 9z"/><path fill="#EA4335" d="M12 6.1c1.5 0 2.8.5 3.9 1.5l2.9-2.9A10 10 0 0 0 2.7 7.1l3.5 2.7C7 7.9 9.3 6.1 12 6.1z"/></svg> Akun Google` : `${ico('user')} Akun Arvo`}</span>${me.email ? `<span class="chip">${ico('mail')} ${esc(me.email)}</span>` : ''}</div>
+      <div class="pc-chips"><span class="chip ${me.google ? 'gg' : ''}">${me.google ? `<svg class="i gi" width="14" height="14" viewBox="0 0 24 24"><path fill="#4285F4" d="M22 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.6a4.8 4.8 0 0 1-2.1 3.1v2.6h3.4c2-1.8 3.1-4.5 3.1-7.5z"/><path fill="#34A853" d="M12 22c2.8 0 5.2-.9 6.9-2.5l-3.4-2.6c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.7v2.7A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.2 13.6a6 6 0 0 1 0-3.8V7.1H2.7a10 10 0 0 0 0 9z"/><path fill="#EA4335" d="M12 6.1c1.5 0 2.8.5 3.9 1.5l2.9-2.9A10 10 0 0 0 2.7 7.1l3.5 2.7C7 7.9 9.3 6.1 12 6.1z"/></svg> Akun Google` : `${ico('user')} Akun Arvo`}</span>${me.email ? `<span class="chip">${ico('mail')} ${esc(me.email)}</span>` : ''}</div>
       <p class="pc-desc">${me.bio ? esc(me.bio) : muted('Belum menambahkan bio.')}</p>
     </div>
     <div class="pc-act"><a class="btn go sm" href="/#paket">${ico('bag')} ${me.active ? 'Perpanjang paket' : 'Lihat paket'}</a><a class="btn ghost sm" href="/playground.html">${ico('play')} Playground</a><button class="btn ghost sm" id="out">${ico('logout')} Keluar</button></div>
     <input type="file" id="pf" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
   </section>
+
+  <section class="card trialcard" id="trialtop" hidden></section>
 
   <section class="card"><div class="card-h">${ico('trend')} Request Metrics</div><div class="card-b">
     <div class="tiles">
@@ -201,19 +203,32 @@ async function render() {
 }
 
 const TRIAL_MSG = { off: 'Claim trial sedang tidak tersedia.', claimed: 'Kamu sudah pernah claim trial.', has_plan: 'Kamu masih punya paket aktif, claim tersedia untuk akun tanpa paket.' }
+async function claimTrial(btn) {
+  btn.disabled = true
+  try { const r = await put('/auth/me/trial', {}, 'POST'); toast(`Trial aktif: ${r.name} ${r.days} hari`); await render() }
+  catch (err) { toast(err.message); const m = $('#tcm'); if (m) say(m, err.message, 1); btn.disabled = false }
+}
+/* Claim Trial tampil menonjol di bagian atas profil begitu admin mengaktifkannya (dan akun masih bisa claim).
+   Di tab Events tetap ada ringkasan status supaya user tahu alasannya kalau belum bisa claim. */
 async function loadTrial() {
-  const box = $('#trial'); if (!box) return
+  const box = $('#trial'), top = $('#trialtop'); if (!box) return
   try {
     const t = await api('/auth/me/trial')
-    box.innerHTML = t.enabled
-      ? `<p class="hint">Coba <b>${esc(t.plan_name)}</b> gratis selama <b>${t.days} hari</b>. Satu kali per akun dan per IP.</p>
-         <button class="btn go" id="tcl" ${t.can_claim ? '' : 'disabled'}>${ico('gift')} Claim trial</button><p class="msg" id="tcm">${t.can_claim ? '' : esc(TRIAL_MSG[t.reason] || '')}</p>`
-      : `<div class="lockbox">${tile('gift', 'mut')}<div>${TRIAL_MSG.off}</div></div>`
-    const b = $('#tcl'); if (b) b.onclick = async () => {
-      b.disabled = true
-      try { const r = await put('/auth/me/trial', {}, 'POST'); toast(`Trial aktif: ${r.name} ${r.days} hari`); await render() }
-      catch (err) { say($('#tcm'), err.message, 1); b.disabled = false }
+    if (top) {
+      top.hidden = !(t.enabled && t.can_claim)
+      if (!top.hidden) {
+        top.innerHTML = `<div class="tc-in">${tile('gift', 'green')}<div class="tc-tx"><b>Trial gratis ${esc(t.plan_name)}</b><span>${t.days} hari, satu kali per akun dan per IP.</span></div>
+          <button class="btn go" id="tcl">${ico('gift')} Claim trial</button></div><p class="msg" id="tcm"></p>`
+        $('#tcl').onclick = (e) => claimTrial(e.currentTarget)
+      }
     }
+    box.innerHTML = t.enabled
+      ? (t.can_claim ? `<p class="hint">Trial <b>${esc(t.plan_name)}</b> ${t.days} hari tersedia untukmu. Klaim lewat kartu di bagian atas halaman.</p>
+           <button class="btn go" id="tcl2">${ico('gift')} Claim trial</button>`
+        : `<p class="hint">Coba <b>${esc(t.plan_name)}</b> gratis selama <b>${t.days} hari</b>. Satu kali per akun dan per IP.</p>
+           <button class="btn go" disabled>${ico('gift')} Claim trial</button><p class="msg">${esc(TRIAL_MSG[t.reason] || '')}</p>`)
+      : `<div class="lockbox">${tile('gift', 'mut')}<div>${TRIAL_MSG.off}</div></div>`
+    const b2 = $('#tcl2'); if (b2) b2.onclick = (e) => claimTrial(e.currentTarget)
   } catch (e) { box.innerHTML = `<p class="err">${esc(e.message)}</p>` }
 }
 
@@ -256,6 +271,7 @@ async function loadIps() {
 
 function loadSide() {
   api('/auth/me/orders').then(({ orders }) => {
+    orders = orders.slice(0, 2)
     $('#ord').innerHTML = orders.length ? `<table><tr><th>Tanggal</th><th>Paket</th><th>Total</th><th>Status</th></tr>${orders.map((o) =>
       `<tr><td>${fmtDate(o.created_at)}</td><td>${esc(o.plan)} ${o.days ? o.days + ' hr' : '∞'}</td><td>${rp(o.total)}</td><td>${esc(o.status)}</td></tr>`).join('')}</table>` : '<p class="empty">Belum ada pembelian.</p>'
   }).catch(() => {})
@@ -266,7 +282,7 @@ function loadSide() {
     const series = Array.from({ length: 14 }, (_, i) => { const k = key(13 - i); return { day: k, n: by[k] || 0 } }), max = Math.max(1, ...series.map((d) => d.n))
     $('#use').innerHTML = `<div class="sec">Pemakaian 14 hari</div><div class="chart">${series.map((d, i) => `<div class="cb ${i === 13 ? 'today' : ''}" title="${esc(d.day)}: ${d.n} request"><span class="cv">${d.n || ''}</span><div class="bw"><i style="height:${d.n ? Math.max(8, (d.n / max) * 100) : 2}%"></i></div><em>${d.day.slice(8)}</em></div>`).join('')}</div>
       <div class="tw"><table><tr><th>Endpoint</th><th>Request</th></tr>${paths.map((p) => `<tr><td class="mono">${esc(p.path)}</td><td>${p.n.toLocaleString('id-ID')}</td></tr>`).join('')}</table></div>
-      ${recent && recent.length ? `<div class="sec" style="margin-top:14px">Riwayat terbaru</div><div class="tw"><table><tr><th>Waktu</th><th>Endpoint</th><th>IP</th></tr>${recent.map((r) => `<tr><td>${fmtDT(r.at)}</td><td class="mono">${esc(r.path)}</td><td class="mono">${esc(r.ip || '-')}</td></tr>`).join('')}</table></div>` : ''}`
+      ${recent && recent.length ? `<div class="sec" style="margin-top:14px">Riwayat terbaru</div><div class="tw"><table><tr><th>Waktu</th><th>Endpoint</th><th>IP</th></tr>${recent.slice(0, 2).map((r) => `<tr><td>${fmtDT(r.at)}</td><td class="mono">${esc(r.path)}</td><td class="mono">${esc(r.ip || '-')}</td></tr>`).join('')}</table></div>` : ''}`
   }).catch(() => {})
 }
 
