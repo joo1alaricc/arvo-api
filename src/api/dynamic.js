@@ -19,11 +19,19 @@ export const dynamicHandler = (builtin) => async (c) => {
     const r = await store(c).findEndpoint(category, slug)
     if (r.ok === false) return err(c, 404, 'Not Found', 'The requested API endpoint does not exist.')
     const ep = r.endpoint
-    if (ep.method !== c.req.method && !(ep.method === 'GET' && c.req.method === 'HEAD')) return err(c, 405, 'Method Not Allowed', `Gunakan method ${ep.method}.`)
-    if (ep.status === 'offline') return err(c, 503, 'Service Unavailable', 'This endpoint is currently OFFLINE.')
-
-    const denied = await meter(c, { path: ep.path, access: ep.access })
-    if (denied) return denied
+    /* endpoint berbayar: cek akses dulu (404 bila tidak berhak), baru method/status, supaya tidak bocor keberadaannya */
+    const gate = async () => {
+        if (ep.method !== c.req.method && !(ep.method === 'GET' && c.req.method === 'HEAD')) return err(c, 405, 'Method Not Allowed', `Gunakan method ${ep.method}.`)
+        if (ep.status === 'offline') return err(c, 503, 'Service Unavailable', 'This endpoint is currently OFFLINE.')
+        return null
+    }
+    if (ep.access !== 'free') {
+        const denied = await meter(c, { path: ep.path, access: ep.access }); if (denied) return denied
+        const bad = await gate(); if (bad) return bad
+    } else {
+        const bad = await gate(); if (bad) return bad
+        const denied = await meter(c, { path: ep.path, access: ep.access }); if (denied) return denied
+    }
 
     const body = ep.method === 'POST' ? await c.req.json().catch(() => ({})) : {}
     const vals = { ip: c.get('ip'), now: String(Date.now()) }, missing = []
