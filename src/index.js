@@ -10,8 +10,9 @@ import { auth } from './api/auth.js'
 import { admin } from './api/admin.js'
 import { prettyPrint } from './utils/pretty.js'
 import { dynamicHandler, mergeSpec } from './api/dynamic.js'
-import { BUILTIN_PATHS } from './api/index.js'
-import { store } from './utils/session.js'
+import { BUILTIN_PATHS, builtinInfo } from './api/index.js'
+import { store, currentUser } from './utils/session.js'
+import { getOverrides } from './utils/overrides.js'
 
 const createApp = () => {
     const app = new OpenAPIHono()
@@ -28,16 +29,33 @@ const createApp = () => {
     app.route('/api/admin', admin)
     setupRoutes(app)
 
-    /* Spec OpenAPI = endpoint bawaan + endpoint dinamis dari dashboard admin. Tidak mengurangi limit. */
-    app.get('/docs', async (c) => {
-        const doc = app.getOpenAPIDocument({
-            openapi: '3.0.0',
-            info: { version: '1.0.0', title: 'Arvo', description: 'About Simple and easy to use API. ⭐️ Star to support our work!' },
-            servers: [{ url: '/' }],
+    /* Katalog untuk Playground: hanya info yang perlu untuk memanggil endpoint (path, method, input, akses). Tidak ada skema respons,
+     * kode, atau URL upstream. Endpoint di atas tier si peminta (free/premium/vip) tidak ditampilkan sama sekali. Tidak mengurangi limit. */
+    app.get('/api/catalog', async (c) => {
+        const RANK = { free: 0, premium: 1, vip: 2, owner: 3 }, warn = []
+        let rank = c.get('isOwner') ? 3 : 0
+        if (!rank) {
+            try {
+                const u = await currentUser(c)
+                if (u) rank = (await store(c).isAdmin(u.id)) ? 3 : RANK[u.role === 'member' ? 'free' : u.role] ?? 0
+            } catch (e) { warn.push('sesi: ' + (e.message || e)) }
+        }
+        /* Tiap sumber dipisah: kalau database/override bermasalah, endpoint bawaan TETAP tampil (tidak pernah kosong gara-gara satu error). */
+        let ov = {}
+        try { ov = (await getOverrides(c)) || {} } catch (e) { warn.push('override: ' + (e.message || e)) }
+        const list = builtinInfo().map((e) => {
+            const o = ov[e.path]
+            return o ? { ...e, name: o.name || e.name, description: o.description ?? e.description, access: o.access || e.access, status: o.status || e.status } : e
         })
-        const r = await store(c).listEndpoints().catch(() => ({ endpoints: [] }))
+        try { const r = await store(c).listEndpoints(); if (r && r.ok !== false) list.push(...(r.endpoints || [])) } catch (e) { warn.push('endpoint: ' + (e.message || e)) }
+        const doc = { paths: {} }
+        for (const e of list) {
+            if ((RANK[e.access] ?? 9) > rank) continue
+            try { mergeSpec(doc, [e], rank === 3) } catch (e2) { warn.push(`${e.path}: ${e2.message || e2}`) }
+        }
+        if (warn.length) console.error('[catalog]', warn.join(' | '))
         c.header('Cache-Control', 'no-store')
-        return c.json(mergeSpec(doc, r.endpoints || [], !!c.get('isOwner')))
+        return c.json(rank === 3 && warn.length ? { ...doc, warnings: warn } : doc)
     })
 
     /* Endpoint buatan admin (harus paling akhir supaya tidak menimpa route bawaan). */
