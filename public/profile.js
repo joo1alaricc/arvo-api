@@ -1,4 +1,4 @@
-let me, who = { ip: '-' }, tab = 'events', reveal = false
+let me, who = { ip: '-' }, tab = 'events', showKey = false
 const el = $('#app')
 const maskKey = (k) => (k.length > 8 ? k.slice(0, 5) + '•'.repeat(Math.min(14, k.length - 7)) + k.slice(-2) : '•'.repeat(k.length))
 const muted = (t) => `<span style="color:var(--mut)">${t}</span>`
@@ -15,8 +15,9 @@ const FIELDS = {
   password: { label: 'Password', icon: 'lock', color: 'amber', show: () => (me.has_password ? '••••••••' : muted('Belum dibuat (akun Google)')),
     inputs: () => [...(me.has_password ? [{ id: 'cp', type: 'password', ph: 'Password lama', ac: 'current-password' }] : []), { id: 'np', type: 'password', ph: 'Password baru (min. 8)', ac: 'new-password' }],
     save: (v) => put('/auth/me/password', { current_password: v.cp, new_password: v.np }) },
-  api_key: { label: 'API Key', icon: 'key', mono: 1, show: () => `<span id="kv">${esc(reveal ? me.api_key : maskKey(me.api_key))}</span>`, edit: () => me.custom_key,
-    btns: () => `<button class="ib" data-eye aria-label="Tampilkan key">${ico(reveal ? 'eyeoff' : 'eye')}</button><button class="ib" data-copyk aria-label="Salin key">${ico('copy')}</button>`,
+  bio: { label: 'Bio', icon: 'user', show: () => (me.bio ? esc(me.bio) : muted('Belum menambahkan bio.')), inputs: () => [{ id: 'v', value: me.bio || '', ph: 'Ceritakan sedikit tentang kamu (maks. 160)' }], save: profileSave('bio') },
+  api_key: { label: 'API Key', icon: 'key', mono: 1, show: () => `<span id="kv">${esc(showKey ? me.api_key : maskKey(me.api_key))}</span>`, edit: () => me.custom_key,
+    btns: () => `<button class="ib" data-eye aria-label="Tampilkan key">${ico(showKey ? 'eyeoff' : 'eye')}</button><button class="ib" data-copyk aria-label="Salin key">${ico('copy')}</button>`,
     inputs: () => [{ id: 'v', value: me.api_key, ph: '10-40 karakter: huruf, angka, _ atau -' }], save: (v) => put('/auth/me/key', { new_key: v.v }) },
 }
 const READONLY = [
@@ -151,14 +152,19 @@ async function render() {
     <div class="pc-top"><span class="pc-brand"><span class="logo">${LOGO}</span>Arvo</span><span class="badge ${me.role}">${me.role === 'member' ? 'Free User' : esc(me.plan_name || me.role)}</span></div>
     <div class="pc-mid">
       <div class="pc-photo"><span class="pc-halo"></span><div class="pc-img" id="pimg"></div><button class="pc-cam" data-pick aria-label="Ganti foto profil">${ico('camera')}</button></div>
-      <h1 class="pc-name">${esc(me.username.toUpperCase())}</h1>
-      <p class="pc-desc">${esc(DESC)}</p>
+      <p class="pc-hi">Selamat Datang,</p>
+      <div class="pc-chips"><span class="chip">${me.google ? `<svg class="i" viewBox="0 0 24 24"><path fill="#4285F4" d="M22 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.6a4.8 4.8 0 0 1-2.1 3.1v2.6h3.4c2-1.8 3.1-4.5 3.1-7.5z"/><path fill="#34A853" d="M12 22c2.8 0 5.2-.9 6.9-2.5l-3.4-2.6c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.7v2.7A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.2 13.6a6 6 0 0 1 0-3.8V7.1H2.7a10 10 0 0 0 0 9z"/><path fill="#EA4335" d="M12 6.1c1.5 0 2.8.5 3.9 1.5l2.9-2.9A10 10 0 0 0 2.7 7.1l3.5 2.7C7 7.9 9.3 6.1 12 6.1z"/></svg> Akun Google` : `${ico('user')} Akun Arvo`}</span></div>
+      <h1 class="pc-name">${esc(me.username)}</h1>
+      <div class="pc-chips"><span class="chip mono">@${esc(me.username.toLowerCase())}</span></div>
+      ${me.email ? `<div class="pc-chips"><span class="chip">${ico('mail')} ${esc(me.email)}</span></div>` : ''}
+      <div class="pc-chips"><span class="chip mono">ID: ${me.id}<button class="ib" data-copyid aria-label="Salin ID">${ico('copy')}</button></span><span class="chip">${ico('shield')} ${me.role === 'member' ? 'Free User' : esc(me.plan_name || me.role)}</span></div>
+      <p class="pc-desc">${me.bio ? esc(me.bio) : muted('Belum menambahkan bio.')}</p>
     </div>
     <div class="pc-foot">
       <div><small>Bergabung</small><b>${joined.getFullYear()}</b></div>
       <div class="r"><small>Tanggal</small><b>${joined.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}</b></div>
     </div>
-    <div class="pc-act"><a class="btn go sm" href="/#paket">${ico('bag')} ${me.active ? 'Perpanjang paket' : 'Lihat paket'}</a><a class="btn ghost sm" href="/playground.html">${ico('play')} Playground</a><button class="btn ghost sm" id="out">${ico('logout')} Keluar</button></div>
+    <div class="pc-act"><button class="btn ghost sm" data-copyid>${ico('copy')} Salin ID</button><a class="btn go sm" href="/#paket">${ico('bag')} ${me.active ? 'Perpanjang paket' : 'Lihat paket'}</a><a class="btn ghost sm" href="/playground.html">${ico('play')} Playground</a><button class="btn ghost sm" id="out">${ico('logout')} Keluar</button></div>
     <input type="file" id="pf" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
   </section>
 
@@ -176,7 +182,7 @@ async function render() {
   <div class="dash-grid">
     <div>
       <section class="card"><div class="card-h">${ico('user')} Personal Info</div><div class="card-b">
-        <div class="sec">Account</div>${['username', 'email', 'phone', 'password'].map(row).join('')}${photoRow()}
+        <div class="sec">Account</div>${['username', 'email', 'phone', 'bio', 'password'].map(row).join('')}${photoRow()}
         <div class="sec" style="margin-top:18px">API</div>${row('api_key')}
         ${me.custom_key ? '' : '<p class="hint" style="margin-top:-2px">Custom API key tersedia di Premium 2 ke atas.</p>'}
         ${READONLY.map(roRow).join('')}
@@ -269,7 +275,8 @@ el.onclick = async (e) => {
   else if (t.dataset.edit) startEdit(t.dataset.edit)
   else if (t.dataset.save) saveField(t.dataset.save, t)
   else if ('cancel' in t.dataset) render()
-  else if ('eye' in t.dataset) { reveal = !reveal; $('#kv').textContent = reveal ? me.api_key : maskKey(me.api_key); t.innerHTML = ico(reveal ? 'eyeoff' : 'eye') }
+  else if ('eye' in t.dataset) { showKey = !showKey; $('#kv').textContent = showKey ? me.api_key : maskKey(me.api_key); t.innerHTML = ico(showKey ? 'eyeoff' : 'eye') }
+  else if ('copyid' in t.dataset) navigator.clipboard.writeText(String(me.id)).then(() => toast('ID disalin'))
   else if ('copyk' in t.dataset) navigator.clipboard.writeText(me.api_key).then(() => flash(t))
   else if (t.dataset.delip) { t.disabled = true; try { await api('/auth/me/ips/' + encodeURIComponent(t.dataset.delip), { method: 'DELETE' }); loadIps() } catch (err) { say($('#ipm'), err.message, 1); t.disabled = false } }
   else if ('pick' in t.dataset) $('#pf').click()
