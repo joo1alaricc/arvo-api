@@ -12,7 +12,7 @@ const loading = () => (out().innerHTML = '<div class="sk" style="height:18px;wid
 /* dialog generik */
 function modal(html, cls = '') {
   const d = document.createElement('dialog'); d.className = cls
-  d.innerHTML = html; document.body.append(d); d.addEventListener('close', () => d.remove())
+  d.innerHTML = html; document.body.append(d); d.addEventListener('close', () => setTimeout(() => d.remove(), 650))
   d.addEventListener('click', (e) => { if (e.target === d) d.close() })
   d.showModal(); return d
 }
@@ -54,10 +54,18 @@ const V = {
 
   /* ---------- endpoint ---------- */
   async endpoint() {
-    const { endpoints } = await api('/admin/endpoints')
+    const [{ endpoints }, { endpoints: builtin }] = await Promise.all([api('/admin/endpoints'), api('/admin/builtin')])
     EPS = Object.fromEntries(endpoints.map((e) => [e.id, e]))
+    BI = Object.fromEntries(builtin.map((e) => [e.path, e]))
     out().innerHTML = `<div class="bar"><h1>Endpoint</h1><button class="btn" id="add">${ico('plus')} Tambah fitur</button></div>
-      <p class="sub">Endpoint bawaan (<span class="mono">/api/stats</span>, <span class="mono">/api/premium/ping</span>) ada di kode. Fitur di bawah ini dibuat dari dashboard dan langsung muncul di Playground.</p>
+      <div class="panel tw" style="padding:6px 10px"><h3 style="margin:8px 0 2px">Endpoint bawaan <span class="badge">${builtin.length}</span></h3>
+        <p class="sub" style="font-size:12px;margin:0 0 6px">Ada di kode (<span class="mono">src/api</span>), selalu aktif. Bisa dites dari sini.</p>
+        <table><tr><th>Fitur</th><th>Path</th><th>Akses</th><th>Status</th><th>Aksi</th></tr>${builtin.map((e) => `<tr>
+          <td><b>${esc(e.name)}</b><br><span class="sub" style="margin:0;font-size:11.5px">${esc(e.description)}</span></td>
+          <td><span class="mt ${e.method.toLowerCase()}" style="font-size:10px">${e.method}</span> <span class="mono" style="font-size:12px">${esc(e.path)}</span></td>
+          <td>${accessBadge(e.access)}</td><td><span class="badge ${e.status}">${e.status === 'online' ? 'Online' : 'Offline'}</span></td>
+          <td><div class="acts"><button class="btn go" data-bt="${esc(e.path)}">Tes</button></div></td></tr>`).join('') || '<tr><td colspan="5" class="sub">Tidak ada endpoint bawaan.</td></tr>'}</table></div>
+      <p class="sub">Fitur di bawah ini dibuat dari dashboard dan langsung muncul di Playground.</p>
       <div class="panel tw" style="padding:6px 10px"><table><tr><th>Fitur</th><th>Path</th><th>Akses</th><th>Mode</th><th>Online</th><th>Aksi</th></tr>${endpoints.map((e) => `<tr>
         <td><b>${esc(e.name)}</b><br><span class="sub" style="margin:0;font-size:11.5px">${e.inputs.map((i) => esc(i.name)).join(', ') || 'tanpa input'}</span></td>
         <td><span class="mt ${e.method.toLowerCase()}" style="font-size:10px">${e.method}</span> <span class="mono" style="font-size:12px">${esc(e.path)}</span></td>
@@ -65,6 +73,7 @@ const V = {
         <td><label class="sw"><input type="checkbox" data-on="${e.id}" ${e.status === 'online' ? 'checked' : ''}><i></i></label></td>
         <td><div class="acts"><button class="btn go" data-t="${e.id}">Tes</button><button class="btn ghost" data-e="${e.id}">Edit</button><button class="btn ghost red" data-x="${e.id}">Hapus</button></div></td></tr>`).join('') || '<tr><td colspan="6" class="sub">Belum ada endpoint buatan admin.</td></tr>'}</table></div>`
     $('#add').onclick = () => epForm()
+    out().querySelectorAll('[data-bt]').forEach((b) => (b.onclick = () => epTest(BI[b.dataset.bt])))
     out().querySelectorAll('[data-e]').forEach((b) => (b.onclick = () => epForm(EPS[b.dataset.e])))
     out().querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => epTest(EPS[b.dataset.t])))
     out().querySelectorAll('[data-on]').forEach((b) => (b.onchange = async () => {
@@ -143,7 +152,7 @@ const V = {
     out().querySelectorAll('[data-dc]').forEach((b) => (b.onclick = async () => { if (confirm('Hapus kode ' + b.dataset.dc + '?')) { await api('/admin/codes/' + encodeURIComponent(b.dataset.dc), { method: 'DELETE' }); V.kode() } }))
   },
 }
-let EPS = {}, PL = {}
+let EPS = {}, PL = {}, BI = {}
 
 /* ---------- detail IP user ---------- */
 async function userIps(id, name, done) {
