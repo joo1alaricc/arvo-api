@@ -25,7 +25,7 @@ api('/auth/config').then(({ hero_video, hero_poster }) => {
   document.addEventListener('visibilitychange', () => (document.hidden ? v.pause() : box.classList.contains('on') && v.play().catch(() => {})))
 }).catch(() => {})
 
-fetch('/docs').then(async (r) => {
+fetch('/api/catalog').then(async (r) => {
   $('#s-ep').textContent = Object.keys((await r.json()).paths || {}).length
   $('#dot').className = 'dot up'; $('#status').textContent = 'Semua sistem berjalan'
 }).catch(() => { $('#dot').className = 'dot down'; $('#status').textContent = 'Server tidak dapat dijangkau' })
@@ -33,23 +33,31 @@ let session = {}
 ready.then((s) => {
   session = s; $('#s-ip').textContent = s.who.ip
   const q = s.who.quota
-  $('#s-rl').textContent = !q ? '–' : q.unlimited ? 'Unlimited' : `${q.remaining}/${q.limit}`
+  const u = s.user
+  /* login: tampilkan sisa limit harian akunmu (dipakai saat request pakai API key); belum login: sisa kuota IP */
+  if (u) { $('#s-rl').textContent = u.daily_limit === null ? 'Unlimited' : `${u.remaining}/${u.daily_limit}`; $('#s-rl').nextElementSibling.textContent = 'Sisa limit akun hari ini' }
+  else $('#s-rl').textContent = !q ? '–' : q.unlimited ? 'Unlimited' : `${q.remaining}/${q.limit}`
 })
 
+const BEST = 'premium3'   /* paket yang diberi sorotan BEST SELLER */
 const price = (p, d, perm) => perm ? p.permanentPrice : Math.max(1000, Math.ceil(p.basePrice * d / p.baseDays / 100) * 100)
 const feats = (p) => [
   p.daily === null ? 'Request unlimited' : `${p.daily.toLocaleString('id-ID')} request / hari`,
   'Akses API premium', `Whitelist IP hingga ${p.maxIps} IP`, p.customKey ? 'Custom API key' : null,
+  p.tier === 'vip' ? 'Badge VIP' : 'Badge Premium',
+  p.tier === 'vip' ? 'Profil centang gold & username gold berkilau' : 'Profil centang biru berkilau',
+  p.tier === 'vip' ? 'Border profil custom (pilih warna sendiri)' : null,
 ].filter(Boolean).map((f) => `<li>${f}</li>`).join('')
 
-api('/billing/plans').then(({ plans, min_days, max_days }) => {
+Promise.all([api('/billing/plans'), ready]).then(([{ plans, min_days, max_days }, { user }]) => {
+  const stacking = !!(user && user.active)
   $('#plans').innerHTML = ''
   plans.forEach((p) => {
-    const el = document.createElement('article'); el.className = 'rv plan ' + p.tier
+    const el = document.createElement('article'); el.className = 'rv plan ' + p.tier + (p.id === BEST ? ' best' : '')
     const timed = !!p.basePrice, perm = !!p.permanentPrice
     let days = timed ? p.baseDays : 0, permanent = !timed
-    el.innerHTML = `<span class="tag">${p.tier === 'vip' ? 'VIP' : 'Premium'}</span><h3>${p.name}</h3>
-      <div class="price"></div><ul>${feats(p)}</ul><div class="chips"></div><button class="btn">Beli ${p.name}</button>`
+    el.innerHTML = `${p.id === BEST ? '<span class="ribbon">BEST SELLER</span>' : ''}<span class="tag">${p.tier === 'vip' ? 'VIP' : 'Premium'}</span><h3>${p.name}</h3>
+      <div class="price"></div><ul>${feats(p)}</ul><div class="chips"></div><button class="btn">${stacking ? 'Tambah' : 'Beli'} ${p.name}</button>${stacking ? '<p class="hint" style="margin:0;font-size:11.5px">Masuk sebagai perpanjangan: durasi ditambah, limit &amp; slot IP dijumlahkan dengan paketmu sekarang.</p>' : ''}`
     const chips = el.querySelector('.chips'), priceEl = el.querySelector('.price')
     const draw = () => {
       priceEl.innerHTML = `${rp(price(p, days, permanent))} <small>${permanent ? 'sekali bayar, permanen' : `/ ${days} hari`}</small>`
