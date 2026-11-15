@@ -245,7 +245,7 @@ export class StoreDO extends DurableObject {
         return { ok: true,
             days: this.q('SELECT day,SUM(count) n FROM usage WHERE user_id=? AND day>=? GROUP BY day ORDER BY day DESC', id, from),
             paths: this.q('SELECT path,SUM(count) n FROM usage WHERE user_id=? AND day>=? GROUP BY path ORDER BY n DESC LIMIT 10', id, from),
-            recent: this.q('SELECT at,path,ip FROM usage_log WHERE user_id=? ORDER BY id DESC LIMIT 20', id) }
+            recent: this.q('SELECT at,path,ip FROM usage_log WHERE user_id=? ORDER BY id DESC LIMIT 2', id) }
     }
 
     /* ---------- profil, whitelist (tabel), redeem, hapus akun ---------- */
@@ -354,17 +354,19 @@ export class StoreDO extends DurableObject {
         const cur = this.user(userId)
         if (cur && this.ent(cur, now) && cur.expires_at === null && qt.days !== null) return fail(409, 'permanent_active', 'Kamu punya paket permanen. Untuk menambah limit, beli paket permanen juga.')
         this.sql.exec("UPDATE orders SET status='expired' WHERE status='pending' AND expires_at+?<?", GRACE, now)
+        /* Harga persis sesuai paket, tanpa kode unik / biaya admin. Pembayaran dicocokkan lewat nominal, jadi
+           dua order pending dengan nominal sama tidak boleh berjalan bersamaan. */
+        const same = this.q("SELECT * FROM orders WHERE status='pending' AND total=? AND expires_at+?>?", qt.amount, GRACE, now)
+        const mine = same.find((o) => o.user_id === userId && o.plan === plan && o.days === qt.days)
+        if (mine) return { ok: true, id: mine.id, plan, name: this.plans[plan].name, days: mine.days, amount: mine.amount, total: mine.total, status: 'pending', expires_at: mine.expires_at, reused: true }
         if (this.q("SELECT COUNT(*) c FROM orders WHERE status='pending' AND user_id=?", userId)[0].c >= 5) {
             return fail(429, 'too_many_pending', 'Terlalu banyak order tertunda, selesaikan atau tunggu kedaluwarsa.')
         }
-        const used = new Set(this.q("SELECT code FROM orders WHERE status='pending' AND amount=?", qt.amount).map((r) => r.code))
-        const free = Array.from({ length: 99 }, (_, i) => i + 1).filter((c) => !used.has(c))
-        if (!free.length) return fail(503, 'busy', 'Antrean pembayaran penuh, coba beberapa menit lagi.')
-        const code = free[Math.floor(Math.random() * free.length)]
-        const id = hex(8), total = qt.amount + code
+        if (same.length) return fail(409, 'amount_busy', 'Ada pembayaran lain dengan nominal yang sama sedang menunggu. Coba lagi dalam beberapa menit.')
+        const id = hex(8), total = qt.amount
         this.sql.exec('INSERT INTO orders(id,user_id,plan,days,amount,code,total,status,ip,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-            id, userId, plan, qt.days, qt.amount, code, total, 'pending', ip, now, now + ttl)
-        return { ok: true, id, plan, name: this.plans[plan].name, days: qt.days, amount: qt.amount, code, total, status: 'pending', expires_at: now + ttl }
+            id, userId, plan, qt.days, qt.amount, 0, total, 'pending', ip, now, now + ttl)
+        return { ok: true, id, plan, name: this.plans[plan].name, days: qt.days, amount: qt.amount, total, status: 'pending', expires_at: now + ttl }
     }
     fulfill(o, now) {
         this.applyPlan(this.user(o.user_id), o.plan, o.days, now, true)
@@ -386,7 +388,7 @@ export class StoreDO extends DurableObject {
         return { ok: true, id: o.id, plan: o.plan, name: this.plans[o.plan]?.name || o.plan, days: o.days, total: o.total, status: o.status, expires_at: o.expires_at }
     }
     userOrders(id) {
-        return { ok: true, orders: this.q('SELECT id,plan,days,total,status,created_at FROM orders WHERE user_id=? ORDER BY created_at DESC LIMIT 30', id) }
+        return { ok: true, orders: this.q('SELECT id,plan,days,total,status,created_at FROM orders WHERE user_id=? ORDER BY created_at DESC LIMIT 2', id) }
     }
 
     /* ---------- admin ---------- */
