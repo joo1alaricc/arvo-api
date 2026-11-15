@@ -126,3 +126,11 @@ tbody tr,table tr{transition:background-color .15s}table tr:hover td{background:
   radial-gradient(50% 60% at 60% 90%,color-mix(in srgb,var(--ok) 18%,transparent),transparent 70%);animation:floaty 16s ease-in-out infinite;transition:opacity 1.2s}
 .hv.on .hv-glow{opacity:0}
 @media(max-width:600px){.herobox .hero{padding-top:56px;padding-bottom:40px;min-height:0}}
+
+/* paket BEST SELLER */
+.plan{position:relative}
+.plan.best{border-color:#f5a524;box-shadow:0 0 0 1px #f5a524,0 10px 30px -10px #f5a52466}
+.plan.best:hover{border-color:#f5a524;box-shadow:0 0 0 1px #f5a524,0 14px 34px -10px #f5a52499}
+.ribbon{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:linear-gradient(110deg,#f5a524,#ffd166,#f5a524);background-size:200% 100%;color:#2a1a00;font-size:11px;font-weight:800;letter-spacing:.08em;padding:3px 12px;border-radius:99px;white-space:nowrap;box-shadow:0 4px 12px #f5a52455;animation:ribbonShine 3s linear infinite}
+@keyframes ribbonShine{to{background-position:-200% 0}}
+@media(prefers-reduced-motion:reduce){.ribbon{animation:none}}
