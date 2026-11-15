@@ -96,3 +96,18 @@ const ready = Promise.all([
   new MutationObserver(() => { if (!q) { q = true; requestAnimationFrame(scan) } }).observe(document.body, { childList: true, subtree: true })
   scan()
 }
+
+
+/* ---------- sentuhan: efek cincin di titik tap/klik, di semua halaman ---------- */
+if (!matchMedia('(prefers-reduced-motion:reduce)').matches) {
+  const layer = document.createElement('div'); layer.className = 'tap-layer'; layer.setAttribute('aria-hidden', 'true'); document.body.append(layer)
+  addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    /* dialog modal berada di top layer di atas segalanya, jadi efeknya ditaruh di dalam dialog yang sedang terbuka */
+    const dlg = document.querySelector('dialog[open]')
+    const t = document.createElement('i'); t.className = 'tap'
+    if (dlg && dlg.contains(e.target)) { const r = dlg.getBoundingClientRect(); t.style.left = e.clientX - r.left + dlg.scrollLeft + 'px'; t.style.top = e.clientY - r.top + dlg.scrollTop + 'px'; dlg.append(t) }
+    else { t.style.left = e.clientX + 'px'; t.style.top = e.clientY + 'px'; layer.append(t) }
+    setTimeout(() => t.remove(), 800)
+  }, { passive: true, capture: true })
+}
