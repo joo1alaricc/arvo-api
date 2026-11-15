@@ -53,7 +53,7 @@ document.body.insertAdjacentHTML('afterbegin', `<header class="nav"><div class="
   <span id="navr" class="navr"></span>
   <button id="theme" class="nb" aria-label="Ganti tema"></button></div>
   <div class="mnav" id="mnav"><div>${LINKS.map(([h, t]) => `<a href="${h}">${t}</a>`).join('')}</div></div></header>`)
-document.body.insertAdjacentHTML('beforeend', `<footer><div class="wrap foot"><b>Arvo</b><span>© 2026 · <a href="/docs">OpenAPI</a> · <a href="/playground.html">Playground</a></span></div></footer>`)
+document.body.insertAdjacentHTML('beforeend', `<footer><div class="wrap foot"><b>Arvo</b><span>© 2026 · <a href="/playground.html">Playground</a></span></div></footer>`)
 const syncTheme = () => ($('#theme').innerHTML = ni(root.dataset.theme === 'dark' ? 'sun' : 'moon'))
 $('#theme').onclick = () => {
   const swap = () => { root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark'; localStorage.setItem('theme', root.dataset.theme); syncTheme() }
