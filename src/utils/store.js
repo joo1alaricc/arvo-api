@@ -34,12 +34,14 @@ export class StoreDO extends DurableObject {
             CREATE TABLE IF NOT EXISTS endpoints(id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT, slug TEXT, name TEXT, description TEXT DEFAULT '',
                 method TEXT DEFAULT 'GET', access TEXT DEFAULT 'free', status TEXT DEFAULT 'online', mode TEXT DEFAULT 'proxy', code TEXT DEFAULT '',
                 headers TEXT DEFAULT '{}', inputs TEXT DEFAULT '[]', created_at INTEGER, updated_at INTEGER, UNIQUE(category,slug));
-            CREATE TABLE IF NOT EXISTS admins(user_id INTEGER PRIMARY KEY, added_by TEXT, added_at INTEGER);`)
+            CREATE TABLE IF NOT EXISTS admins(user_id INTEGER PRIMARY KEY, added_by TEXT, added_at INTEGER);
+            CREATE TABLE IF NOT EXISTS usage_log(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, at INTEGER, path TEXT, ip TEXT);
+            CREATE INDEX IF NOT EXISTS usage_log_u ON usage_log(user_id,id);`)
         /* DB lama bisa punya tabel orders dengan skema berbeda (CREATE IF NOT EXISTS tidak mengubahnya): lengkapi kolom yang kurang */
         this.ensureCols('orders', { user_id: 'INTEGER', plan: 'TEXT', days: 'INTEGER', amount: 'INTEGER', code: 'INTEGER', total: 'INTEGER', status: 'TEXT', ip: 'TEXT',
             created_at: 'INTEGER', expires_at: 'INTEGER', paid_at: 'INTEGER' },
         { user_id: ['uid', 'userid', 'user', 'owner_id'], total: ['amount', 'price'], created_at: ['created', 'ts', 'time'] })
-        for (const col of ['phone', 'bio', 'avatar_url', 'banner_url', 'reg_ip', 'last_ip', 'avatar_data', 'avatar_ver']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`) } catch {} }
+        for (const col of ['phone', 'bio', 'avatar_url', 'banner_url', 'reg_ip', 'last_ip', 'avatar_data', 'avatar_ver', 'stack', 'border_colors']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`) } catch {} }
         try { this.sql.exec('ALTER TABLE users ADD COLUMN last_seen INTEGER') } catch {}
         if (!this.q('SELECT 1 FROM plans LIMIT 1').length) {
             DEFAULT_PLANS.forEach((p, i) => this.sql.exec('INSERT INTO plans VALUES(?,?,?,?,?,?,?,?,?,1,?)', p.id, p.tier, p.name, p.daily, p.maxIps, p.customKey ? 1 : 0, p.baseDays, p.basePrice, p.permanentPrice, i))
@@ -75,13 +77,43 @@ export class StoreDO extends DurableObject {
     q(sql, ...b) { return this.sql.exec(sql, ...b).toArray() }
     user(id) { return this.q('SELECT * FROM users WHERE id=?', id)[0] }
 
+    freeLimit() { return Math.max(1, Math.floor(Number(this.env?.FREE_DAILY_LIMIT)) || 100) }
+
+    /* Daftar id paket yang menumpuk di akun (tiap pembelian/perpanjangan menambah satu entri). Akun lama: hanya paket tunggalnya. */
+    stackOf(u) {
+        let ids = null
+        try { ids = JSON.parse(u.stack || 'null') } catch {}
+        return Array.isArray(ids) && ids.length ? ids : (u.plan ? [u.plan] : [])
+    }
+    /* Hak akses gabungan dari tumpukan paket: limit harian & slot IP dijumlahkan, tier tertinggi menang. */
+    stackEnt(ids) {
+        const ps = ids.map((i) => this.plans[i]).filter(Boolean)
+        if (!ps.length) return null
+        const rank = (p) => (p.tier === 'vip' ? 2e9 : 1e9) + (p.daily === null ? 9e8 : p.daily)
+        const sorted = [...ps].sort((a, b) => rank(b) - rank(a))
+        const count = new Map()
+        for (const p of sorted) count.set(p.name, (count.get(p.name) || 0) + 1)
+        const parts = [...count].map(([name, n]) => ({ name, n }))
+        return {
+            primary: sorted[0].id, tier: ps.some((p) => p.tier === 'vip') ? 'vip' : 'premium',
+            daily: ps.some((p) => p.daily === null) ? null : ps.reduce((a, p) => a + p.daily, 0),
+            maxIps: Math.min(100, ps.reduce((a, p) => a + p.maxIps, 0)), customKey: ps.some((p) => p.customKey),
+            parts, name: parts.map((x) => (x.n > 1 ? `${x.name} ×${x.n}` : x.name)).join(' + '),
+        }
+    }
+    ent(u, now) { return u.plan && (!u.expires_at || u.expires_at > now) ? this.stackEnt(this.stackOf(u)) : null }
+
     pub(u, now) {
-        const p = u.plan && (!u.expires_at || u.expires_at > now) ? this.plans[u.plan] || null : null
+        const p = this.ent(u, now), day = jakartaDay(now)
+        const used = u.usage_day === day ? u.usage_count : 0, limit = p ? p.daily : this.freeLimit()
+        let border = null
+        try { border = JSON.parse(u.border_colors || 'null') } catch {}
         return { ok: true, id: u.id, username: u.username, email: u.email, google: !!u.google_sub, has_password: !!u.pass_hash,
-            api_key: u.api_key, role: p ? p.tier : 'member', plan: u.plan, plan_name: u.plan ? this.plans[u.plan]?.name || u.plan : null,
-            active: !!p, expired: !!u.plan && !p, expires_at: u.expires_at, daily_limit: p ? p.daily : null,
+            api_key: u.api_key, role: p ? p.tier : 'member', plan: u.plan, plan_name: p ? p.name : u.plan ? this.plans[u.plan]?.name || u.plan : null,
+            plan_parts: p ? p.parts : [], active: !!p, expired: !!u.plan && !p, expires_at: u.expires_at, daily_limit: limit, free_limit: this.freeLimit(),
+            remaining: limit === null ? null : Math.max(0, limit - used),
             max_ips: p ? p.maxIps : 0, custom_key: !!p?.customKey, ips: JSON.parse(u.ips),
-            used_today: u.usage_day === jakartaDay(now) ? u.usage_count : 0, total_requests: u.total, created_at: u.created_at,
+            used_today: used, total_requests: u.total, created_at: u.created_at, border_colors: Array.isArray(border) ? border : null,
             phone: u.phone || null, bio: u.bio || null, avatar_url: u.avatar_data ? `/api/auth/me/avatar?v=${u.avatar_ver || 1}` : (u.avatar_url || null), last_ip: u.last_ip || null }
     }
 
@@ -153,34 +185,54 @@ export class StoreDO extends DurableObject {
         return { ok: true, api_key: newKey }
     }
 
+    /* Border foto profil kustom: khusus VIP aktif. colors kosong = kembali ke bawaan. */
+    setBorder(id, colors, now) {
+        const p = this.pub(this.user(id), now)
+        if (p.role !== 'vip' || !p.active) return fail(403, 'not_allowed', 'Border profil custom khusus paket VIP yang aktif.')
+        const list = Array.isArray(colors) ? colors.map((c) => String(c).trim().toLowerCase()) : []
+        if (list.length && (list.length < 2 || list.length > 4 || list.some((c) => !/^#[0-9a-f]{6}$/.test(c)))) return fail(400, 'bad_border', 'Pilih 2-4 warna (format #rrggbb).')
+        this.sql.exec('UPDATE users SET border_colors=? WHERE id=?', list.length ? JSON.stringify(list) : null, id)
+        return { ok: true, border_colors: list.length ? list : null }
+    }
+
     /* ---------- pemakaian API ---------- */
-    /* need: free | premium | vip | owner. Tier dicek SEBELUM kuota dikurangi, jadi request yang ditolak tidak memakan limit. */
-    consume(key, ip, path, now, need = 'free') {
+    /* need: free | premium | vip | owner. Tier dicek SEBELUM kuota dikurangi, jadi request yang ditolak tidak memakan limit.
+     * Akun gratis yang mengirim key dihitung per akun (FREE_DAILY_LIMIT / hari), bukan per IP, supaya sisa limit terlihat di profil.
+     * owner=true: hanya mencatat pemakaian, tanpa batas apa pun. */
+    consume(key, ip, path, now, need = 'free', owner = false) {
         const [u] = this.q('SELECT * FROM users WHERE api_key=?', key)
         if (!u) return fail(401, 'invalid_api_key', 'API key tidak valid.')
         const p = this.pub(u, now)
         const day = jakartaDay(now)
-        const hit = () => this.sql.exec('INSERT INTO usage(user_id,day,path,count) VALUES(?,?,?,1) ON CONFLICT(user_id,day,path) DO UPDATE SET count=count+1', u.id, day, path)
+        const record = (used) => {
+            this.sql.exec('UPDATE users SET usage_day=?,usage_count=?,total=total+1 WHERE id=?', day, used, u.id)
+            this.sql.exec('INSERT INTO usage(user_id,day,path,count) VALUES(?,?,?,1) ON CONFLICT(user_id,day,path) DO UPDATE SET count=count+1', u.id, day, path)
+            this.sql.exec('INSERT INTO usage_log(user_id,at,path,ip) VALUES(?,?,?,?)', u.id, now, path, ip)
+            this.sql.exec('DELETE FROM usage_log WHERE user_id=? AND id<(SELECT id FROM usage_log WHERE user_id=? ORDER BY id DESC LIMIT 1 OFFSET 99)', u.id, u.id)
+        }
         this.touchIp(u.id, ip, now, 'api')
+        let used = p.used_today
+        if (owner) { record(used + 1); return { ok: true, owner: true } }
         if (!p.active) {
             if (need !== 'free') return fail(402, 'premium_required', need === 'vip' ? 'Endpoint ini khusus paket VIP.' : 'Endpoint ini khusus paket Premium/VIP.')
-            hit(); this.sql.exec('UPDATE users SET total=total+1 WHERE id=?', u.id); return { ok: true, premium: false }
+            const limit = p.daily_limit
+            if (used >= limit) return fail(429, 'daily_limit', `Limit harian gratis (${limit} request) habis, reset 00:00 WIB. Upgrade paket untuk limit lebih besar.`)
+            record(++used)
+            return { ok: true, premium: false, limit, remaining: limit - used }
         }
         if (need === 'vip' && p.role !== 'vip') return fail(402, 'vip_required', 'Endpoint ini khusus paket VIP.')
         if (p.ips.length && !p.ips.includes(ip)) return fail(403, 'ip_not_whitelisted', `IP ${ip} tidak ada di whitelist key ini.`)
         if (p.ips.includes(ip)) this.sql.exec('UPDATE ip_meta SET last_used=?,req=req+1 WHERE user_id=? AND ip=?', now, u.id, ip)
-        let used = u.usage_day === day ? u.usage_count : 0
         if (p.daily_limit !== null && used >= p.daily_limit) return fail(429, 'daily_limit', 'Limit harian habis, reset 00:00 WIB.')
-        used++
-        this.sql.exec('UPDATE users SET usage_day=?,usage_count=?,total=total+1 WHERE id=?', day, used, u.id)
-        hit()
+        record(++used)
         return { ok: true, premium: true, plan: u.plan, name: p.plan_name, limit: p.daily_limit, remaining: p.daily_limit === null ? null : p.daily_limit - used }
     }
     usage(id, now) {
         const from = jakartaDay(now - 13 * DAY)
         return { ok: true,
             days: this.q('SELECT day,SUM(count) n FROM usage WHERE user_id=? AND day>=? GROUP BY day ORDER BY day DESC', id, from),
-            paths: this.q('SELECT path,SUM(count) n FROM usage WHERE user_id=? AND day>=? GROUP BY path ORDER BY n DESC LIMIT 10', id, from) }
+            paths: this.q('SELECT path,SUM(count) n FROM usage WHERE user_id=? AND day>=? GROUP BY path ORDER BY n DESC LIMIT 10', id, from),
+            recent: this.q('SELECT at,path,ip FROM usage_log WHERE user_id=? ORDER BY id DESC LIMIT 20', id) }
     }
 
     /* ---------- profil, whitelist (tabel), redeem, hapus akun ---------- */
@@ -256,28 +308,38 @@ export class StoreDO extends DurableObject {
         if (!r) return fail(404, 'bad_code', 'Kode tidak ditemukan.')
         if (r.used >= r.max_uses) return fail(410, 'code_used_up', 'Kode sudah habis dipakai.')
         if (this.q('SELECT 1 FROM redeems WHERE code=? AND user_id=?', c, id).length) return fail(409, 'code_taken', 'Kamu sudah memakai kode ini.')
-        this.applyPlan(this.user(id), r.plan, r.days, now)
+        const ap = this.applyPlan(this.user(id), r.plan, r.days, now)
+        if (ap.ok === false) return ap
         this.sql.exec('INSERT INTO redeems VALUES(?,?,?)', c, id, now)
         this.sql.exec('UPDATE codes SET used=used+1 WHERE code=?', c)
         return { ok: true, plan: r.plan, name: this.plans[r.plan]?.name || r.plan, days: r.days }
     }
     deleteAccount(id) {
-        for (const t of ['sessions', 'usage', 'ip_meta', 'redeems', 'seen_ips']) this.sql.exec(`DELETE FROM ${t} WHERE user_id=?`, id)
+        for (const t of ['sessions', 'usage', 'usage_log', 'ip_meta', 'redeems', 'seen_ips']) this.sql.exec(`DELETE FROM ${t} WHERE user_id=?`, id)
         this.sql.exec('DELETE FROM users WHERE id=?', id)
         return { ok: true }
     }
 
     /* ---------- order & paket ---------- */
-    applyPlan(u, planId, days, now) {
+    /* Paket menumpuk: kalau akun masih punya paket aktif, pembelian baru = perpanjangan. Durasi ditambahkan ke masa aktif,
+     * limit harian & slot IP dijumlahkan, paket sebelumnya tidak dihapus. Kalau paket lama sudah habis, mulai dari nol.
+     * Paket permanen + paket berdurasi ditolak (limit tambahan akan jadi permanen), kecuali lenient (pembayaran sudah masuk). */
+    applyPlan(u, planId, days, now, lenient = false) {
         const add = days ? days * DAY : null
-        const expires = add === null ? null : u.plan === planId
-            ? (u.plan && u.expires_at === null ? null : Math.max(now, u.expires_at || 0) + add) : now + add
-        const ips = JSON.stringify(JSON.parse(u.ips).slice(0, this.plans[planId].maxIps))
-        this.sql.exec('UPDATE users SET plan=?,expires_at=?,ips=? WHERE id=?', planId, expires, ips, u.id)
+        const active = !!this.ent(u, now)
+        if (active && u.expires_at === null && add !== null && !lenient) return fail(409, 'permanent_active', 'Kamu punya paket permanen. Untuk menambah limit, beli paket permanen juga.')
+        const stack = active ? [...this.stackOf(u), planId] : [planId]
+        const expires = add === null ? null : active ? (u.expires_at === null ? null : u.expires_at + add) : now + add
+        const e = this.stackEnt(stack)
+        const ips = JSON.stringify(JSON.parse(u.ips).slice(0, e.maxIps))
+        this.sql.exec('UPDATE users SET plan=?,stack=?,expires_at=?,ips=? WHERE id=?', e.primary, JSON.stringify(stack), expires, ips, u.id)
+        return { ok: true, extended: active }
     }
     createOrder({ userId, plan, days, permanent, ip, now, ttl }) {
         let qt
         try { const pl = this.plans[plan]; if (!pl || !pl.visible) throw new Error('Paket tidak tersedia.'); qt = quote(pl, { days, permanent }) } catch (e) { return fail(400, 'bad_request', e.message) }
+        const cur = this.user(userId)
+        if (cur && this.ent(cur, now) && cur.expires_at === null && qt.days !== null) return fail(409, 'permanent_active', 'Kamu punya paket permanen. Untuk menambah limit, beli paket permanen juga.')
         this.sql.exec("UPDATE orders SET status='expired' WHERE status='pending' AND expires_at+?<?", GRACE, now)
         if (this.q("SELECT COUNT(*) c FROM orders WHERE status='pending' AND user_id=?", userId)[0].c >= 5) {
             return fail(429, 'too_many_pending', 'Terlalu banyak order tertunda, selesaikan atau tunggu kedaluwarsa.')
@@ -292,7 +354,7 @@ export class StoreDO extends DurableObject {
         return { ok: true, id, plan, name: this.plans[plan].name, days: qt.days, amount: qt.amount, code, total, status: 'pending', expires_at: now + ttl }
     }
     fulfill(o, now) {
-        this.applyPlan(this.user(o.user_id), o.plan, o.days, now)
+        this.applyPlan(this.user(o.user_id), o.plan, o.days, now, true)
         this.sql.exec("UPDATE orders SET status='paid',paid_at=? WHERE id=?", now, o.id)
         return { ok: true, order: o.id, plan: o.plan, total: o.total }
     }
@@ -347,10 +409,9 @@ export class StoreDO extends DurableObject {
         if (!u) return fail(404, 'not_found', 'User tidak ditemukan.')
         if (!this.plans[plan]) return fail(400, 'bad_request', 'Paket tidak dikenal.')
         if (!permanent && !(d >= 1 && d <= 3650)) return fail(400, 'bad_request', 'Durasi 1-3650 hari.')
-        this.applyPlan(u, plan, permanent ? null : d, now)
-        return { ok: true }
+        return this.applyPlan(u, plan, permanent ? null : d, now)
     }
-    adminRevoke(id) { this.sql.exec('UPDATE users SET plan=NULL,expires_at=NULL,ips=? WHERE id=?', '[]', id); return { ok: true } }
+    adminRevoke(id) { this.sql.exec('UPDATE users SET plan=NULL,stack=NULL,expires_at=NULL,ips=? WHERE id=?', '[]', id); return { ok: true } }
     adminCreateCode({ code, plan, days, permanent, max_uses }, now) {
         if (!this.plans[plan]) return fail(400, 'bad_request', 'Paket tidak dikenal.')
         const d = permanent ? null : Math.floor(Number(days)), m = Math.floor(Number(max_uses) || 1)
@@ -403,7 +464,7 @@ export class StoreDO extends DurableObject {
     }
     adminDeletePlan(id) {
         if (!this.plans[id]) return fail(404, 'not_found', 'Paket tidak ditemukan.')
-        if (this.q('SELECT 1 FROM users WHERE plan=? LIMIT 1', id).length) return fail(409, 'plan_in_use', 'Masih ada user di paket ini. Sembunyikan paketnya saja (nonaktifkan).')
+        if (this.q('SELECT 1 FROM users WHERE plan=? OR stack LIKE ? LIMIT 1', id, `%"${id}"%`).length) return fail(409, 'plan_in_use', 'Masih ada user di paket ini. Sembunyikan paketnya saja (nonaktifkan).')
         const t = this.setting('trial'); if (t?.plan === id) this.saveSetting('trial', { ...t, enabled: false })
         this.sql.exec('DELETE FROM codes WHERE plan=?', id); this.sql.exec('DELETE FROM plans WHERE id=?', id)
         this.loadPlans()
