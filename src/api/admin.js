@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { store, send, fail, currentUser } from '../utils/session.js'
 import { refreshBlocked } from '../utils/rateLimit.js'
+import { getOverrides, refreshOverrides } from '../utils/overrides.js'
 import { BUILTIN_PATHS, builtinInfo } from './index.js'
 import { ghStatus, ghTree, ghGet, ghPut, ghDelete, ghRuns, safePath, b64ToText, textToB64 } from '../utils/github.js'
 import { analyze, build, readBack, patchIndex, exportNames, EXAMPLE, STRUCTURE_HELP } from '../utils/endpointGen.js'
@@ -20,7 +21,7 @@ admin.use('*', async (c, next) => {
 })
 const superOnly = async (c, next) => c.get('adminLevel') === 'super' ? next()
     : c.json({ error: 'Forbidden', message: 'Hanya super admin (owner) yang boleh melakukan ini.', status: 403 }, 403)
-for (const p of ['/endpoints', '/endpoints/*', '/builtin', '/admins', '/admins/*', '/github', '/github/*', '/deploy', '/deploy/*', '/code-endpoints', '/code-endpoints/*', '/media/hero']) admin.use(p, superOnly)
+for (const p of ['/endpoints', '/endpoints/*', '/builtin', '/builtin/*', '/admins', '/admins/*', '/github', '/github/*', '/deploy', '/deploy/*', '/code-endpoints', '/code-endpoints/*', '/media/hero']) admin.use(p, superOnly)
 const who = (c) => `[Arvo:${c.get('adminName')}]`
 admin.get('/stats', async (c) => send(c, await store(c).adminStats(Date.now())))
 admin.get('/users', async (c) => send(c, await store(c).adminUsers(c.req.query('q'), Date.now())))
@@ -58,7 +59,13 @@ admin.put('/trial', async (c) => send(c, await store(c).adminSetTrial(await body
 admin.delete('/trial/claims/:uid', async (c) => send(c, await store(c).adminResetClaim(+c.req.param('uid'))))
 
 /* ---- endpoint dinamis ---- */
-admin.get('/builtin', (c) => c.json({ ok: true, endpoints: builtinInfo() }))
+admin.get('/builtin', async (c) => {
+    const ov = await getOverrides(c)
+    return c.json({ ok: true, endpoints: builtinInfo().map((e) => { const o = ov[e.path]; return { ...e, base: { name: e.name, description: e.description, access: e.access, status: e.status }, overridden: !!o, ...(o ? { name: o.name, description: o.description, access: o.access, status: o.status } : {}) } }) })
+})
+admin.put('/builtin', async (c) => { const r = await store(c).adminSaveBuiltin(await body(c), BUILTIN_PATHS); refreshOverrides(); return send(c, r) })
+admin.delete('/builtin/:path', async (c) => { const r = await store(c).adminResetBuiltin('/api/' + decodeURIComponent(c.req.param('path'))); refreshOverrides(); return send(c, r) })
+admin.get('/violations', async (c) => send(c, await store(c).adminViolations()))
 admin.get('/endpoints', async (c) => send(c, await store(c).listEndpoints()))
 admin.post('/endpoints', async (c) => send(c, await store(c).adminSaveEndpoint(await body(c), null, BUILTIN_PATHS, Date.now())))
 admin.put('/endpoints/:id', async (c) => send(c, await store(c).adminSaveEndpoint(await body(c), +c.req.param('id'), BUILTIN_PATHS, Date.now())))
