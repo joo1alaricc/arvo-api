@@ -8,6 +8,23 @@ document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => {
 }))
 $('#snip').textContent = SN.curl
 
+/* ---- video hero: path dari HERO_VIDEO (wrangler.toml). Gagal/kosong -> otomatis pakai cahaya cadangan ---- */
+api('/auth/config').then(({ hero_video, hero_poster }) => {
+  if (!hero_video) return
+  const box = $('#hv'), v = $('#hvid'), calm = matchMedia('(prefers-reduced-motion:reduce)').matches
+  if (hero_poster) v.poster = hero_poster
+  v.addEventListener('loadeddata', () => { box.classList.add('on'); if (!calm) v.play().catch(() => {}) }, { once: true })
+  v.addEventListener('error', () => { box.classList.remove('on'); v.remove() }, { once: true })
+  v.src = hero_video; v.load()
+  if (calm) return
+  /* parallax: video ikut bergerak pelan saat scroll, ditempel di belakang hero */
+  let y = 0, tick = false
+  const hero = $('#herobox')
+  const paint = () => { tick = false; const k = Math.min(1.2, Math.max(0, y / (hero.offsetHeight || 1))); box.style.transform = `translate3d(0,${(y * 0.28).toFixed(1)}px,0) scale(${(1 + k * 0.06).toFixed(4)})` }
+  addEventListener('scroll', () => { y = scrollY; if (!tick) { tick = true; requestAnimationFrame(paint) } }, { passive: true })
+  document.addEventListener('visibilitychange', () => (document.hidden ? v.pause() : box.classList.contains('on') && v.play().catch(() => {})))
+}).catch(() => {})
+
 fetch('/docs').then(async (r) => {
   $('#s-ep').textContent = Object.keys((await r.json()).paths || {}).length
   $('#dot').className = 'dot up'; $('#status').textContent = 'Semua sistem berjalan'
@@ -28,7 +45,7 @@ const feats = (p) => [
 api('/billing/plans').then(({ plans, min_days, max_days }) => {
   $('#plans').innerHTML = ''
   plans.forEach((p) => {
-    const el = document.createElement('article'); el.className = 'plan ' + p.tier
+    const el = document.createElement('article'); el.className = 'rv plan ' + p.tier
     const timed = !!p.basePrice, perm = !!p.permanentPrice
     let days = timed ? p.baseDays : 0, permanent = !timed
     el.innerHTML = `<span class="tag">${p.tier === 'vip' ? 'VIP' : 'Premium'}</span><h3>${p.name}</h3>
@@ -52,6 +69,7 @@ api('/billing/plans').then(({ plans, min_days, max_days }) => {
     }
     draw(); el.querySelector('.btn').onclick = () => buy(p.id, days, permanent); $('#plans').append(el)
   })
+  reveal($('#plans'))
 }).catch((e) => ($('#plans').innerHTML = `<p class="err">${esc(e.message)}</p>`))
 
 let poll
@@ -76,3 +94,7 @@ async function buy(plan, days, permanent) {
     poll = setInterval(async () => { try { view(await api('/billing/orders/' + o.id)) } catch {} }, 4000)
   } catch (e) { body.innerHTML = `<p class="err">${esc(e.message)}</p>` }
 }
+
+/* muncul halus saat scroll untuk bagian di bawah hero */
+document.querySelectorAll('main > section:not(.hero) > h2, main > section > .sub, .steps li, #cara .code, details').forEach((e) => e.classList.add('rv'))
+reveal()
