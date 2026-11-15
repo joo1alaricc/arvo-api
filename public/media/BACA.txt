@@ -1,0 +1,2 @@
+Taruh video hero di folder ini, mis. hero.mp4 (atau hero.webm).
+Lalu sesuaikan HERO_VIDEO di wrangler.toml.
