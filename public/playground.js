@@ -1,11 +1,21 @@
 document.querySelectorAll('[data-ico]').forEach((e) => (e.innerHTML = ico(e.dataset.ico)))
-/* API key disimpan sekali (localStorage) dan dipakai semua endpoint; tiap endpoint punya kolom apikey sendiri. */
-let savedKey = ''
-try { savedKey = localStorage.getItem('arvo_key') || '' } catch {}
-let me = null
+/* API key: otomatis terisi dengan key akun yang login di SEMUA endpoint. User boleh menggantinya; perubahan dibagikan ke semua endpoint
+ * dan diingat selama key akunnya belum berubah (kalau key akun diganti/ganti akun, kembali otomatis ke key akun). */
+let me = null, savedKey = ''
+const LS = { get: (k) => { try { return localStorage.getItem(k) } catch { return null } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v) } catch {} } }
+const acct = () => (me && me.api_key) || ''
+const initKey = () => {
+  const o = LS.get('arvo_key_override'), base = LS.get('arvo_key_base')
+  savedKey = o !== null && base === acct() ? o : acct()
+}
 const keyInputs = () => document.querySelectorAll('.pg-ep [data-k="apikey"]')
-const setKey = (v, from) => { savedKey = v; try { localStorage.setItem('arvo_key', v) } catch {} ; keyInputs().forEach((i) => { if (i !== from) i.value = v }); document.querySelectorAll('.pg-ep').forEach((e) => e._r?.()) }
-ready.then(({ user }) => { me = user; document.querySelectorAll('[data-mine]').forEach((b) => (b.hidden = !user)) })
+const syncMine = () => document.querySelectorAll('.pg-ep [data-mine]').forEach((b) => (b.hidden = !acct() || savedKey === acct()))
+const setKey = (v, from) => {
+  savedKey = v
+  if (v === acct()) { LS.set('arvo_key_override', null); LS.set('arvo_key_base', null) } else { LS.set('arvo_key_override', v); LS.set('arvo_key_base', acct()) }
+  keyInputs().forEach((i) => { if (i !== from) i.value = v })
+  document.querySelectorAll('.pg-ep').forEach((e) => e._r?.()); syncMine()
+}
 const LANGS = { curl: 'cURL', js: 'JavaScript (fetch)', py: 'Python (requests)', php: 'PHP (cURL)' }
 const snippets = (method, url, body, key) => {
   const h = { 'x-api-key': key || 'KEY_KAMU', ...(body ? { 'Content-Type': 'application/json' } : {}) }
@@ -32,7 +42,7 @@ function card(path, method, d, tag) {
   <div class="pg-b"><div class="in">
     ${d.summary || d.description ? `<p class="desc">${esc(d.summary || '')}${d.summary && d.description ? ' · ' : ''}${esc(d.description || '')}</p>` : ''}
     <div class="need"><span>Data yang diperlukan dari server:</span>${chips.join('')}</div>
-    <div><div class="lbl"><span>x-api-key <span style="opacity:.6">(header)</span>${paid ? ' <em>*</em>' : ''}</span><button class="ib" data-mine hidden title="Pakai key akunku" aria-label="Pakai key akunku" style="width:26px;height:26px">${ico('user')}</button></div>
+    <div><div class="lbl"><span>x-api-key <span style="opacity:.6">(header)</span>${paid ? ' <em>*</em>' : ''}</span><button class="ib" data-mine hidden title="Kembalikan ke key akunku" aria-label="Kembalikan ke key akunku" style="width:26px;height:26px">${ico('refresh')}</button></div>
       <input data-k="apikey" data-in="header" placeholder="${paid ? 'arvo_xxxxxxxx (wajib)' : 'arvo_xxxxxxxx (opsional)'}" autocomplete="off" spellcheck="false" value="${esc(savedKey)}"></div>
     ${params.map((p) => field(p.name, p.name, p.in, p.example ?? p.schema?.default ?? p.schema?.type ?? p.name, p.required, p.in)).join('')}
     ${bodyKeys.map((k) => field(k, k, 'body', bodyProps.properties[k].example ?? k, bodyReq.includes(k), 'body')).join('')}
@@ -50,8 +60,8 @@ function card(path, method, d, tag) {
   const q = (s) => el.querySelector(s)
   const keyEl = q('[data-k="apikey"]')
   keyEl.addEventListener('input', () => setKey(keyEl.value.trim(), keyEl))
-  q('[data-mine]').onclick = () => { if (me) { keyEl.value = me.api_key; setKey(me.api_key, keyEl) } }
-  q('[data-mine]').hidden = !me
+  q('[data-mine]').onclick = () => { keyEl.value = acct(); setKey(acct(), keyEl) }
+  q('[data-mine]').hidden = !acct() || savedKey === acct()
   /* query (apikey di depan, mirip betabotz) dan body dipisah */
   const build = () => {
     let p = path; const qs = new URLSearchParams(), bd = {}
@@ -114,10 +124,14 @@ function applyFilter() {
   $('#none').hidden = any
 }
 
-fetch('/api/catalog').then((r) => r.json()).then((spec) => {
+const showMsg = (t, cls = 'sub') => ($('#list').innerHTML = `<p class="${cls}" style="white-space:pre-wrap">${esc(t)}</p>`)
+Promise.all([ready.catch(() => ({})), fetch('/api/catalog', { cache: 'no-store', credentials: 'same-origin' }).then(async (r) => ({ r, j: await r.json().catch(() => null) }))]).then(([sess, { r, j: spec }]) => {
+  me = sess.user || null; initKey()
+  if (!r.ok || !spec || !spec.paths) return showMsg(`Gagal memuat daftar endpoint (HTTP ${r.status}).\n${(spec && (spec.message || spec.error)) || 'Respons server tidak valid.'}${spec && spec.detail ? '\n' + spec.detail : ''}`, 'err')
   const list = $('#list'); list.innerHTML = '<p class="nores" id="none" hidden>Tidak ada endpoint yang cocok.</p>'
   const by = {}
-  for (const [path, ms] of Object.entries(spec.paths || {})) for (const [m, d] of Object.entries(ms)) (by[d.tags?.[0] || 'default'] ||= []).push([path, m, d])
+  for (const [path, ms] of Object.entries(spec.paths)) for (const [m, d] of Object.entries(ms)) (by[d.tags?.[0] || 'default'] ||= []).push([path, m, d])
+  if (!Object.keys(by).length) { list.innerHTML = `<p class="nores">Belum ada endpoint yang bisa kamu akses.${spec.warnings ? '<br><small>' + esc(spec.warnings.join(' · ')) + '</small>' : ''}</p>`; return }
   Object.entries(by).forEach(([tag, eps], i) => {
     const g = document.createElement('section'); g.className = 'grp' + (i === 0 ? ' open' : ''); g.style.animationDelay = i * 0.05 + 's'
     g.innerHTML = `<button class="grp-h">${tile('folder')}<span>${esc(tag)}</span><span class="cnt"></span><span class="chev">${ico('chev')}</span></button><div class="grp-b"><div class="in"></div></div>`
@@ -125,6 +139,7 @@ fetch('/api/catalog').then((r) => r.json()).then((spec) => {
     g.querySelector('.grp-h').onclick = () => g.classList.toggle('open')
     list.insertBefore(g, $('#none')); groups.push({ el: g, eps: els, cnt: g.querySelector('.cnt') })
   })
+  if (spec.warnings) list.insertAdjacentHTML('beforeend', `<p class="sub" style="font-size:12px">Catatan untuk admin: ${esc(spec.warnings.join(' · '))}</p>`)
   applyFilter()
-}).catch((e) => ($('#list').innerHTML = `<p class="err">Gagal memuat spec: ${esc(e.message)}</p>`))
+}).catch((e) => showMsg('Gagal memuat daftar endpoint: ' + e.message, 'err'))
 $('#sq').oninput = applyFilter
