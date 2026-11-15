@@ -7,7 +7,7 @@ export const premiumPingRoute = createRoute({
     description: 'Contoh endpoint premium. Wajib kirim header x-api-key dari paket Premium/VIP.',
     'x-status': 'ONLINE',
     'x-premium': false,
-    'x-access': 'premium',
+    'x-access': 'free',
     responses: {
         200: {
             content: { 'application/json': { schema: z.object({ status: z.string(), plan: z.string(), ip: z.string() }) } },
