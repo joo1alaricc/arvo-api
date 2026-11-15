@@ -24,6 +24,7 @@ GITHUB_API = "github_pat_11BSNCSUI03qii4X5jLge7_30U7CO1WFt0BPV1UFSdgWQM1vx1cgNF6
 OWNER_IPS = "103.150.16.3"
 QRIS_IMAGE_URL = "https://cloud.yardansh.com/EhofMy.jpg"
 ORDER_TTL_MIN = "30"
+keep_vars = true 
 GOOGLE_CLIENT_ID = "978603752308-2crtqbtdjangppler9i9qf70bmvchacn.apps.googleusercontent.com"
 # Secret (wrangler secret put): PAYMENT_WEBHOOK_SECRET, dan opsional QRIS_STATIC
 
