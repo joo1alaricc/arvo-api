@@ -3,7 +3,23 @@ const el = $('#app')
 const maskKey = (k) => (k.length > 8 ? k.slice(0, 5) + '•'.repeat(Math.min(14, k.length - 7)) + k.slice(-2) : '•'.repeat(k.length))
 const muted = (t) => `<span style="color:var(--mut)">${t}</span>`
 const fsay = (id, t, bad) => { const e = $('#' + id); if (e) { e.textContent = t; e.className = 'fmsg ' + (bad ? 'err' : 'ok') } }
-const lim = () => (me.daily_limit === null ? (me.active ? 'Unlimited' : 'Limit IP gratis') : me.daily_limit.toLocaleString('id-ID') + ' / hari')
+const n = (v) => Number(v).toLocaleString('id-ID')
+/* sisa limit hari ini, juga untuk akun gratis (limit per akun, reset 00:00 WIB) */
+const lim = () => (me.daily_limit === null ? 'Unlimited' : `Sisa ${n(me.remaining)} dari ${n(me.daily_limit)} / hari`)
+const DEF_BORDER = ['#f7d774', '#b8860b', '#fff1a8']
+const GOOGLE = ['#4285f4', '#ea4335', '#fbbc05']
+const SILVER_NAVY = ['#0a2463', '#c9d1dc', '#1e3a8a', '#f1f4f8']
+/* warna cincin foto: free = Google, premium = silver & navy, vip = pilihan user */
+const ringColors = () => (me.role === 'vip' ? (me.border_colors && me.border_colors.length ? me.border_colors : DEF_BORDER) : me.role === 'premium' ? SILVER_NAVY : GOOGLE)
+const ringCss = (c) => `conic-gradient(${[...c, c[0]].join(',')})`
+/* centang terverifikasi: biru (premium) atau gold (vip), dengan kilau yang menyapu */
+const SEAL = (() => { const P = [], N = 14; for (let i = 0; i < N * 2; i++) { const a = (i / (N * 2)) * Math.PI * 2 - Math.PI / 2, r = i % 2 ? 9.3 : 10.8; P.push((12 + r * Math.cos(a)).toFixed(2) + ' ' + (12 + r * Math.sin(a)).toFixed(2)) } return 'M' + P.join('L') + 'Z' })()
+const verified = (kind) => `<svg class="vb ${kind}" viewBox="0 0 24 24" role="img" aria-label="Terverifikasi ${kind === 'gold' ? 'VIP' : 'Premium'}"><defs>
+  <linearGradient id="vbg" x1="0" y1="0" x2="1" y2="1">${kind === 'gold' ? '<stop offset="0" stop-color="#ffe680"/><stop offset=".5" stop-color="#f0b400"/><stop offset="1" stop-color="#b07d00"/>' : '<stop offset="0" stop-color="#6bb4ff"/><stop offset=".55" stop-color="#2a7bf5"/><stop offset="1" stop-color="#1555c8"/>'}</linearGradient>
+  <clipPath id="vbc"><path d="${SEAL}"/></clipPath></defs>
+  <path d="${SEAL}" fill="url(#vbg)" stroke="url(#vbg)" stroke-width="1.2" stroke-linejoin="round"/>
+  <g clip-path="url(#vbc)"><g transform="rotate(22 12 12)"><rect class="shine" x="-14" y="-6" width="6" height="36" fill="#fff" opacity=".75"/></g></g>
+  <path d="M7.5 12.3l3 3 6-6.4" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 
 /* ---------- definisi baris field ---------- */
 const profileSave = (k) => (v) => put('/auth/me/profile', { [k]: v.v })
@@ -21,9 +37,9 @@ const FIELDS = {
     inputs: () => [{ id: 'v', value: me.api_key, ph: '10-40 karakter: huruf, angka, _ atau -' }], save: (v) => put('/auth/me/key', { new_key: v.v }) },
 }
 const READONLY = [
-  ['Limit', 'grid', 'green', () => lim()],
+  ['Limit harian', 'grid', 'green', () => lim()],
   ['Masa aktif', 'clock', 'amber', () => (me.active ? (me.expires_at ? fmtDate(me.expires_at) : 'Permanen') : me.expired ? 'Sudah habis' : 'Tidak ada paket')],
-  ['Paket', 'shield', '', () => (me.plan_name || 'Free User') + (me.expired ? ' (habis)' : '')],
+  ['Paket', 'shield', '', () => (me.active ? me.plan_name : (me.plan_name || 'Free User') + (me.expired ? ' (habis)' : ''))],
 ]
 
 const row = (k) => {
@@ -76,39 +92,29 @@ const panelManage = () => `<div class="danger-box">${tile('userx', 'red')}<h4>Ha
 
 const TABS = [['events', 'gift', 'Events', panelEvents], ['settings', 'shield', 'Settings', panelSettings], ['manage', 'userx', 'Management', panelManage]]
 
-/* ---------- kartu profil: foto bulat di tengah, aksen latar mengikuti warna foto ---------- */
+/* ---------- kartu profil ---------- */
 const DESC = 'API simpel dan cepat. Mulai gratis, upgrade ke Premium atau VIP kapan saja.'
-const hueOf = (t) => [...t].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 360, 7)
 
 const photoRow = () => `<div class="field" data-f="photo">${tile('image', 'amber')}<div class="fb"><small>Foto profil</small><div class="fv" id="phv">${photoText()}</div></div>
   <button class="ib" data-pick aria-label="Pilih file foto" title="Pilih file">${ico('folder')}</button><button class="ib" data-rmphoto aria-label="Hapus foto" title="Hapus foto" ${me.avatar_url ? '' : 'hidden'}>${ico('trash')}</button></div><p class="fmsg" id="fm-photo"></p>`
 const photoText = () => (me.avatar_url ? 'Foto dari file kamu' : muted('Belum ada. Pilih file JPG, PNG, atau WebP'))
 
-function setAccent(card, h, s) {
-  card.style.setProperty('--ph', h); card.style.setProperty('--ps', s + '%')
-}
+/* border foto: VIP bisa pilih warna sendiri, yang lain dapat bawaan */
+const isVip = () => me.role === 'vip' && me.active
+const borderRow = () => isVip()
+  ? `<div class="field" data-f="border">${tile('image', 'amber')}<div class="fb"><small>Border foto profil (VIP)</small><div class="bd-pick">
+      ${(me.border_colors && me.border_colors.length === 3 ? me.border_colors : DEF_BORDER).map((c, i) => `<input type="color" data-bc="${i}" value="${esc(c)}" aria-label="Warna border ${i + 1}">`).join('')}
+      <button class="btn go sm" data-bsave>Simpan</button><button class="btn ghost sm" data-breset>Reset</button></div></div></div><p class="fmsg" id="fm-border"></p>`
+  : `<p class="hint" style="margin-top:-2px">Border foto profil custom tersedia di paket VIP.</p>`
+
 function paintCard() {
-  const card = $('#pcard'), box = $('#pimg'); if (!card || !box) return
-  const fallback = () => { box.innerHTML = `<span class="pc-ini">${esc(me.username[0])}</span>`; card.style.removeProperty('--bgimg'); setAccent(card, hueOf(me.username), 72) }
+  const box = $('#pimg'); if (!box) return
+  const fallback = () => { box.innerHTML = `<span class="pc-ini">${esc(me.username[0])}</span>` }
   if (!me.avatar_url) return fallback()
-  /* foto tampil langsung; warna & background diambil dari cache localDb (dibuat di latar belakang saat masuk web) */
   const im = new Image()
-  im.onload = () => { box.innerHTML = ''; im.alt = ''; im.draggable = false; box.append(im); card.classList.add('has-img') }
+  im.onload = () => { box.innerHTML = ''; im.alt = ''; im.draggable = false; box.append(im) }
   im.onerror = fallback
   im.src = me.avatar_url
-  getBg(me).then((bg) => {
-    if (!bg) return setAccent(card, hueOf(me.username), 40)
-    bg.h != null ? setAccent(card, bg.h, bg.s) : setAccent(card, hueOf(me.username), 18)
-    if (bg.bg) card.style.setProperty('--bgimg', `url("${bg.bg}")`)
-  }).catch(() => setAccent(card, hueOf(me.username), 40))
-}
-
-/* sedikit miring mengikuti kursor (hanya perangkat dengan mouse) */
-function tiltCard() {
-  const c = $('#pcard'); if (!c || !matchMedia('(hover:hover) and (pointer:fine)').matches || matchMedia('(prefers-reduced-motion:reduce)').matches) return
-  c.onpointermove = (e) => { const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5
-    c.style.setProperty('--rx', (-y * 4).toFixed(2) + 'deg'); c.style.setProperty('--ry', (x * 5).toFixed(2) + 'deg'); c.style.setProperty('--mx', (x * 100 + 50).toFixed(1) + '%'); c.style.setProperty('--my', (y * 100 + 50).toFixed(1) + '%') }
-  c.onpointerleave = () => { c.style.setProperty('--rx', '0deg'); c.style.setProperty('--ry', '0deg') }
 }
 
 /* potong tengah jadi persegi 320px lalu kompres, supaya ringan disimpan */
@@ -128,7 +134,7 @@ const toAvatar = (file) => new Promise((res, rej) => {
   im.src = url
 })
 async function refreshPhoto(msg) {
-  me = await api('/auth/me'); if (me.avatar_url) await getBg(me, true).catch(() => {}); else localDb.del('bg:' + me.id); paintCard()
+  me = await api('/auth/me'); paintCard()
   const t = $('#phv'); if (t) t.innerHTML = photoText()
   const rm = el.querySelector('[data-rmphoto]'); if (rm) rm.hidden = !me.avatar_url
   if (msg) toast(msg)
@@ -146,15 +152,15 @@ async function render() {
   me = await api('/auth/me')
   const joined = new Date(me.created_at || Date.now())
   const pct = me.daily_limit ? Math.min(100, (me.used_today / me.daily_limit) * 100) : 0
+  const vb = me.role === 'vip' ? verified('gold') : me.role === 'premium' ? verified('blue') : ''
   el.innerHTML = `
   <section class="pcard" id="pcard">
-    <div class="pc-bg"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div>
     <div class="pc-top"><span class="badge ${me.role}">${me.role === 'member' ? 'Free User' : esc(me.plan_name || me.role)}</span></div>
     <div class="pc-mid">
-      <div class="pc-photo"><span class="pc-halo"></span><div class="pc-img" id="pimg"></div><button class="pc-cam" data-pick aria-label="Ganti foto profil">${ico('camera')}</button></div>
+      <div class="pc-photo"><span class="pc-ring" id="pring" style="--ring:${ringCss(ringColors())}"></span><div class="pc-img" id="pimg"></div><button class="pc-cam" data-pick aria-label="Ganti foto profil">${ico('camera')}</button></div>
       <p class="pc-hi">Selamat Datang,</p>
-      <h1 class="pc-name">${esc(me.username)}</h1>
-      <div class="pc-chips"><span class="chip">${me.google ? `<svg class="i" viewBox="0 0 24 24"><path fill="#4285F4" d="M22 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.6a4.8 4.8 0 0 1-2.1 3.1v2.6h3.4c2-1.8 3.1-4.5 3.1-7.5z"/><path fill="#34A853" d="M12 22c2.8 0 5.2-.9 6.9-2.5l-3.4-2.6c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.7v2.7A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.2 13.6a6 6 0 0 1 0-3.8V7.1H2.7a10 10 0 0 0 0 9z"/><path fill="#EA4335" d="M12 6.1c1.5 0 2.8.5 3.9 1.5l2.9-2.9A10 10 0 0 0 2.7 7.1l3.5 2.7C7 7.9 9.3 6.1 12 6.1z"/></svg> Akun Google` : `${ico('user')} Akun Arvo`}</span>${me.email ? `<span class="chip">${ico('mail')} ${esc(me.email)}</span>` : ''}</div>
+      <h1 class="pc-name ${me.role === 'vip' ? 'gold' : ''}"><span class="nm">${esc(me.username)}</span>${vb}</h1>
+      <div class="pc-chips"><span class="chip ${me.google ? 'gg' : ''}">${me.google ? `<svg class="i" viewBox="0 0 24 24"><path fill="#4285F4" d="M22 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.6a4.8 4.8 0 0 1-2.1 3.1v2.6h3.4c2-1.8 3.1-4.5 3.1-7.5z"/><path fill="#34A853" d="M12 22c2.8 0 5.2-.9 6.9-2.5l-3.4-2.6c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.7v2.7A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.2 13.6a6 6 0 0 1 0-3.8V7.1H2.7a10 10 0 0 0 0 9z"/><path fill="#EA4335" d="M12 6.1c1.5 0 2.8.5 3.9 1.5l2.9-2.9A10 10 0 0 0 2.7 7.1l3.5 2.7C7 7.9 9.3 6.1 12 6.1z"/></svg> Akun Google` : `${ico('user')} Akun Arvo`}</span>${me.email ? `<span class="chip">${ico('mail')} ${esc(me.email)}</span>` : ''}</div>
       <p class="pc-desc">${me.bio ? esc(me.bio) : muted('Belum menambahkan bio.')}</p>
     </div>
     <div class="pc-act"><a class="btn go sm" href="/#paket">${ico('bag')} ${me.active ? 'Perpanjang paket' : 'Lihat paket'}</a><a class="btn ghost sm" href="/playground.html">${ico('play')} Playground</a><button class="btn ghost sm" id="out">${ico('logout')} Keluar</button></div>
@@ -163,19 +169,19 @@ async function render() {
 
   <section class="card"><div class="card-h">${ico('trend')} Request Metrics</div><div class="card-b">
     <div class="tiles">
-      <div class="tile" style="--c:var(--blue)"><div><small>Hari ini</small><b>${me.used_today.toLocaleString('id-ID')}</b><small>${esc(lim())}</small></div><span class="ico">${ico('activity')}</span></div>
+      <div class="tile" style="--c:var(--blue)"><div><small>Hari ini</small><b>${me.used_today.toLocaleString('id-ID')}</b><small>${me.daily_limit === null ? 'Unlimited' : `sisa ${n(me.remaining)} / ${n(me.daily_limit)}`}</small></div><span class="ico">${ico('activity')}</span></div>
       <div class="tile" style="--c:var(--g)"><div><small>Total request</small><b>${me.total_requests.toLocaleString('id-ID')}</b><small>sejak bergabung</small></div><span class="ico">${ico('trend')}</span></div>
       <div class="tile" style="--c:var(--amber)"><div><small>Paket</small><b class="sm">${esc(me.plan_name || 'Free User')}</b><small>${me.expired ? 'habis' : me.active ? 'aktif' : 'gratis'}</small></div><span class="ico">${ico('shield')}</span></div>
       <div class="tile" style="--c:var(--red)"><div><small>Masa aktif</small><b class="sm">${me.active ? (me.expires_at ? fmtDate(me.expires_at) : 'Permanen') : '–'}</b><small>${me.max_ips ? 'maks ' + me.max_ips + ' IP' : 'tanpa whitelist'}</small></div><span class="ico">${ico('clock')}</span></div>
     </div>
-    ${me.daily_limit ? `<div class="meter" title="${pct.toFixed(0)}% limit harian terpakai"><i style="width:${pct}%"></i></div>` : ''}
+    ${me.daily_limit ? `<div class="meter" title="${pct.toFixed(0)}% limit harian terpakai"><i style="width:${pct}%"></i></div><p class="hint" style="margin:6px 0 0">Limit direset setiap 00:00 WIB.${me.active ? '' : ' Upgrade paket untuk limit lebih besar.'}</p>` : ''}
     <div id="use" style="margin-top:14px"></div>
   </div></section>
 
   <div class="dash-grid">
     <div>
       <section class="card"><div class="card-h">${ico('user')} Personal Info</div><div class="card-b">
-        <div class="sec">Account</div>${['username', 'email', 'phone', 'bio', 'password'].map(row).join('')}${photoRow()}
+        <div class="sec">Account</div>${['username', 'email', 'phone', 'bio', 'password'].map(row).join('')}${photoRow()}${borderRow()}
         <div class="sec" style="margin-top:18px">API</div>${row('api_key')}
         ${me.custom_key ? '' : '<p class="hint" style="margin-top:-2px">Custom API key tersedia di Premium 2 ke atas.</p>'}
         ${READONLY.map(roRow).join('')}
@@ -186,7 +192,7 @@ async function render() {
         <div class="seg">${TABS.map(([id, ic, label]) => `<button data-tab="${id}" class="${id === 'manage' ? 'del ' : ''}${id === tab ? 'on' : ''}">${ico(ic)}${label}</button>`).join('')}</div>
         <div class="card-b">${TABS.map(([id, , , fn]) => `<div class="tab-p" data-p="${id}" ${id === tab ? '' : 'hidden'}>${fn()}</div>`).join('')}</div>
       </section>
-      <section class="card"><div class="card-h">${ico('bag')} Paket &amp; pembelian</div><div class="card-b"><div class="tw" id="ord"><p class="empty">Memuat…</p></div></div></section>
+      <section class="card"><div class="card-h">${ico('bag')} Paket &amp; pembelian</div><div class="card-b"><p class="hint" style="margin-top:0">Beli paket saat paket kamu masih aktif = perpanjang: durasi ditambah, limit harian &amp; slot IP dijumlahkan, paket sebelumnya tidak hilang.</p><div class="tw" id="ord"><p class="empty">Memuat…</p></div></div></section>
     </div>
   </div>`
 
@@ -253,11 +259,12 @@ function loadSide() {
     $('#ord').innerHTML = orders.length ? `<table><tr><th>Tanggal</th><th>Paket</th><th>Total</th><th>Status</th></tr>${orders.map((o) =>
       `<tr><td>${fmtDate(o.created_at)}</td><td>${esc(o.plan)} ${o.days ? o.days + ' hr' : '∞'}</td><td>${rp(o.total)}</td><td>${esc(o.status)}</td></tr>`).join('')}</table>` : '<p class="empty">Belum ada pembelian.</p>'
   }).catch(() => {})
-  api('/auth/me/usage').then(({ days, paths }) => {
-    if (!days.length) { $('#use').innerHTML = '<p class="empty">Belum ada request dengan API key ini.</p>'; return }
+  api('/auth/me/usage').then(({ days, paths, recent }) => {
+    if (!days.length) { $('#use').innerHTML = '<p class="empty">Belum ada request dengan API key ini. Coba endpoint di Playground dengan key kamu.</p>'; return }
     const max = Math.max(...days.map((d) => d.n)), list = [...days].reverse()
     $('#use').innerHTML = `<div class="sec">Pemakaian 14 hari</div><div class="bars">${list.map((d) => `<div style="height:${Math.max(3, (d.n / max) * 100)}%" title="${esc(d.day)}: ${d.n}"></div>`).join('')}</div>
-      <div class="tw"><table><tr><th>Endpoint</th><th>Request</th></tr>${paths.map((p) => `<tr><td class="mono">${esc(p.path)}</td><td>${p.n.toLocaleString('id-ID')}</td></tr>`).join('')}</table></div>`
+      <div class="tw"><table><tr><th>Endpoint</th><th>Request</th></tr>${paths.map((p) => `<tr><td class="mono">${esc(p.path)}</td><td>${p.n.toLocaleString('id-ID')}</td></tr>`).join('')}</table></div>
+      ${recent && recent.length ? `<div class="sec" style="margin-top:14px">Riwayat terbaru</div><div class="tw"><table><tr><th>Waktu</th><th>Endpoint</th><th>IP</th></tr>${recent.map((r) => `<tr><td>${fmtDT(r.at)}</td><td class="mono">${esc(r.path)}</td><td class="mono">${esc(r.ip || '-')}</td></tr>`).join('')}</table></div>` : ''}`
   }).catch(() => {})
 }
 
@@ -271,11 +278,15 @@ el.onclick = async (e) => {
   else if ('eye' in t.dataset) { showKey = !showKey; $('#kv').textContent = showKey ? me.api_key : maskKey(me.api_key); t.innerHTML = ico(showKey ? 'eyeoff' : 'eye') }
   else if ('copyk' in t.dataset) navigator.clipboard.writeText(me.api_key).then(() => flash(t))
   else if (t.dataset.delip) { t.disabled = true; try { await api('/auth/me/ips/' + encodeURIComponent(t.dataset.delip), { method: 'DELETE' }); loadIps() } catch (err) { say($('#ipm'), err.message, 1); t.disabled = false } }
+  else if ('bsave' in t.dataset) { t.disabled = true; try { await put('/auth/me/border', { colors: [...el.querySelectorAll('[data-bc]')].map((i) => i.value) }); toast('Border profil diperbarui'); await render() } catch (err) { fsay('fm-border', err.message, 1); t.disabled = false } }
+  else if ('breset' in t.dataset) { t.disabled = true; try { await put('/auth/me/border', { colors: [] }); toast('Border dikembalikan ke bawaan'); await render() } catch (err) { fsay('fm-border', err.message, 1); t.disabled = false } }
   else if ('pick' in t.dataset) $('#pf').click()
   else if ('rmphoto' in t.dataset) { t.disabled = true; try { await api('/auth/me/avatar', { method: 'DELETE' }); await refreshPhoto('Foto profil dihapus') } catch (err) { toast(err.message) } t.disabled = false }
   else if (t.id === 'out') { await put('/auth/logout', {}, 'POST'); location.href = '/' }
 }
 
+/* pratinjau langsung saat memilih warna border */
+el.oninput = (e) => { if (e.target.dataset.bc != null) $('#pring').style.setProperty('--ring', ringCss([...el.querySelectorAll('[data-bc]')].map((i) => i.value))) }
 el.onchange = (e) => { if (e.target.id === 'pf') pickPhoto(e.target.files[0]) }
 
 ready.then(({ user, who: w }) => { who = w; return user ? render() : (location.href = '/login.html?next=/profile.html') })
