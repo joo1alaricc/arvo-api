@@ -1,64 +1,80 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="id" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arvo | NEO-SWAGGER PREM</title>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;700;900&family=JetBrains+Mono:wght@800&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arvo - API Gateway</title>
+<meta name="description" content="API simpel dan cepat. Mulai gratis, upgrade ke Premium atau VIP kapan saja.">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
 </head>
-
 <body>
-    <div class="container">
-        <div class="top-bar">
-            <div class="logo" data-text="YE-MO.API">YE-MO.API</div>
-            <div class="header-meta">
-                <span class="badge rate-limit-status" style="background: var(--yellow); color: var(--black);">RATE
-                    LIMIT: ...</span>
-                <span class="badge online">ONLINE</span>
-            </div>
-        </div>
+<header class="nav"><div class="wrap nav-in">
+  <a class="brand" href="/">Arvo</a>
+  <nav>
+    <a href="#paket">Paket</a><a href="#cara">Cara kerja</a><a href="/explorer.html">Playground</a><a href="#kelola">Kelola key</a><a href="#faq">FAQ</a>
+  </nav>
+  <button id="theme" class="btn ghost" aria-label="Ganti tema">Terang</button>
+</div></header>
 
-        <div class="info-box">
-            <h1>NEO-SWAGGER PORTAL</h1>
-            <p>About Simple and easy to use API. ⭐️ Star to support our work!</p>
-            <div class="header-meta" style="margin-top: 1.5rem;">
-                <span class="badge oas-badge" style="font-size: 0.75rem; padding: 4px 8px;">OAS 3.0.0</span>
-                <a href="/docs" class="docs-link">VIEW /docs</a>
-                <button class="docs-link" onclick="downloadSpec()"
-                    style="background: var(--yellow); color: var(--black); cursor: pointer;">DOWNLOAD SPEC</button>
-            </div>
-        </div>
+<main>
+<section class="hero wrap">
+  <p class="pill"><i class="dot" id="dot"></i><span id="status">Memeriksa server…</span></p>
+  <h1>API yang simpel,<br>kuota yang jelas.</h1>
+  <p class="lead">Coba gratis tanpa daftar. Butuh kuota lebih besar, whitelist IP, atau key sendiri? Pilih paket, bayar via QRIS, key langsung aktif.</p>
+  <div class="row"><a class="btn" href="#paket">Lihat paket</a><a class="btn ghost" href="/explorer.html">Coba di Playground</a></div>
+  <div class="stats">
+    <div><b id="s-ep">–</b><span>Endpoint</span></div>
+    <div><b id="s-rl">–</b><span>Sisa kuota IP kamu</span></div>
+    <div><b id="s-ip">–</b><span>IP terdeteksi</span></div>
+  </div>
+</section>
 
-        <div class="servers-box">
-            <label>SERVERS</label>
-            <select id="server-select" aria-label="Select Server"></select>
-        </div>
+<section id="cara" class="wrap">
+  <h2>Empat langkah, key langsung aktif</h2>
+  <ol class="steps">
+    <li><h3>Pilih paket &amp; durasi</h3><p>Atur sendiri berapa hari, atau ambil permanen.</p></li>
+    <li><h3>Bayar QRIS</h3><p>Scan QR dengan nominal unik dari e-wallet atau m-banking apa saja.</p></li>
+    <li><h3>Terima API key</h3><p>Muncul otomatis setelah pembayaran terkonfirmasi.</p></li>
+    <li><h3>Pakai di request</h3><p>Kirim header <code>x-api-key</code>. Selesai.</p></li>
+  </ol>
+  <div class="code">
+    <div class="tabs"><button class="on" data-t="curl">cURL</button><button data-t="js">JavaScript</button><button data-t="py">Python</button></div>
+    <pre id="snip"></pre>
+  </div>
+</section>
 
-        <div class="controls">
-            <div class="section-header">Endpoints</div>
-            <div class="search-container">
-                <input type="text" class="search-input" placeholder="SEARCH..." oninput="filterEndpoints(this.value)">
-            </div>
-        </div>
+<section id="paket" class="wrap">
+  <h2>Pilih paket yang pas</h2>
+  <p class="sub">Harga dihitung per hari mengikuti durasi yang kamu pilih. Limit direset tiap 00:00 WIB.</p>
+  <label class="renew">Perpanjang / upgrade key yang sudah ada (opsional)
+    <input id="renew" placeholder="arvo_xxxxxxxx" autocomplete="off"></label>
+  <div id="plans" class="plans"><p class="sub">Memuat paket…</p></div>
+</section>
 
-        <div id="endpoint-list"></div>
-    </div>
+<section id="kelola" class="wrap">
+  <h2>Kelola API key</h2>
+  <div class="panel">
+    <div class="row"><input id="mkey" placeholder="Tempel API key kamu" autocomplete="off"><button class="btn" id="mload">Muat</button></div>
+    <div id="minfo"></div>
+  </div>
+  <div id="owner" class="panel" hidden>
+    <h3>Panel owner · order masuk</h3><div id="orders"></div>
+  </div>
+</section>
 
-    <footer>
-        <div class="footer-logo">ARVO.IO</div>
-        <div class="footer-links">
-            <a href="/docs">Docs</a>
-            <a href="https://www.instagram.com/brzee_.sky">Instagram</a>
-            <a href="https://whatsapp.com/channel/0029Vb76SfPDzgTBlh5Tn70I">Support</a>
-        </div>
-        <div class="footer-copy">Pure Data. No Fluff. &copy; 2026 INFRASTRUCTURE</div>
-    </footer>
+<section id="faq" class="wrap">
+  <h2>Pertanyaan umum</h2>
+  <details><summary>Bagaimana pembayaran dikonfirmasi?</summary><p>Setelah kamu membayar nominal persis (termasuk kode unik), order dikonfirmasi lewat webhook mutasi atau manual oleh owner. Key tampil di halaman pembayaran begitu terkonfirmasi.</p></details>
+  <details><summary>Apa itu whitelist IP?</summary><p>Key hanya bisa dipakai dari IP yang kamu daftarkan. Kalau daftar kosong, key bisa dipakai dari IP mana saja.</p></details>
+  <details><summary>Kapan limit harian reset?</summary><p>Setiap pukul 00:00 WIB. Paket unlimited tidak punya batas harian.</p></details>
+  <details><summary>Key hilang, bagaimana?</summary><p>Simpan key saat muncul. Kalau paket kamu mendukung custom key, kamu bisa menggantinya di panel Kelola key.</p></details>
+</section>
+</main>
 
-    <script src="app.js"></script>
+<footer><div class="wrap foot"><b>Arvo</b><span>© 2026 · <a href="/docs">OpenAPI</a> · <a href="/explorer.html">Playground</a></span></div></footer>
+
+<dialog id="pay"><div id="paybody"></div><button class="btn ghost" id="payclose">Tutup</button></dialog>
+<script src="site.js"></script>
 </body>
-
 </html>
