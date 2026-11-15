@@ -75,32 +75,48 @@ Promise.all([api('/billing/plans'), ready]).then(([{ plans, min_days, max_days }
         b.onclick = () => { permanent = true; draw() }; chips.append(b)
       }
     }
-    draw(); el.querySelector('.btn').onclick = () => buy(p.id, days, permanent); $('#plans').append(el)
+    draw(); el.querySelector('.btn').onclick = () => buy(p.id, days, permanent, p); $('#plans').append(el)
   })
   reveal($('#plans'))
 }).catch((e) => ($('#plans').innerHTML = `<p class="err">${esc(e.message)}</p>`))
 
 let poll
-const dlg = $('#pay'), body = $('#paybody')
-$('#payclose').onclick = () => { clearInterval(poll); dlg.close() }
+const dlg = $('#pay'), body = $('#paybody'), closeBtn = $('#payclose')
+const stop = () => { clearInterval(poll); poll = null }
+closeBtn.onclick = () => { stop(); dlg.close() }
+dlg.addEventListener('close', stop)
+const label = (name, days, permanent) => `${name} · ${permanent || !days ? 'permanen' : days + ' hari'}`
 const view = (o) => {
+  closeBtn.textContent = 'Tutup'
   if (o.status === 'paid') {
     body.innerHTML = `<h3>Pembayaran berhasil</h3><p class="sub">${esc(o.name)} sudah aktif di akunmu.</p><a class="btn" href="/profile.html">Buka profil</a>`
-    clearInterval(poll); return
+    stop(); return
   }
-  if (o.status !== 'pending') { body.innerHTML = '<h3>Order tidak aktif</h3><p class="sub">Silakan buat order baru.</p>'; clearInterval(poll); return }
-  body.innerHTML = `<h3>${esc(o.name)}${o.days ? ` · ${o.days} hari` : ' · permanen'}</h3>
+  if (o.status !== 'pending') { body.innerHTML = '<h3>Order tidak aktif</h3><p class="sub">Silakan buat order baru.</p>'; stop(); return }
+  body.innerHTML = `<h3>${esc(label(o.name, o.days))}</h3>
     <img alt="QRIS" src="${o.qris.image}"><div class="big">${rp(o.total)}</div>
-    <p class="sub">Bayar <b>persis</b> sesuai nominal (kode unik ikut dihitung). Halaman ini otomatis berubah setelah terkonfirmasi. ID order: <span class="mono">${o.id}</span></p>`
+    <p class="sub">Bayar sesuai nominal di atas, tanpa biaya tambahan. Halaman ini otomatis berubah setelah pembayaran terkonfirmasi. ID order: <span class="mono">${o.id}</span></p>`
 }
-async function buy(plan, days, permanent) {
+/* Langkah 1: konfirmasi dulu. QR baru dibuat setelah user menekan "Lanjut ke Pembayaran". */
+function buy(plan, days, permanent, p) {
   if (!session.user) { location.href = '/login.html?next=' + encodeURIComponent('/#paket'); return }
-  body.textContent = 'Membuat order…'; dlg.showModal()
+  stop(); closeBtn.textContent = 'Batal'
+  body.innerHTML = `<h3>Konfirmasi Pembelian</h3>
+    <div class="cfm"><div><span>Paket</span><b>${esc(p.name)}</b></div>
+      <div><span>Durasi</span><b>${permanent ? 'Permanen' : days + ' hari'}</b></div>
+      <div class="tot"><span>Total bayar</span><b>${rp(price(p, days, permanent))}</b></div></div>
+    <p class="sub" style="margin:10px 0 0;font-size:12.5px">Sesuai harga paket, tanpa biaya admin atau tambahan lain.</p>
+    <button class="btn" id="paygo" style="width:100%;margin-top:12px">Lanjut ke Pembayaran</button>`
+  if (!dlg.open) dlg.showModal()
+  $('#paygo').onclick = () => pay(plan, days, permanent)
+}
+async function pay(plan, days, permanent) {
+  body.innerHTML = '<p class="sub" style="display:flex;gap:8px;align-items:center"><i class="spin"></i> Membuat QR pembayaran…</p>'
   try {
     const o = await put('/billing/orders', { plan, days, permanent }, 'POST')
-    view(o); clearInterval(poll)
+    view(o); stop()
     poll = setInterval(async () => { try { view(await api('/billing/orders/' + o.id)) } catch {} }, 4000)
-  } catch (e) { body.innerHTML = `<p class="err">${esc(e.message)}</p>` }
+  } catch (e) { closeBtn.textContent = 'Tutup'; body.innerHTML = `<p class="err">${esc(e.message)}</p>` }
 }
 
 /* muncul halus saat scroll untuk bagian di bawah hero */
