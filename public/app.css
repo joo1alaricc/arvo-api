@@ -102,79 +102,46 @@ svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .kline{display:flex;gap:6px;align-items:center}.kline input{flex:1}.kline .btn{flex:none}
 .pg-ep[hidden],.grp[hidden]{display:none}
 .bar2{margin-bottom:12px}.bar2 .sbar input{padding-top:8px;padding-bottom:8px}
-
-/* ---------- kartu profil: foto bulat di tengah, aksen latar mengikuti warna foto ---------- */
-@property --ph{syntax:'<number>';inherits:true;initial-value:230}
-@property --ps{syntax:'<percentage>';inherits:true;initial-value:72%}
-.pcard{--pl:64%;--pa:hsl(var(--ph) var(--ps) var(--pl));--rx:0deg;--ry:0deg;--mx:50%;--my:30%;
-  position:relative;isolation:isolate;overflow:hidden;display:flex;flex-direction:column;min-height:460px;padding:18px 20px 20px;margin-bottom:12px;
-  border-radius:28px;background:var(--card);border:1px solid color-mix(in srgb,var(--pa) 30%,var(--line));
-  box-shadow:0 1px 2px #0003,0 34px 64px -34px color-mix(in srgb,var(--pa) 60%,transparent);
-  transform:perspective(1400px) rotateX(var(--rx)) rotateY(var(--ry));
-  transition:transform .7s var(--ease),--ph 1s var(--ease),--ps 1s var(--ease),border-color .8s,box-shadow .8s;animation:rise .85s var(--ease) backwards}
-[data-theme=light] .pcard{--pl:54%;box-shadow:0 1px 2px #0000000d,0 30px 60px -36px color-mix(in srgb,var(--pa) 70%,transparent)}
-.pc-bg{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
-.pc-bg::before{content:"";position:absolute;inset:0;background:var(--bgimg,none) center/cover;opacity:.55;transform:scale(1.15)}
-/* blob cahaya pakai radial-gradient (bukan filter:blur) supaya ringan di HP */
-.pc-bg i{position:absolute;border-radius:50%;animation:floaty 14s ease-in-out infinite;will-change:transform}
-.pc-bg .b1{width:100%;aspect-ratio:1;left:0;top:-20%;opacity:.5;background:radial-gradient(closest-side,var(--pa),transparent)}
-.pc-bg .b2{width:80%;aspect-ratio:1;left:-24%;bottom:-30%;opacity:.34;background:radial-gradient(closest-side,hsl(calc(var(--ph) + 38) var(--ps) var(--pl)),transparent);animation-delay:-5s}
-.pc-bg .b3{width:76%;aspect-ratio:1;right:-24%;bottom:-28%;opacity:.3;background:radial-gradient(closest-side,hsl(calc(var(--ph) - 34) var(--ps) var(--pl)),transparent);animation-delay:-9s}
-[data-theme=light] .pc-bg .b1{opacity:.4}[data-theme=light] .pc-bg .b2,[data-theme=light] .pc-bg .b3{opacity:.26}[data-theme=light] .pc-bg::before{opacity:.26}
-.pcard::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(460px circle at var(--mx) var(--my),color-mix(in srgb,var(--pa) 16%,transparent),transparent 62%)}
-.pc-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.pc-brand{display:flex;align-items:center;gap:8px;font-weight:800;font-size:17px;letter-spacing:-.01em}
-.pc-brand .logo{width:30px;height:30px;border-radius:9px;box-shadow:0 6px 18px -4px color-mix(in srgb,var(--pa) 70%,transparent)}
-.pc-top .badge{background:color-mix(in srgb,var(--card) 55%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.pc-mid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:26px 0 18px}
-.pc-photo{position:relative;width:136px;height:136px}
-.pc-halo{position:absolute;inset:-16px;border-radius:50%;background:conic-gradient(from 0deg,var(--pa),hsl(calc(var(--ph) + 55) var(--ps) var(--pl)),hsl(calc(var(--ph) - 45) var(--ps) var(--pl)),var(--pa));filter:blur(16px);opacity:.5;animation:spin 10s linear infinite}
-.pc-img{position:relative;width:100%;height:100%;border-radius:50%;overflow:hidden;display:grid;place-items:center;border:4px solid var(--card);
-  background:linear-gradient(135deg,var(--pa),hsl(calc(var(--ph) + 40) var(--ps) var(--pl)));box-shadow:0 0 0 2px var(--pa),0 24px 46px -12px color-mix(in srgb,var(--pa) 65%,transparent);
-  transition:transform .7s var(--spring),opacity .4s,filter .4s}
-.pc-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;-webkit-user-select:none;user-select:none;animation:imgIn .8s var(--ease) both}
-@keyframes imgIn{from{opacity:0;transform:scale(1.14)}to{opacity:1;transform:none}}
-.pc-ini{font:800 56px/1 inherit;color:#fff;text-transform:uppercase;text-shadow:0 2px 14px #0004}
+/* ---------- kartu profil: sama dengan .card lain; border foto berputar (Google / Premium / VIP custom) ---------- */
+.pcard{position:relative;display:flex;flex-direction:column;padding:16px 14px 14px;margin-bottom:12px;border-radius:var(--r);background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow);animation:rise .45s var(--ease) both;transition:background-color .25s,border-color .25s}
+.pc-top{position:absolute;top:12px;right:12px;z-index:1;max-width:46%}
+.pc-top .badge{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.pc-top .badge.vip{color:#e6b422;border-color:#e6b422}
+.pc-mid{display:flex;flex-direction:column;align-items:center;text-align:center;padding:10px 0 2px}
+.pc-photo{position:relative;width:88px;height:88px;margin:6px 0 2px}
+.pc-ring{position:absolute;inset:-5px;border-radius:50%;background:var(--ring);animation:spin 3.2s linear infinite;will-change:transform}
+.pc-img{position:relative;width:100%;height:100%;border-radius:50%;overflow:hidden;display:grid;place-items:center;border:3px solid var(--card);background:linear-gradient(135deg,var(--ac),#e16bff);transition:opacity .4s,filter .4s,border-color .25s}
+.pc-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;-webkit-user-select:none;user-select:none;animation:imgIn .6s var(--ease) both}
+@keyframes imgIn{from{opacity:0;transform:scale(1.1)}to{opacity:1;transform:none}}
+.pc-ini{font:800 36px/1 inherit;color:#fff;text-transform:uppercase}
 .pcard.busy .pc-img{opacity:.5;filter:saturate(.5) blur(1px)}
-@media(hover:hover){.pc-photo:hover .pc-img{transform:scale(1.05)}}
-.pc-cam{position:absolute;right:0;bottom:4px;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;cursor:pointer;background:var(--tx);color:var(--bg);border:3px solid var(--card);
-  box-shadow:0 8px 20px -6px #0006;transition:transform .55s var(--spring)}
-.pc-cam:hover{transform:scale(1.12) rotate(-6deg)}.pc-cam:active{transform:scale(.88);transition-duration:.1s}.pc-cam svg.i{width:17px;height:17px}
-.pc-name{font-size:clamp(30px,9vw,46px);font-weight:800;line-height:1;letter-spacing:.14em;padding-left:.14em;margin:26px 0 8px;max-width:100%;overflow-wrap:anywhere}
-.pc-desc{max-width:350px;color:var(--mut);font-size:13.5px;line-height:1.6}
-.pc-foot{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;padding:14px 2px 0;border-top:1px solid color-mix(in srgb,var(--tx) 11%,transparent)}
-.pc-foot small{display:block;font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);margin-bottom:2px}
-.pc-foot b{display:block;font-size:30px;font-weight:800;letter-spacing:-.025em;line-height:1.1}
-.pc-foot .r{text-align:right}.pc-foot .r b{font-size:19px;line-height:1.5}
-.pc-act{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:16px}
-.ib[hidden]{display:none}
-@media(max-width:520px){.pcard{border-radius:24px;padding:16px 16px 18px;min-height:430px}.pc-photo{width:120px;height:120px}}
-@media(prefers-reduced-motion:reduce){.pc-bg i,.pc-halo{animation:none}.pcard{transform:none!important}}
-
-/* kartu profil gaya dashboard (sapaan, chip akun/email/ID, bio) */
-.pc-hi{margin:18px 0 8px;color:var(--mut);font-size:14px;font-weight:600}
-.pc-chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:0 0 8px;max-width:100%}
-.pc-chips .chip{display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:7px 13px;border-radius:999px;font-size:13px;font-weight:600;overflow-wrap:anywhere;
-  background:color-mix(in srgb,var(--card) 55%,transparent);border:1px solid color-mix(in srgb,var(--tx) 14%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.pc-chips .chip.mono{font-family:'JetBrains Mono',monospace;font-weight:500}
-.pc-chips .chip .i{width:15px;height:15px;flex:none}
-.pc-chips .chip .ib{width:24px;height:24px;border:0;background:none;padding:0}
-.pc-name{letter-spacing:-.01em;padding-left:0;margin:2px 0 10px}
-.pc-desc{margin-top:6px}
-
-/* v7: kartu profil ringkas, senada dengan .card lain */
-.pcard{min-height:0;padding:16px 14px 14px;border-radius:var(--r);border:1px solid var(--line);box-shadow:var(--shadow);transform:none!important;animation:rise .45s var(--ease) both}
-.pc-bg::before{opacity:.1}.pc-bg i{opacity:.16!important;animation:none}.pcard::after{display:none}
-.pc-halo{display:none}
-.pc-top{position:absolute;top:12px;right:12px;z-index:1}
-.pc-mid{padding:4px 0 2px}
-.pc-photo,.pc-photo{width:84px;height:84px}
-.pc-img{border-width:3px;box-shadow:0 0 0 2px var(--pa)}
-.pc-cam{width:28px;height:28px;border-width:2px;right:-2px;bottom:0}.pc-cam svg.i{width:14px;height:14px}
-.pc-hi{margin:10px 0 2px;font-size:12.5px}
-.pc-name{font-size:20px;letter-spacing:-.01em;margin:0 0 8px}
-.pc-chips{margin:0 0 6px;gap:6px}
-.pc-chips .chip{padding:4px 10px;font-size:12px;background:color-mix(in srgb,var(--tx) 6%,transparent);border-color:var(--line);-webkit-backdrop-filter:none;backdrop-filter:none}
-.pc-chips .chip .i{width:13px;height:13px}
-.pc-desc{font-size:12.5px;margin:2px 0 0}
-.pc-act{margin-top:12px}
+.pc-cam{position:absolute;right:-4px;bottom:-2px;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;cursor:pointer;background:var(--tx);color:var(--bg);border:2px solid var(--card);transition:transform .25s var(--ease)}
+.pc-cam:hover{transform:scale(1.12) rotate(-6deg)}.pc-cam:active{transform:scale(.88)}.pc-cam svg.i{width:14px;height:14px}
+.pc-hi{margin:12px 0 2px;color:var(--mut);font-size:12.5px;font-weight:600}
+.pc-name{display:flex;align-items:center;justify-content:center;gap:6px;max-width:100%;font-size:21px;font-weight:800;line-height:1.2;letter-spacing:-.01em;margin:0 0 8px}
+.pc-name .nm{overflow-wrap:anywhere}
+.pc-name.gold .nm{background:linear-gradient(110deg,#a8780a 25%,#ffe27a 42%,#fffbe0 50%,#ffe27a 58%,#a8780a 75%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:goldShine 3s linear infinite}
+[data-theme=light] .pc-name.gold .nm{background-image:linear-gradient(110deg,#7a5200 25%,#c88a00 42%,#f2c230 50%,#c88a00 58%,#7a5200 75%);background-size:250% 100%}
+@keyframes goldShine{from{background-position:150% 0}to{background-position:-100% 0}}
+.pc-chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:0 0 6px;max-width:100%}
+.pc-chips .chip{display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:4px 10px;border-radius:999px;font:500 12px 'JetBrains Mono',monospace;overflow-wrap:anywhere;color:var(--blue);background:color-mix(in srgb,var(--tx) 6%,transparent);border:1px solid var(--line)}
+.pc-chips .chip .i{width:13px;height:13px;flex:none}
+/* chip Google: tanpa border & latar, supaya logo terlihat jelas */
+.pc-chips .chip.gg{border:0;background:none;padding:4px 4px;gap:6px}
+.pc-chips .chip.gg .i{width:18px;height:18px}
+.pc-desc{max-width:350px;color:var(--mut);font-size:12.5px;line-height:1.6;margin:2px 0 0}
+.pc-act{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px}
+/* centang terverifikasi berkilau */
+.vb{width:22px;height:22px;flex:none;overflow:visible;animation:vbGlow 2.6s ease-in-out infinite}
+.vb.blue{--glow:#4f9bff}.vb.gold{--glow:#f5b800}
+.vb .shine{animation:vbShine 2.6s ease-in-out infinite}
+@keyframes vbShine{0%{transform:translateX(0)}55%,100%{transform:translateX(40px)}}
+@keyframes vbGlow{0%,100%{filter:drop-shadow(0 0 1px var(--glow))}50%{filter:drop-shadow(0 0 5px var(--glow))}}
+/* editor border VIP */
+.bd-pick{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.bd-pick input[type=color]{width:34px;height:34px;padding:0;border:1px solid var(--line);border-radius:50%;background:none;cursor:pointer;overflow:hidden}
+.bd-pick input[type=color]::-webkit-color-swatch-wrapper{padding:0}.bd-pick input[type=color]::-webkit-color-swatch{border:0;border-radius:50%}
+.bd-pick input[type=color]::-moz-color-swatch{border:0;border-radius:50%}
+.pf{display:grid;gap:4px;margin:2px 0 10px;font-size:12.5px;color:var(--mut)}.pf b{color:var(--tx)}
+.sub-tag{font-size:11.5px;color:var(--mut);display:block;font-weight:400;line-height:1.3}
+@media(prefers-reduced-motion:reduce){.pc-ring,.vb,.vb .shine,.pc-name.gold .nm{animation:none}}
