@@ -1,6 +1,6 @@
 const MENU = {
   ringkasan: ['Ringkasan', 'grid'], pengguna: ['Pengguna', 'user'], endpoint: ['Endpoint', 'link'], paket: ['Paket', 'shield'],
-  trial: ['Claim trial', 'gift'], blokir: ['Blokir IP', 'lock'], order: ['Order', 'bag'], kode: ['Kode redeem', 'key'],
+  trial: ['Claim trial', 'gift'], blokir: ['Blokir IP', 'lock'], keamanan: ['Keamanan', 'shield'], order: ['Order', 'bag'], kode: ['Kode redeem', 'key'],
 }
 const SUPER_ONLY = ['endpoint', 'deploy', 'tim']   /* admin tambahan TIDAK boleh: endpoint, update kode (GitHub), tambah admin */
 let LEVEL = 'admin'
@@ -62,12 +62,12 @@ const V = {
     BI = Object.fromEntries(builtin.map((e) => [e.path, e]))
     out().innerHTML = `<div class="bar"><h1>Endpoint</h1><button class="btn" id="add">${ico('plus')} Tambah fitur</button></div>
       <div class="panel tw" style="padding:6px 10px"><h3 style="margin:8px 0 2px">Endpoint bawaan <span class="badge">${builtin.length}</span></h3>
-        <p class="sub" style="font-size:12px;margin:0 0 6px">Ada di kode (<span class="mono">src/api</span>), selalu aktif. Bisa dites dari sini.</p>
+        <p class="sub" style="font-size:12px;margin:0 0 6px">Ada di kode (<span class="mono">src/api</span>). Nama, deskripsi, akses, dan status bisa diubah dari sini (tanpa deploy); logikanya tetap di kode.</p>
         <table><tr><th>Fitur</th><th>Path</th><th>Akses</th><th>Status</th><th>Aksi</th></tr>${builtin.map((e) => `<tr>
-          <td><b>${esc(e.name)}</b><br><span class="sub" style="margin:0;font-size:11.5px">${esc(e.description)}</span></td>
+          <td><b>${esc(e.name)}</b>${e.overridden ? ' <span class="badge warn">diubah</span>' : ''}<br><span class="sub" style="margin:0;font-size:11.5px">${esc(e.description)}</span></td>
           <td><span class="mt ${e.method.toLowerCase()}" style="font-size:10px">${e.method}</span> <span class="mono" style="font-size:12px">${esc(e.path)}</span></td>
           <td>${accessBadge(e.access)}</td><td><span class="badge ${e.status}">${e.status === 'online' ? 'Online' : 'Offline'}</span></td>
-          <td><div class="acts"><button class="btn go" data-bt="${esc(e.path)}">Tes</button></div></td></tr>`).join('') || '<tr><td colspan="5" class="sub">Tidak ada endpoint bawaan.</td></tr>'}</table></div>
+          <td><div class="acts"><button class="btn go" data-bt="${esc(e.path)}">Tes</button><button class="btn ghost" data-be="${esc(e.path)}">Edit</button>${e.overridden ? `<button class="btn ghost" data-br="${esc(e.path)}">Reset</button>` : ''}</div></td></tr>`).join('') || '<tr><td colspan="5" class="sub">Tidak ada endpoint bawaan.</td></tr>'}</table></div>
       <p class="sub">Fitur di bawah ini dibuat dari dashboard dan langsung muncul di Playground.</p>
       <div class="panel tw" style="padding:6px 10px"><table><tr><th>Fitur</th><th>Path</th><th>Akses</th><th>Mode</th><th>Online</th><th>Aksi</th></tr>${endpoints.map((e) => `<tr>
         <td><b>${esc(e.name)}</b><br><span class="sub" style="margin:0;font-size:11.5px">${e.inputs.map((i) => esc(i.name)).join(', ') || 'tanpa input'}</span></td>
@@ -77,12 +77,26 @@ const V = {
         <td><div class="acts"><button class="btn go" data-t="${e.id}">Tes</button><button class="btn ghost" data-e="${e.id}">Edit</button><button class="btn ghost red" data-x="${e.id}">Hapus</button></div></td></tr>`).join('') || '<tr><td colspan="6" class="sub">Belum ada endpoint buatan admin.</td></tr>'}</table></div>`
     $('#add').onclick = () => epForm()
     out().querySelectorAll('[data-bt]').forEach((b) => (b.onclick = () => epTest(BI[b.dataset.bt])))
+    out().querySelectorAll('[data-be]').forEach((b) => (b.onclick = () => builtinForm(BI[b.dataset.be])))
+    out().querySelectorAll('[data-br]').forEach((b) => (b.onclick = async () => { if (confirm('Kembalikan ke nilai asli di kode?')) { try { await api('/admin/builtin/' + encodeURIComponent(b.dataset.br.replace(/^\/api\//, '')), { method: 'DELETE' }); toast('Dikembalikan'); V.endpoint() } catch (e) { toast(e.message) } } }))
     out().querySelectorAll('[data-e]').forEach((b) => (b.onclick = () => epForm(EPS[b.dataset.e])))
     out().querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => epTest(EPS[b.dataset.t])))
     out().querySelectorAll('[data-on]').forEach((b) => (b.onchange = async () => {
       try { await put('/admin/endpoints/' + b.dataset.on, { ...EPS[b.dataset.on], status: b.checked ? 'online' : 'offline' }, 'PUT'); toast(b.checked ? 'Endpoint online' : 'Endpoint offline'); V.endpoint() } catch (e) { toast(e.message); b.checked = !b.checked }
     }))
     out().querySelectorAll('[data-x]').forEach((b) => (b.onclick = async () => { if (confirm('Hapus endpoint ' + EPS[b.dataset.x].path + '?')) { await api('/admin/endpoints/' + b.dataset.x, { method: 'DELETE' }); toast('Endpoint dihapus'); V.endpoint() } }))
+  },
+
+  /* ---------- keamanan: percobaan akses tanpa hak ---------- */
+  async keamanan() {
+    const { items } = await api('/admin/violations')
+    const KIND = { tier: 'Akses endpoint tanpa paket', ip: 'IP tidak di whitelist', key: 'API key salah' }
+    out().innerHTML = `<h1>Keamanan</h1><p class="sub">Percobaan yang ditolak server: memanggil endpoint Premium/VIP tanpa paket (dibalas 404), request dari IP di luar whitelist, dan API key salah. Tetap tercatat meski tampilan di browser dimanipulasi. Menyimpan 500 catatan terakhir.</p>
+      <div class="panel tw"><table><tr><th>Waktu</th><th>Jenis</th><th>User</th><th>IP</th><th>Endpoint</th><th>Total dari IP ini</th><th></th></tr>${items.map((v) => `<tr>
+        <td style="white-space:nowrap">${fmtDT(v.at)}</td><td><span class="badge ${v.kind === 'tier' ? 'bad' : 'warn'}">${esc(KIND[v.kind] || v.kind)}</span></td><td>${esc(v.username || (v.user_id ? '#' + v.user_id : '–'))}</td>
+        <td class="ipc">${esc(v.ip || '–')}</td><td class="mono" style="font-size:12px">${esc(v.path)}</td><td>${v.hits}</td>
+        <td>${v.ip ? `<button class="btn ghost" data-bl="${esc(v.ip)}">Blokir IP</button>` : ''}</td></tr>`).join('') || '<tr><td class="sub" colspan="7">Belum ada percobaan mencurigakan.</td></tr>'}</table></div>`
+    out().querySelectorAll('[data-bl]').forEach((b) => (b.onclick = async () => { if (confirm('Blokir IP ' + b.dataset.bl + '?')) { try { await put('/admin/blocked', { ip: b.dataset.bl, reason: 'Percobaan akses tidak sah' }, 'POST'); toast('IP diblokir'); b.disabled = true } catch (e) { toast(e.message) } } }))
   },
 
   /* ---------- paket ---------- */
@@ -194,6 +208,20 @@ function planForm(p) {
     const body = { id: g('pid').value.trim(), name: g('pn').value.trim(), tier: g('pt').value, daily: num(g('pd').value), maxIps: num(g('pm').value) ?? 0, customKey: g('pc').checked,
       basePrice: num(g('pb').value), baseDays: num(g('pbd').value), permanentPrice: num(g('pp').value), visible: g('pv').checked }
     try { await put(edit ? '/admin/plans/' + p.id : '/admin/plans', body, edit ? 'PUT' : 'POST'); d.close(); toast('Paket disimpan'); V.paket() } catch (e) { say($('#pmsg', d), e.message, 1) }
+  }
+}
+
+/* ---------- form endpoint bawaan (override) ---------- */
+function builtinForm(e) {
+  const d = modal(`<h3>Edit endpoint bawaan</h3><p class="sub mono" style="font-size:12px">${esc(e.method)} ${esc(e.path)}</p><div class="frm">
+    <div class="full"><label>Nama fitur</label><input id="bn" value="${esc(e.name)}"></div>
+    <div><label>Akses</label><select id="ba">${[['free', 'Gratis'], ['premium', 'Premium'], ['vip', 'VIP'], ['owner', 'Hanya owner']].map(([v, t]) => `<option value="${v}" ${e.access === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <div><label>Status</label><select id="bs"><option value="online" ${e.status === 'online' ? 'selected' : ''}>Online</option><option value="offline" ${e.status === 'offline' ? 'selected' : ''}>Offline</option></select></div>
+    <div class="full"><label>Deskripsi</label><input id="bd" value="${esc(e.description || '')}"></div></div>
+    <p class="msg" id="bmsg">Perubahan berlaku ±10 detik. Logika endpoint tetap di kode.</p><div class="row" style="margin-top:10px"><button class="btn" id="bsv">Simpan</button><button class="btn ghost" id="bcl">Batal</button></div>`, 'lg')
+  $('#bcl', d).onclick = () => d.close()
+  $('#bsv', d).onclick = async () => {
+    try { await put('/admin/builtin', { path: e.path, name: $('#bn', d).value, access: $('#ba', d).value, status: $('#bs', d).value, description: $('#bd', d).value }); d.close(); toast('Endpoint disimpan'); V.endpoint() } catch (er) { say($('#bmsg', d), er.message, 1) }
   }
 }
 
