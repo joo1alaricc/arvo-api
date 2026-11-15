@@ -2,7 +2,7 @@
 <html lang="id" data-theme="dark"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Masuk · Arvo</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="site.css"></head>
+<link rel="stylesheet" href="site.css"><link rel="stylesheet" href="motion.css"></head>
 <body><main class="wrap"><div class="panel auth">
   <div class="tabs"><button class="on" data-m="login">Masuk</button><button data-m="register">Daftar</button></div>
   <form id="f" style="margin-top:16px">
@@ -16,10 +16,14 @@
 </div></main>
 <script src="common.js"></script>
 <script>
-const n = new URLSearchParams(location.search).get('next')
-const dest = n && n.startsWith('/') && !n.startsWith('//') ? n : '/profile.html'
+const qs = new URLSearchParams(location.search)
+/* tujuan setelah login; disimpan di sessionStorage karena login Google memantul lewat halaman Google */
+const nx = qs.get('next') || sessionStorage.getItem('arvo_next')
+const dest = nx && nx.startsWith('/') && !nx.startsWith('//') ? nx : '/profile.html'
+if (qs.get('next')) sessionStorage.setItem('arvo_next', dest)
 let mode = 'login'
-ready.then(({ user }) => { if (user) location.href = dest })
+ready.then(({ user }) => { if (user) { sessionStorage.removeItem('arvo_next'); location.href = dest } })
+if (qs.get('err') === 'google') say($('#m'), 'Masuk dengan Google gagal. Coba lagi.', 1)
 document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => {
   mode = b.dataset.m
   document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b))
@@ -31,14 +35,15 @@ $('#f').onsubmit = async (ev) => {
   try { await put('/auth/' + mode, { username: $('#u').value, password: $('#p').value, email: $('#e').value }, 'POST'); location.href = dest }
   catch (e) { say($('#m'), e.message, 1) }
 }
+/* Google: mode redirect. Tombol membawa kamu ke Google lalu kembali ke /api/auth/google/callback,
+   tanpa popup. Di Google Cloud Console daftarkan origin situs ini dan URI callback tersebut. */
 api('/auth/config').then(({ google_client_id }) => {
   if (!google_client_id) return
-  const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'
+  const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true
   s.onload = () => {
-    google.accounts.id.initialize({ client_id: google_client_id, callback: async ({ credential }) => {
-      try { await put('/auth/google', { credential }, 'POST'); location.href = dest } catch (e) { say($('#m'), e.message, 1) }
-    } })
-    google.accounts.id.renderButton($('#gbtn'), { theme: 'outline', size: 'large', width: 320 }); $('#gwrap').hidden = false
+    google.accounts.id.initialize({ client_id: google_client_id, ux_mode: 'redirect', login_uri: location.origin + '/api/auth/google/callback', auto_select: false })
+    google.accounts.id.renderButton($('#gbtn'), { theme: root.dataset.theme === 'dark' ? 'filled_black' : 'outline', size: 'large', shape: 'pill', width: 320, text: 'continue_with' })
+    $('#gwrap').hidden = false
   }
   document.head.append(s)
 }).catch(() => {})
