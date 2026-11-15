@@ -32,7 +32,7 @@ export const endSession = async (c) => {
 export const currentUser = async (c) => {
     const t = getCookie(c, COOKIE)
     if (!t) return null
-    const r = await store(c).getSession(await sha(t), Date.now())
+    const r = await store(c).getSession(await sha(t), Date.now(), c.get('ip'))
     return r.ok === false ? null : r
 }
 export const requireUser = async (c, next) => {
