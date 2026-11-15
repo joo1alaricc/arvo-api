@@ -88,18 +88,18 @@ function setAccent(card, h, s) {
 }
 function paintCard() {
   const card = $('#pcard'), box = $('#pimg'); if (!card || !box) return
-  const fallback = () => { box.innerHTML = `<span class="pc-ini">${esc(me.username[0])}</span>`; card.style.removeProperty('--img'); setAccent(card, hueOf(me.username), 72) }
+  const fallback = () => { box.innerHTML = `<span class="pc-ini">${esc(me.username[0])}</span>`; card.style.removeProperty('--bgimg'); setAccent(card, hueOf(me.username), 72) }
   if (!me.avatar_url) return fallback()
+  /* foto tampil langsung; warna & background diambil dari cache localDb (dibuat di latar belakang saat masuk web) */
   const im = new Image()
-  if (!me.avatar_url.startsWith('/')) im.crossOrigin = 'anonymous'
-  im.onload = () => {
-    box.innerHTML = ''; im.alt = ''; im.draggable = false; box.append(im)
-    card.style.setProperty('--img', `url("${me.avatar_url}")`)
-    const a = accentOf(im); a ? setAccent(card, a.h, a.s) : setAccent(card, hueOf(me.username), 18)
-    card.classList.add('has-img')
-  }
+  im.onload = () => { box.innerHTML = ''; im.alt = ''; im.draggable = false; box.append(im); card.classList.add('has-img') }
   im.onerror = fallback
   im.src = me.avatar_url
+  getBg(me).then((bg) => {
+    if (!bg) return setAccent(card, hueOf(me.username), 40)
+    bg.h != null ? setAccent(card, bg.h, bg.s) : setAccent(card, hueOf(me.username), 18)
+    if (bg.bg) card.style.setProperty('--bgimg', `url("${bg.bg}")`)
+  }).catch(() => setAccent(card, hueOf(me.username), 40))
 }
 
 /* sedikit miring mengikuti kursor (hanya perangkat dengan mouse) */
@@ -127,7 +127,7 @@ const toAvatar = (file) => new Promise((res, rej) => {
   im.src = url
 })
 async function refreshPhoto(msg) {
-  me = await api('/auth/me'); paintCard()
+  me = await api('/auth/me'); if (me.avatar_url) await getBg(me, true).catch(() => {}); else localDb.del('bg:' + me.id); paintCard()
   const t = $('#phv'); if (t) t.innerHTML = photoText()
   const rm = el.querySelector('[data-rmphoto]'); if (rm) rm.hidden = !me.avatar_url
   if (msg) toast(msg)
@@ -280,3 +280,4 @@ el.onclick = async (e) => {
 el.onchange = (e) => { if (e.target.id === 'pf') pickPhoto(e.target.files[0]) }
 
 ready.then(({ user, who: w }) => { who = w; return user ? render() : (location.href = '/login.html?next=/profile.html') })
+  .catch((e) => { el.innerHTML = `<p class="err" style="padding:20px">Gagal memuat profil: ${esc(e.message || e)}. <a href="" style="color:var(--blue)">Coba lagi</a></p>` })
