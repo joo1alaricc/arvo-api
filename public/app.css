@@ -150,3 +150,14 @@ svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .ib[hidden]{display:none}
 @media(max-width:520px){.pcard{border-radius:24px;padding:16px 16px 18px;min-height:430px}.pc-photo{width:120px;height:120px}}
 @media(prefers-reduced-motion:reduce){.pc-bg i,.pc-halo{animation:none}.pcard{transform:none!important}}
+
+/* kartu profil gaya dashboard (sapaan, chip akun/email/ID, bio) */
+.pc-hi{margin:18px 0 8px;color:var(--mut);font-size:14px;font-weight:600}
+.pc-chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:0 0 8px;max-width:100%}
+.pc-chips .chip{display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:7px 13px;border-radius:999px;font-size:13px;font-weight:600;overflow-wrap:anywhere;
+  background:color-mix(in srgb,var(--card) 55%,transparent);border:1px solid color-mix(in srgb,var(--tx) 14%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.pc-chips .chip.mono{font-family:'JetBrains Mono',monospace;font-weight:500}
+.pc-chips .chip .i{width:15px;height:15px;flex:none}
+.pc-chips .chip .ib{width:24px;height:24px;border:0;background:none;padding:0}
+.pc-name{letter-spacing:-.01em;padding-left:0;margin:2px 0 10px}
+.pc-desc{margin-top:6px}
