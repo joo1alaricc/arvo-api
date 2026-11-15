@@ -3,9 +3,11 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const rp = (n) => 'Rp' + Number(n).toLocaleString('id-ID')
 const fmtDate = (t) => (t ? new Date(t).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Permanen')
 const api = async (path, opt = {}) => {
-  const r = await fetch('/api' + path, { credentials: 'same-origin', ...opt, headers: { 'Content-Type': 'application/json', ...(opt.headers || {}) } })
+  let r
+  try { r = await fetch('/api' + path, { credentials: 'same-origin', signal: AbortSignal.timeout(25000), ...opt, headers: { 'Content-Type': 'application/json', ...(opt.headers || {}) } }) }
+  catch (e) { throw new Error(e.name === 'TimeoutError' ? 'Server tidak merespons (timeout 25 detik).' : 'Tidak bisa menghubungi server.') }
   const j = await r.json().catch(() => ({}))
-  if (!r.ok) throw Object.assign(new Error(j.message || 'Terjadi kesalahan'), { status: r.status })
+  if (!r.ok) throw Object.assign(new Error((j.message || 'Terjadi kesalahan') + (j.detail ? '\n' + j.detail : '')), { status: r.status })
   return j
 }
 const put = (path, data, method = 'PUT') => api(path, { method, body: JSON.stringify(data) })
