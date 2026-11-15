@@ -1,6 +1,6 @@
 /* Popup sambutan di beranda: muncul 5 detik setelah halaman dibuka.
    Ubah angka di bawah kalau perlu. POPUP_ONCE=true -> hanya sekali per sesi browser (tidak mengganggu tiap pindah halaman). */
-const POPUP_DELAY = 5000
+const POPUP_DELAY = 2000
 const POPUP_ONCE = true
 const WA_LINK = 'https://whatsapp.com/channel/0029Vb76SfPDzgTBlh5Tn70I'
 const IG_LINK = 'https://www.instagram.com/brzee_.sky'
