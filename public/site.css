@@ -16,15 +16,13 @@ a{color:inherit}code,pre,.mono{font-family:'JetBrains Mono',monospace}
 .nav{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:saturate(1.4) blur(12px);-webkit-backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid var(--line);transition:background-color .25s,border-color .25s}
 .nav-in{display:flex;align-items:center;gap:8px;height:52px}
 .brand{display:flex;align-items:center;gap:8px;font-weight:800;font-size:17px;text-decoration:none;letter-spacing:-.01em}
-.logo{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:linear-gradient(135deg,var(--ac),#e16bff);color:#fff;font-size:14px;transition:transform .3s var(--ease)}.brand:hover .logo{transform:rotate(-8deg) scale(1.08)}
+.logo{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:linear-gradient(135deg,var(--ac),#e16bff);color:#fff;font-size:14px;transition:transform .3s var(--ease)}.logo svg{width:68%;height:68%;fill:none;stroke:#fff;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}.brand:hover .logo{transform:rotate(-8deg) scale(1.08)}
 .links{display:flex;gap:2px;margin-left:14px}.links a{position:relative;text-decoration:none;color:var(--mut);padding:6px 10px;border-radius:8px;font-size:13px;font-weight:600;transition:color .2s,background-color .2s}
 .links a:hover,.links a.on{color:var(--tx);background:color-mix(in srgb,var(--mut) 12%,transparent)}
 .sp{flex:1}.navr{display:flex;align-items:center;gap:6px}
 .nb{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:none;color:var(--tx);display:grid;place-items:center;cursor:pointer;text-decoration:none;flex:none;transition:background-color .2s,transform .15s var(--ease),border-color .2s}
 .nb:hover{background:color-mix(in srgb,var(--mut) 12%,transparent)}.nb:active{transform:scale(.92)}.nb svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .nb.adm{color:var(--ac);border-color:color-mix(in srgb,var(--ac) 45%,var(--line))}
-.av{width:34px;height:34px;border-radius:50%;overflow:hidden;display:grid;place-items:center;flex:none;background:linear-gradient(135deg,var(--ac),var(--ok));color:#fff;font-weight:800;font-size:14px;text-transform:uppercase;text-decoration:none;position:relative;border:2px solid var(--line);transition:transform .2s var(--ease),border-color .2s}
-.av:hover{transform:scale(1.07);border-color:var(--ac)}.av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .mbtn{display:none}.mnav{display:none}
 @media(max-width:760px){.links{display:none}.mbtn{display:grid}.nav-in{gap:6px}
  .mnav{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s var(--ease);border-top:1px solid transparent}.mnav>div{overflow:hidden;min-height:0;display:grid;gap:2px;padding:0 16px}
@@ -109,3 +107,22 @@ tbody tr,table tr{transition:background-color .15s}table tr:hover td{background:
 .sw input:checked+i{background:var(--ok)}.sw input:checked+i::after{transform:translateX(14px)}
 .ipc{font:500 12px 'JetBrains Mono',monospace}.ipc.bl{color:var(--bad);text-decoration:line-through}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* ---------- hero dengan video latar (ala zireku) ---------- */
+.herobox{position:relative;isolation:isolate;overflow:hidden;border-bottom:1px solid var(--line)}
+.herobox .hero{padding-top:76px;padding-bottom:56px;min-height:420px}
+.hv{position:absolute;inset:-8% 0;z-index:-1;pointer-events:none;will-change:transform;transform:translate3d(0,0,0)}
+.hv video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transform:scale(1.04);transition:opacity 1.4s var(--ease,ease),transform 2.4s var(--ease,ease)}
+.hv.on video{opacity:.62;transform:scale(1)}
+[data-theme=light] .hv.on video{opacity:.5}
+/* gradasi tema: teks tetap terbaca, bawah menyatu dengan latar halaman */
+.hv::after{content:"";position:absolute;inset:0;background:
+  linear-gradient(180deg,color-mix(in srgb,var(--bg) 55%,transparent) 0%,color-mix(in srgb,var(--bg) 18%,transparent) 42%,var(--bg) 100%),
+  radial-gradient(120% 90% at 20% 30%,color-mix(in srgb,var(--bg) 70%,transparent),transparent 70%)}
+/* cadangan kalau video tidak ada: cahaya warna yang bergerak pelan */
+.hv-glow{position:absolute;inset:0;background:
+  radial-gradient(50% 60% at 18% 30%,color-mix(in srgb,var(--ac) 34%,transparent),transparent 70%),
+  radial-gradient(45% 55% at 82% 20%,color-mix(in srgb,#e16bff 26%,transparent),transparent 70%),
+  radial-gradient(50% 60% at 60% 90%,color-mix(in srgb,var(--ok) 18%,transparent),transparent 70%);animation:floaty 16s ease-in-out infinite;transition:opacity 1.2s}
+.hv.on .hv-glow{opacity:0}
+@media(max-width:600px){.herobox .hero{padding-top:56px;padding-bottom:40px;min-height:0}}
