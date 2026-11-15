@@ -7,7 +7,7 @@ export const register = (app, route, handler) => {
                 status: 503
             }, 503)
         }
-        if (route['x-premium'] && !c.get('account')) {
+        if (route['x-premium'] && !c.get('account')?.premium) {
             return c.json({
                 error: 'Premium Required',
                 message: 'Endpoint ini khusus paket Premium/VIP. Kirim header x-api-key.',
