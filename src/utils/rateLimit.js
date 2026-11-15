@@ -21,6 +21,8 @@ const errorPage = async (c, status, fallback, replacements = {}) => {
 }
 
 const json = (c, status, error, message, extra = {}) => c.json({ error, message, status, ...extra }, status)
+/* Sama persis dengan 404 endpoint yang memang tidak ada, supaya endpoint berbayar tidak terdeteksi keberadaannya. */
+const hidden = (c) => json(c, 404, 'Not Found', 'The requested API endpoint does not exist.', { path: c.req.path })
 
 const storeOf = (c) => c.env.STORE.get(c.env.STORE.idFromName('main'))
 
@@ -67,11 +69,12 @@ export const meter = async (c, { path, access = 'free' }) => {
         if (apiKey && c.env.STORE) await storeOf(c).consume(apiKey, ip, path, Date.now(), access, true).catch((e) => console.error('[Usage]', e))
         return null
     }
-    if (access === 'owner') return json(c, 403, 'Forbidden', 'Endpoint ini khusus owner.')
+    if (access === 'owner') { if (c.env.STORE) await storeOf(c).flag(null, ip, path, 'tier', Date.now()).catch(() => {}); return hidden(c) }
 
     if (apiKey) {
         if (!c.env.STORE) return json(c, 503, 'Service Unavailable', 'Store belum dikonfigurasi.')
         const r = await storeOf(c).consume(apiKey, ip, path, Date.now(), access)
+        if (r.hide) return hidden(c)
         if (r.ok === false) return json(c, r.status, r.error, r.message)
         c.header('X-RateLimit-Limit', r.limit === null ? 'UNLIMITED' : String(r.limit))
         c.header('X-RateLimit-Remaining', r.remaining === null ? 'UNLIMITED' : String(r.remaining))
@@ -83,8 +86,8 @@ export const meter = async (c, { path, access = 'free' }) => {
         return null
     }
 
-    /* Endpoint berbayar tanpa key premium: tolak tanpa mengurangi limit IP gratis. */
-    if (NEED_RANK[access] > 0) return json(c, 402, 'Premium Required', access === 'vip' ? 'Endpoint ini khusus paket VIP. Kirim apikey.' : 'Endpoint ini khusus paket Premium/VIP. Kirim apikey.')
+    /* Endpoint berbayar tanpa key: 404 dan dicatat (tidak mengurangi limit IP gratis). */
+    if (NEED_RANK[access] > 0) { if (c.env.STORE) await storeOf(c).flag(null, ip, path, 'tier', Date.now()).catch(() => {}); return hidden(c) }
 
     if (parseList(c.env.RATE_LIMIT_WHITELIST || '127.0.0.1').includes(ip)) return null
 
