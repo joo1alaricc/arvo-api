@@ -16,7 +16,7 @@ a{color:inherit}code,pre,.mono{font-family:'JetBrains Mono',monospace}
 .nav{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:saturate(1.4) blur(12px);-webkit-backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid var(--line);transition:background-color .25s,border-color .25s}
 .nav-in{display:flex;align-items:center;gap:8px;height:52px}
 .brand{display:flex;align-items:center;gap:8px;font-weight:800;font-size:17px;text-decoration:none;letter-spacing:-.01em}
-.logo{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:linear-gradient(135deg,var(--ac),#e16bff);color:#fff;font-size:14px;transition:transform .3s var(--ease)}.logo svg{width:68%;height:68%;fill:none;stroke:#fff;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}.brand:hover .logo{transform:rotate(-8deg) scale(1.08)}
+.logo{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:linear-gradient(135deg,var(--ac),#e16bff);color:#fff;font-size:14px;transition:transform .3s var(--ease)}.logo svg{width:72%;height:auto;fill:currentColor;stroke:none}.brand:hover .logo{transform:rotate(-8deg) scale(1.08)}
 .links{display:flex;gap:2px;margin-left:14px}.links a{position:relative;text-decoration:none;color:var(--mut);padding:6px 10px;border-radius:8px;font-size:13px;font-weight:600;transition:color .2s,background-color .2s}
 .links a:hover,.links a.on{color:var(--tx);background:color-mix(in srgb,var(--mut) 12%,transparent)}
 .sp{flex:1}.navr{display:flex;align-items:center;gap:6px}
@@ -85,7 +85,16 @@ dialog img{width:100%;background:#fff;border-radius:10px;padding:8px}dialog>.btn
 .bars{display:flex;gap:5px;align-items:flex-end;height:90px;margin:10px 0}.bars div{flex:1;background:var(--ac);border-radius:4px 4px 0 0;min-height:2px;opacity:.85;transform-origin:bottom;animation:grow .6s var(--ease) both;transition:opacity .2s}.bars div:hover{opacity:1}
 table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:8px 8px;border-top:1px solid var(--line);vertical-align:middle}th{color:var(--mut);font-weight:600;font-size:11.5px;white-space:nowrap}.tw{overflow-x:auto}
 tbody tr,table tr{transition:background-color .15s}table tr:hover td{background:color-mix(in srgb,var(--mut) 6%,transparent)}
-.auth{max-width:380px;margin:32px auto}.auth form{display:grid;gap:8px}.auth input{width:100%}.sep{text-align:center;color:var(--mut);font-size:12px;margin:12px 0}
+.auth{max-width:380px;margin:32px auto}.auth form{display:grid;gap:8px}.auth input{width:100%}.sep{display:flex;align-items:center;gap:12px;color:var(--mut);font-size:12px;margin:14px 0}.sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--line)}
+/* tombol Google: wajah buatan kita + tombol resmi Google transparan di atasnya */
+.gbtn{position:relative;height:40px;border-radius:12px;isolation:isolate;transition:transform .55s var(--spring,var(--ease))}
+.gface{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid var(--line);border-radius:inherit;background:color-mix(in srgb,var(--tx) 4%,transparent);color:var(--tx);font:600 13.5px 'Plus Jakarta Sans',system-ui,sans-serif;pointer-events:none;transition:border-color .3s,background-color .3s,box-shadow .4s var(--ease)}
+.gface svg{width:18px;height:18px;flex:none;fill:none;stroke:none}
+.gov{position:absolute;inset:0;z-index:2;overflow:hidden;border-radius:inherit;opacity:.004;color-scheme:light;cursor:pointer}
+.gov>div,.gov iframe{width:100%!important;max-width:none!important}
+.gbtn:hover .gface{border-color:color-mix(in srgb,var(--ac) 55%,var(--line));background:color-mix(in srgb,var(--ac) 8%,transparent)}
+.gbtn:active{transform:scale(.97);transition-duration:.12s}
+.gbtn:focus-within .gface{box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 28%,transparent)}
 .side{display:grid;grid-template-columns:176px 1fr;gap:18px}.side>nav{flex-direction:column;gap:2px;position:sticky;top:68px;align-self:start;display:flex;font-size:13px}
 .side>nav a{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:9px;color:var(--mut);font-weight:600;text-decoration:none;transition:background-color .2s,color .2s,transform .2s var(--ease)}
 .side>nav a svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
