@@ -1,35 +1,13 @@
-import { serve } from '@hono/node-server'
-import { serveStatic } from '@hono/node-server/serve-static'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
-import { readFile } from 'node:fs/promises'
-import cluster from 'node:cluster'
-import os from 'node:os'
 
-import logger from './utils/logger.js'
 import { setupRoutes } from './api/index.js'
-
 import { logApiRequest } from './utils/logApiRequest.js'
 import { rateLimiter } from './utils/rateLimit.js'
 import { prettyPrint } from './utils/pretty.js'
 
-const numCPUs = os.cpus().length
-const isCluster = process.argv.includes('--cluster')
-
-if (isCluster && cluster.isPrimary) {
-    logger.info(`Primary ${process.pid} is running`)
-    logger.info(`Starting ${numCPUs} workers...`)
-
-    for (let i = 0; i < numCPUs; i++) {
-        cluster.fork()
-    }
-
-    cluster.on('exit', (worker, code, signal) => {
-        logger.warn(`Worker ${worker.process.pid} died. Restarting...`)
-        cluster.fork()
-    })
-} else {
+const createApp = () => {
     const app = new OpenAPIHono()
 
     app.use('*', secureHeaders())
@@ -40,22 +18,17 @@ if (isCluster && cluster.isPrimary) {
 
     setupRoutes(app)
 
-    const openApiConfig = {
+    app.doc('/docs', {
         openapi: '3.0.0',
         info: {
             version: '1.0.0',
-            title: 'YeMo',
+            title: 'Arvo',
             description: 'About Simple and easy to use API. ⭐️ Star to support our work!',
         },
-        servers: [{ url: 'http://localhost:3000', description: 'Development Server' }]
-    }
+        servers: [{ url: '/' }],
+    })
 
-    app.doc('/docs', openApiConfig)
-
-    app.get('/static/*', serveStatic({ root: './' }))
-    app.get('/', serveStatic({ path: './public/index.html' }))
-    app.get('/style.css', serveStatic({ path: './public/style.css' }))
-    app.get('/app.js', serveStatic({ path: './public/app.js' }))
+    app.get('/health', (c) => c.json({ status: 'ok', runtime: 'cloudflare-workers' }))
 
     app.notFound(async (c) => {
         if (c.req.path.startsWith('/api/') || c.req.path === '/docs') {
@@ -63,42 +36,49 @@ if (isCluster && cluster.isPrimary) {
                 error: 'Not Found',
                 message: 'The requested API endpoint does not exist.',
                 path: c.req.path,
-                status: 404
+                status: 404,
             }, 404)
         }
 
-        try {
-            const html = await readFile('./public/errors/404.html', 'utf8')
-            return c.html(html, 404)
-        } catch (e) {
-            return c.text('404 Not Found', 404)
-        }
+        const assetPath = c.req.path === '/' ? '/index.html' : c.req.path
+        const assetRequest = new Request(new URL(assetPath, c.req.url), c.req.raw)
+        const asset = await c.env.ASSETS.fetch(assetRequest)
+        if (asset.status !== 404) return asset
+
+        const errorRequest = new Request(new URL('/errors/404.html', c.req.url))
+        const errorPage = await c.env.ASSETS.fetch(errorRequest)
+        return errorPage.status === 404 ? c.text('404 Not Found', 404) : new Response(errorPage.body, {
+            status: 404,
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        })
     })
 
     app.onError(async (err, c) => {
-        logger.error(`[Error] ${err.message}`)
+        console.error('[Worker Error]', err)
         if (c.req.path.startsWith('/api/')) {
             return c.json({
                 error: 'Internal Server Error',
-                message: err.message,
-                status: 500
+                message: 'An unexpected error occurred.',
+                status: 500,
             }, 500)
         }
 
-        try {
-            const html = await readFile('./public/errors/500.html', 'utf8')
-            return c.html(html, 500)
-        } catch (e) {
-            return c.text('Internal Server Error', 500)
-        }
+        const page = await c.env.ASSETS.fetch(new Request(new URL('/errors/500.html', c.req.url)))
+        return page.status === 404 ? c.text('Internal Server Error', 500) : new Response(page.body, {
+            status: 500,
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        })
     })
 
-    const port = process.env.PORT || 3000
-
-    serve({
-        fetch: app.fetch,
-        port
-    }, (info) => {
-        logger.ready(`Worker ${process.pid} is running on port ${info.port}`)
-    })
+    return app
 }
+
+const app = createApp()
+
+export default {
+    fetch(request, env, ctx) {
+        return app.fetch(request, env, ctx)
+    },
+}
+
+export { RateLimitDO } from './utils/rateLimit.js'
