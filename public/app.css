@@ -114,11 +114,12 @@ svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke
   transition:transform .7s var(--ease),--ph 1s var(--ease),--ps 1s var(--ease),border-color .8s,box-shadow .8s;animation:rise .85s var(--ease) backwards}
 [data-theme=light] .pcard{--pl:54%;box-shadow:0 1px 2px #0000000d,0 30px 60px -36px color-mix(in srgb,var(--pa) 70%,transparent)}
 .pc-bg{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
-.pc-bg::before{content:"";position:absolute;inset:-25%;background:var(--img,none) center/cover;filter:blur(48px) saturate(1.6);opacity:.34;transform:scale(1.2)}
-.pc-bg i{position:absolute;border-radius:50%;background:var(--pa);filter:blur(56px);animation:floaty 14s ease-in-out infinite}
-.pc-bg .b1{width:80%;aspect-ratio:1;left:10%;top:-10%;opacity:.5}
-.pc-bg .b2{width:54%;aspect-ratio:1;left:-16%;bottom:-22%;opacity:.34;background:hsl(calc(var(--ph) + 38) var(--ps) var(--pl));animation-delay:-5s}
-.pc-bg .b3{width:48%;aspect-ratio:1;right:-14%;bottom:-18%;opacity:.3;background:hsl(calc(var(--ph) - 34) var(--ps) var(--pl));animation-delay:-9s}
+.pc-bg::before{content:"";position:absolute;inset:0;background:var(--bgimg,none) center/cover;opacity:.55;transform:scale(1.15)}
+/* blob cahaya pakai radial-gradient (bukan filter:blur) supaya ringan di HP */
+.pc-bg i{position:absolute;border-radius:50%;animation:floaty 14s ease-in-out infinite;will-change:transform}
+.pc-bg .b1{width:100%;aspect-ratio:1;left:0;top:-20%;opacity:.5;background:radial-gradient(closest-side,var(--pa),transparent)}
+.pc-bg .b2{width:80%;aspect-ratio:1;left:-24%;bottom:-30%;opacity:.34;background:radial-gradient(closest-side,hsl(calc(var(--ph) + 38) var(--ps) var(--pl)),transparent);animation-delay:-5s}
+.pc-bg .b3{width:76%;aspect-ratio:1;right:-24%;bottom:-28%;opacity:.3;background:radial-gradient(closest-side,hsl(calc(var(--ph) - 34) var(--ps) var(--pl)),transparent);animation-delay:-9s}
 [data-theme=light] .pc-bg .b1{opacity:.4}[data-theme=light] .pc-bg .b2,[data-theme=light] .pc-bg .b3{opacity:.26}[data-theme=light] .pc-bg::before{opacity:.26}
 .pcard::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(460px circle at var(--mx) var(--my),color-mix(in srgb,var(--pa) 16%,transparent),transparent 62%)}
 .pc-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
