@@ -51,7 +51,8 @@ async function saveField(k, btn) {
 }
 
 /* ---------- panel tab ---------- */
-const panelEvents = () => `<div class="sec">Redeem Code</div>
+const panelEvents = () => `<div class="sec">Claim Trial</div><div id="trial"><div class="sk" style="height:56px"></div></div>
+  <div class="sec" style="margin-top:18px">Redeem Code</div>
   <p class="hint">Punya kode dari admin atau event? Masukkan di sini untuk mengaktifkan paketnya.</p>
   <div class="iprow"><input id="rc" placeholder="Contoh: ARVO2026" autocapitalize="characters" autocomplete="off"></div>
   <button class="btn go" id="rcb">${ico('check')} Submit</button><p class="msg" id="rcm"></p>`
@@ -121,7 +122,24 @@ async function render() {
   </div>`
 
   el.querySelectorAll('img[data-fb]').forEach((i) => (i.onerror = () => i.remove()))
-  wireTabs(); loadSide()
+  wireTabs(); loadSide(); loadTrial()
+}
+
+const TRIAL_MSG = { off: 'Claim trial sedang tidak tersedia.', claimed: 'Kamu sudah pernah claim trial.', has_plan: 'Kamu masih punya paket aktif, claim tersedia untuk akun tanpa paket.' }
+async function loadTrial() {
+  const box = $('#trial'); if (!box) return
+  try {
+    const t = await api('/auth/me/trial')
+    box.innerHTML = t.enabled
+      ? `<p class="hint">Coba <b>${esc(t.plan_name)}</b> gratis selama <b>${t.days} hari</b>. Satu kali per akun dan per IP.</p>
+         <button class="btn go" id="tcl" ${t.can_claim ? '' : 'disabled'}>${ico('gift')} Claim trial</button><p class="msg" id="tcm">${t.can_claim ? '' : esc(TRIAL_MSG[t.reason] || '')}</p>`
+      : `<div class="lockbox">${tile('gift', 'mut')}<div>${TRIAL_MSG.off}</div></div>`
+    const b = $('#tcl'); if (b) b.onclick = async () => {
+      b.disabled = true
+      try { const r = await put('/auth/me/trial', {}, 'POST'); toast(`Trial aktif: ${r.name} ${r.days} hari`); await render() }
+      catch (err) { say($('#tcm'), err.message, 1); b.disabled = false }
+    }
+  } catch (e) { box.innerHTML = `<p class="err">${esc(e.message)}</p>` }
 }
 
 function wireTabs() {
