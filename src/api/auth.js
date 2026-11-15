@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { getCookie } from 'hono/cookie'
 import { store, send, fail, hashPw, sameHash, startSession, endSession, requireUser } from '../utils/session.js'
 
 export const auth = new Hono()
@@ -6,7 +7,11 @@ const body = (c) => c.req.json().catch(() => ({}))
 const USER_RE = /^[A-Za-z0-9_]{3,20}$/
 const PW_MSG = fail(400, 'bad_password', 'Password minimal 8 karakter.')
 
-auth.get('/config', (c) => c.json({ google_client_id: c.env.GOOGLE_CLIENT_ID || null }))
+auth.get('/config', (c) => c.json({
+    google_client_id: c.env.GOOGLE_CLIENT_ID || null,
+    hero_video: c.env.HERO_VIDEO || null,
+    hero_poster: c.env.HERO_POSTER || null,
+}))
 
 auth.post('/register', async (c) => {
     const b = await body(c), username = String(b.username || '').trim()
@@ -30,16 +35,58 @@ auth.post('/login', async (c) => {
     return c.json({ ok: true })
 })
 
-/* Login Google: verifikasi ID token (Google Identity Services). Aktif jika GOOGLE_CLIENT_ID diisi. */
+/* Login Google (Google Identity Services).
+ *  - POST /google           : popup/One Tap, kirim {credential} sebagai JSON
+ *  - POST /google/callback  : mode redirect (dipakai halaman login). Google mengirim form {credential, g_csrf_token}
+ *    ke halaman kita, jadi tidak ada popup dan tidak terblokir COOP / pemblokir popup. */
+const googleToken = async (c, credential) => {
+    if (!c.env.GOOGLE_CLIENT_ID || !credential) return null
+    const res = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(credential))
+    const t = await res.json().catch(() => ({}))
+    const okIss = t.iss === 'accounts.google.com' || t.iss === 'https://accounts.google.com'
+    return res.ok && okIss && t.aud === c.env.GOOGLE_CLIENT_ID && String(t.email_verified) === 'true' && t.sub && t.email ? t : null
+}
+
+/* Ambil foto Google di server lalu simpan sebagai foto profil (supaya tidak hotlink & aman dipakai canvas). */
+const googlePhoto = async (url) => {
+    try {
+        const u = new URL(url)
+        if (u.protocol !== 'https:' || !u.hostname.endsWith('.googleusercontent.com')) return null
+        const r = await fetch(url.replace(/=s\d+(-c)?$/, '') + '=s320-c', { signal: AbortSignal.timeout(5000) })
+        const type = (r.headers.get('content-type') || '').split(';')[0]
+        if (!r.ok || !/^image\/(jpeg|png|webp)$/.test(type)) return null
+        const buf = new Uint8Array(await r.arrayBuffer())
+        if (!buf.length || buf.length > 140000) return null
+        let s = ''
+        for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000))
+        return `data:${type};base64,${btoa(s)}`
+    } catch { return null }
+}
+
+const googleSignIn = async (c, t) => {
+    const now = Date.now(), r = await store(c).googleLogin({ sub: t.sub, email: t.email, now, ip: c.get('ip') })
+    if (r.needAvatar && t.picture) {
+        const photo = await googlePhoto(t.picture)
+        if (photo) await store(c).setAvatarIfEmpty(r.id, photo, now)
+    }
+    await startSession(c, r.id)
+}
+
 auth.post('/google', async (c) => {
     if (!c.env.GOOGLE_CLIENT_ID) return send(c, fail(503, 'google_off', 'Login Google belum dikonfigurasi.'))
-    const { credential } = await body(c)
-    const res = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(credential || ''))
-    const t = await res.json().catch(() => ({}))
-    if (!res.ok || t.aud !== c.env.GOOGLE_CLIENT_ID || String(t.email_verified) !== 'true') return send(c, fail(401, 'google_invalid', 'Token Google tidak valid.'))
-    const r = await store(c).googleLogin({ sub: t.sub, email: t.email, now: Date.now(), ip: c.get('ip') })
-    await startSession(c, r.id)
+    const t = await googleToken(c, (await body(c)).credential)
+    if (!t) return send(c, fail(401, 'google_invalid', 'Token Google tidak valid.'))
+    await googleSignIn(c, t)
     return c.json({ ok: true })
+})
+
+auth.post('/google/callback', async (c) => {
+    const f = await c.req.parseBody().catch(() => ({}))
+    const csrf = getCookie(c, 'g_csrf_token')
+    const t = csrf && csrf === f.g_csrf_token ? await googleToken(c, f.credential) : null
+    if (!t) return c.redirect('/login.html?err=google', 303)
+    await googleSignIn(c, t)
+    return c.redirect('/login.html', 303) /* halaman login meneruskan ke tujuan awal (next) */
 })
 
 auth.post('/logout', async (c) => { await endSession(c); return c.json({ ok: true }) })
@@ -55,6 +102,14 @@ auth.put('/me/ips', async (c) => send(c, await store(c).setIps(uid(c), (await bo
 auth.get('/me/ips', async (c) => send(c, await store(c).listIps(uid(c))))
 auth.post('/me/ips', async (c) => send(c, await store(c).addIp(uid(c), (await body(c)).ip, Date.now())))
 auth.delete('/me/ips/:ip', async (c) => send(c, await store(c).removeIp(uid(c), decodeURIComponent(c.req.param('ip')), Date.now())))
+auth.get('/me/avatar', async (c) => {
+    const r = await store(c).getAvatar(uid(c))
+    if (!r.ok) return c.body(null, 404)
+    const m = r.data.match(/^data:([^;]+);base64,(.+)$/)
+    return new Response(Uint8Array.from(atob(m[2]), (ch) => ch.charCodeAt(0)), { headers: { 'Content-Type': m[1], 'Cache-Control': 'private, max-age=31536000, immutable' } })
+})
+auth.put('/me/avatar', async (c) => send(c, await store(c).setAvatar(uid(c), (await body(c)).data, Date.now())))
+auth.delete('/me/avatar', async (c) => send(c, await store(c).clearAvatar(uid(c))))
 auth.put('/me/profile', async (c) => send(c, await store(c).setProfile(uid(c), await body(c))))
 auth.get('/me/trial', async (c) => send(c, await store(c).trialStatus(uid(c), Date.now())))
 auth.post('/me/trial', async (c) => send(c, await store(c).claimTrial(uid(c), c.get('ip'), Date.now())))
