@@ -36,7 +36,9 @@ export class StoreDO extends DurableObject {
                 headers TEXT DEFAULT '{}', inputs TEXT DEFAULT '[]', created_at INTEGER, updated_at INTEGER, UNIQUE(category,slug));
             CREATE TABLE IF NOT EXISTS admins(user_id INTEGER PRIMARY KEY, added_by TEXT, added_at INTEGER);
             CREATE TABLE IF NOT EXISTS usage_log(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, at INTEGER, path TEXT, ip TEXT);
-            CREATE INDEX IF NOT EXISTS usage_log_u ON usage_log(user_id,id);`)
+            CREATE INDEX IF NOT EXISTS usage_log_u ON usage_log(user_id,id);
+            CREATE TABLE IF NOT EXISTS violations(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, ip TEXT, path TEXT, kind TEXT, at INTEGER);
+            CREATE TABLE IF NOT EXISTS builtin_overrides(path TEXT PRIMARY KEY, name TEXT, description TEXT, access TEXT, status TEXT);`)
         /* DB lama bisa punya tabel orders dengan skema berbeda (CREATE IF NOT EXISTS tidak mengubahnya): lengkapi kolom yang kurang */
         this.ensureCols('orders', { user_id: 'INTEGER', plan: 'TEXT', days: 'INTEGER', amount: 'INTEGER', code: 'INTEGER', total: 'INTEGER', status: 'TEXT', ip: 'TEXT',
             created_at: 'INTEGER', expires_at: 'INTEGER', paid_at: 'INTEGER' },
@@ -77,6 +79,7 @@ export class StoreDO extends DurableObject {
     q(sql, ...b) { return this.sql.exec(sql, ...b).toArray() }
     user(id) { return this.q('SELECT * FROM users WHERE id=?', id)[0] }
 
+    freeIps() { return Math.max(1, Math.floor(Number(this.env?.FREE_MAX_IPS)) || 1) }
     freeLimit() { return Math.max(1, Math.floor(Number(this.env?.FREE_DAILY_LIMIT)) || 100) }
 
     /* Daftar id paket yang menumpuk di akun (tiap pembelian/perpanjangan menambah satu entri). Akun lama: hanya paket tunggalnya. */
@@ -112,7 +115,7 @@ export class StoreDO extends DurableObject {
             api_key: u.api_key, role: p ? p.tier : 'member', plan: u.plan, plan_name: p ? p.name : u.plan ? this.plans[u.plan]?.name || u.plan : null,
             plan_parts: p ? p.parts : [], active: !!p, expired: !!u.plan && !p, expires_at: u.expires_at, daily_limit: limit, free_limit: this.freeLimit(),
             remaining: limit === null ? null : Math.max(0, limit - used),
-            max_ips: p ? p.maxIps : 0, custom_key: !!p?.customKey, ips: JSON.parse(u.ips),
+            max_ips: p ? p.maxIps : this.freeIps(), custom_key: !!p?.customKey, ips: JSON.parse(u.ips),
             used_today: used, total_requests: u.total, created_at: u.created_at, border_colors: Array.isArray(border) ? border : null,
             phone: u.phone || null, bio: u.bio || null, avatar_url: u.avatar_data ? `/api/auth/me/avatar?v=${u.avatar_ver || 1}` : (u.avatar_url || null), last_ip: u.last_ip || null }
     }
@@ -165,11 +168,10 @@ export class StoreDO extends DurableObject {
 
     setIps(id, ips, now) {
         const p = this.pub(this.user(id), now)
-        if (!p.active) return fail(403, 'not_allowed', 'Whitelist IP khusus paket Premium/VIP yang aktif.')
         const list = [...new Set((ips || []).map((i) => String(i).trim().toLowerCase()).filter(Boolean))]
         const bad = list.find((i) => !validIp(i))
         if (bad) return fail(400, 'bad_ip', `Format IP salah: ${bad}`)
-        if (list.length > p.max_ips) return fail(400, 'too_many_ips', `Maksimal ${p.max_ips} IP untuk ${p.plan_name}.`)
+        if (list.length > p.max_ips) return fail(400, 'too_many_ips', `Maksimal ${p.max_ips} IP untuk ${p.plan_name || 'akun gratis'}.`)
         this.sql.exec('UPDATE users SET ips=? WHERE id=?', JSON.stringify(list), id)
         for (const i of list) this.sql.exec('INSERT OR IGNORE INTO ip_meta(user_id,ip,created_at,req) VALUES(?,?,?,0)', id, i, now)
         const old = this.q('SELECT ip FROM ip_meta WHERE user_id=?', id).map((r) => r.ip).filter((i) => !list.includes(i))
@@ -201,7 +203,7 @@ export class StoreDO extends DurableObject {
      * owner=true: hanya mencatat pemakaian, tanpa batas apa pun. */
     consume(key, ip, path, now, need = 'free', owner = false) {
         const [u] = this.q('SELECT * FROM users WHERE api_key=?', key)
-        if (!u) return fail(401, 'invalid_api_key', 'API key tidak valid.')
+        if (!u) { this.flag(null, ip, path, 'key', now); return fail(401, 'invalid_api_key', 'API key tidak valid.') }
         const p = this.pub(u, now)
         const day = jakartaDay(now)
         const record = (used) => {
@@ -213,19 +215,30 @@ export class StoreDO extends DurableObject {
         this.touchIp(u.id, ip, now, 'api')
         let used = p.used_today
         if (owner) { record(used + 1); return { ok: true, owner: true } }
-        if (!p.active) {
-            if (need !== 'free') return fail(402, 'premium_required', need === 'vip' ? 'Endpoint ini khusus paket VIP.' : 'Endpoint ini khusus paket Premium/VIP.')
-            const limit = p.daily_limit
-            if (used >= limit) return fail(429, 'daily_limit', `Limit harian gratis (${limit} request) habis, reset 00:00 WIB. Upgrade paket untuk limit lebih besar.`)
-            record(++used)
-            return { ok: true, premium: false, limit, remaining: limit - used }
+        /* tier tidak cukup: pura-pura endpoint tidak ada (404), tapi percobaannya dicatat untuk admin */
+        const rank = { free: 0, premium: 1, vip: 2 }
+        if ((rank[need] ?? 9) > (p.active ? rank[p.role] : 0)) { this.flag(u.id, ip, path, 'tier', now); return { ...fail(404, 'not_found', 'The requested API endpoint does not exist.'), hide: true } }
+        /* semua request berkey (free maupun berbayar) wajib datang dari IP yang ada di whitelist */
+        const ips = p.ips.slice(0, p.max_ips)
+        if (!ips.includes(ip)) {
+            this.flag(u.id, ip, path, 'ip', now)
+            return fail(403, 'ip_not_whitelisted', ips.length ? `IP ${ip} tidak ada di whitelist key ini.` : `IP ${ip} belum didaftarkan. Tambahkan di Profil > Settings > Whitelist IP.`)
         }
-        if (need === 'vip' && p.role !== 'vip') return fail(402, 'vip_required', 'Endpoint ini khusus paket VIP.')
-        if (p.ips.length && !p.ips.includes(ip)) return fail(403, 'ip_not_whitelisted', `IP ${ip} tidak ada di whitelist key ini.`)
-        if (p.ips.includes(ip)) this.sql.exec('UPDATE ip_meta SET last_used=?,req=req+1 WHERE user_id=? AND ip=?', now, u.id, ip)
-        if (p.daily_limit !== null && used >= p.daily_limit) return fail(429, 'daily_limit', 'Limit harian habis, reset 00:00 WIB.')
+        this.sql.exec('UPDATE ip_meta SET last_used=?,req=req+1 WHERE user_id=? AND ip=?', now, u.id, ip)
+        if (p.daily_limit !== null && used >= p.daily_limit) return fail(429, 'daily_limit', p.active ? 'Limit harian habis, reset 00:00 WIB.' : `Limit harian gratis (${p.daily_limit} request) habis, reset 00:00 WIB. Upgrade paket untuk limit lebih besar.`)
         record(++used)
-        return { ok: true, premium: true, plan: u.plan, name: p.plan_name, limit: p.daily_limit, remaining: p.daily_limit === null ? null : p.daily_limit - used }
+        return p.active
+            ? { ok: true, premium: true, plan: u.plan, name: p.plan_name, limit: p.daily_limit, remaining: p.daily_limit === null ? null : p.daily_limit - used }
+            : { ok: true, premium: false, limit: p.daily_limit, remaining: p.daily_limit - used }
+    }
+    /* catatan pelanggaran (akses tanpa hak, IP di luar whitelist, key salah); dilihat admin di tab Keamanan */
+    flag(userId, ip, path, kind, now) {
+        this.sql.exec('INSERT INTO violations(user_id,ip,path,kind,at) VALUES(?,?,?,?,?)', userId, ip, String(path).slice(0, 120), kind, now)
+        this.sql.exec('DELETE FROM violations WHERE id<(SELECT MAX(id)-499 FROM violations)')
+        return { ok: true }
+    }
+    adminViolations() {
+        return { ok: true, items: this.q(`SELECT v.id,v.ip,v.path,v.kind,v.at,v.user_id,u.username,(SELECT COUNT(*) FROM violations w WHERE w.ip=v.ip) hits FROM violations v LEFT JOIN users u ON u.id=v.user_id ORDER BY v.id DESC LIMIT 200`) }
     }
     usage(id, now) {
         const from = jakartaDay(now - 13 * DAY)
@@ -514,6 +527,20 @@ export class StoreDO extends DurableObject {
         return { ok: true, ip: v }
     }
     adminUnblock(ip) { this.sql.exec('DELETE FROM blocked_ips WHERE ip=?', String(ip).toLowerCase()); return { ok: true } }
+
+    /* ---------- endpoint bawaan (kode): admin bisa ubah nama, deskripsi, akses, status lewat override ---------- */
+    builtinOverrides() { return { ok: true, map: Object.fromEntries(this.q('SELECT * FROM builtin_overrides').map((r) => [r.path, r])) } }
+    adminSaveBuiltin(b, builtin) {
+        const path = String(b.path || '')
+        if (!builtin.includes(path)) return fail(404, 'not_found', 'Endpoint bawaan tidak ditemukan.')
+        const name = String(b.name || '').trim(), description = String(b.description || '').trim().slice(0, 300)
+        if (!name || name.length > 60) return fail(400, 'bad_endpoint', 'Nama fitur 1-60 karakter.')
+        if (!['free', 'premium', 'vip', 'owner'].includes(b.access)) return fail(400, 'bad_endpoint', 'Akses tidak valid.')
+        const status = b.status === 'offline' ? 'offline' : 'online'
+        this.sql.exec('INSERT INTO builtin_overrides VALUES(?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET name=excluded.name,description=excluded.description,access=excluded.access,status=excluded.status', path, name, description, b.access, status)
+        return { ok: true }
+    }
+    adminResetBuiltin(path) { this.sql.exec('DELETE FROM builtin_overrides WHERE path=?', String(path)); return { ok: true } }
 
     /* ---------- endpoint dinamis ---------- */
     epRow(r) { return { ...r, path: `/api/${r.category}/${r.slug}`, inputs: JSON.parse(r.inputs || '[]'), headers: JSON.parse(r.headers || '{}') } }
