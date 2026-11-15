@@ -9,6 +9,7 @@ const PW_MSG = fail(400, 'bad_password', 'Password minimal 8 karakter.')
 
 auth.get('/config', (c) => c.json({
     google_client_id: c.env.GOOGLE_CLIENT_ID || null,
+    google_callback: new URL('/api/auth/google/callback', c.req.url).href,
     hero_video: c.env.HERO_VIDEO || null,
     hero_poster: c.env.HERO_POSTER || null,
 }))
