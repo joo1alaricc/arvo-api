@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { store, send, fail } from '../utils/session.js'
 import { refreshBlocked } from '../utils/rateLimit.js'
-import { BUILTIN_PATHS } from './index.js'
+import { BUILTIN_PATHS, builtinInfo } from './index.js'
 
 /* Dashboard admin: akses otomatis dari IP owner (OWNER_IPS), tanpa login. */
 export const admin = new Hono()
@@ -47,6 +47,7 @@ admin.put('/trial', async (c) => send(c, await store(c).adminSetTrial(await body
 admin.delete('/trial/claims/:uid', async (c) => send(c, await store(c).adminResetClaim(+c.req.param('uid'))))
 
 /* ---- endpoint dinamis ---- */
+admin.get('/builtin', (c) => c.json({ ok: true, endpoints: builtinInfo() }))
 admin.get('/endpoints', async (c) => send(c, await store(c).listEndpoints()))
 admin.post('/endpoints', async (c) => send(c, await store(c).adminSaveEndpoint(await body(c), null, BUILTIN_PATHS, Date.now())))
 admin.put('/endpoints/:id', async (c) => send(c, await store(c).adminSaveEndpoint(await body(c), +c.req.param('id'), BUILTIN_PATHS, Date.now())))
