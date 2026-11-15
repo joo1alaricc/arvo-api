@@ -6,11 +6,13 @@
 <title>Arvo - API Gateway</title>
 <meta name="description" content="API simpel dan cepat. Mulai gratis, upgrade ke Premium atau VIP kapan saja.">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="site.css"><link rel="stylesheet" href="motion.css">
 </head>
 <body>
 
 <main>
+<div class="herobox" id="herobox">
+<div class="hv" id="hv" aria-hidden="true"><i class="hv-glow"></i><video id="hvid" muted loop playsinline preload="auto" disablepictureinpicture disableremoteplayback></video></div>
 <section class="hero wrap">
   <p class="pill"><i class="dot" id="dot"></i><span id="status">Memeriksa server…</span></p>
   <h1>API yang simpel,<br>kuota yang jelas.</h1>
@@ -22,6 +24,7 @@
     <div><b id="s-ip">–</b><span>IP terdeteksi</span></div>
   </div>
 </section>
+</div>
 
 <section id="cara" class="wrap">
   <h2>Empat langkah, key langsung aktif</h2>
