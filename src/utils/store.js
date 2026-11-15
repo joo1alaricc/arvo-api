@@ -35,7 +35,7 @@ export class StoreDO extends DurableObject {
                 method TEXT DEFAULT 'GET', access TEXT DEFAULT 'free', status TEXT DEFAULT 'online', mode TEXT DEFAULT 'proxy', code TEXT DEFAULT '',
                 headers TEXT DEFAULT '{}', inputs TEXT DEFAULT '[]', created_at INTEGER, updated_at INTEGER, UNIQUE(category,slug));
             CREATE TABLE IF NOT EXISTS admins(user_id INTEGER PRIMARY KEY, added_by TEXT, added_at INTEGER);`)
-        for (const col of ['phone', 'avatar_url', 'banner_url', 'reg_ip', 'last_ip', 'avatar_data', 'avatar_ver']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`) } catch {} }
+        for (const col of ['phone', 'bio', 'avatar_url', 'banner_url', 'reg_ip', 'last_ip', 'avatar_data', 'avatar_ver']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`) } catch {} }
         try { this.sql.exec('ALTER TABLE users ADD COLUMN last_seen INTEGER') } catch {}
         if (!this.q('SELECT 1 FROM plans LIMIT 1').length) {
             DEFAULT_PLANS.forEach((p, i) => this.sql.exec('INSERT INTO plans VALUES(?,?,?,?,?,?,?,?,?,1,?)', p.id, p.tier, p.name, p.daily, p.maxIps, p.customKey ? 1 : 0, p.baseDays, p.basePrice, p.permanentPrice, i))
@@ -67,7 +67,7 @@ export class StoreDO extends DurableObject {
             active: !!p, expired: !!u.plan && !p, expires_at: u.expires_at, daily_limit: p ? p.daily : null,
             max_ips: p ? p.maxIps : 0, custom_key: !!p?.customKey, ips: JSON.parse(u.ips),
             used_today: u.usage_day === jakartaDay(now) ? u.usage_count : 0, total_requests: u.total, created_at: u.created_at,
-            phone: u.phone || null, avatar_url: u.avatar_data ? `/api/auth/me/avatar?v=${u.avatar_ver || 1}` : (u.avatar_url || null), last_ip: u.last_ip || null }
+            phone: u.phone || null, bio: u.bio || null, avatar_url: u.avatar_data ? `/api/auth/me/avatar?v=${u.avatar_ver || 1}` : (u.avatar_url || null), last_ip: u.last_ip || null }
     }
 
     /* ---------- akun & sesi ---------- */
@@ -210,6 +210,11 @@ export class StoreDO extends DurableObject {
                 const ph = String(b.phone ?? '').replace(/[\s-]/g, '')
                 if (ph && !/^\+?\d{8,15}$/.test(ph)) throw new Error('Nomor telepon 8-15 digit, boleh diawali +.')
                 out.phone = ph || null
+            }
+            if ('bio' in b) {
+                const bi = String(b.bio ?? '').replace(/\s+/g, ' ').trim()
+                if (bi.length > 160) throw new Error('Bio maksimal 160 karakter.')
+                out.bio = bi || null
             }
         } catch (e) { return fail(400, 'bad_profile', e.message) }
         const keys = Object.keys(out)
