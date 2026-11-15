@@ -13,7 +13,7 @@ a{color:inherit}code,pre,.mono{font-family:'JetBrains Mono',monospace}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ---------- header ---------- */
-.nav{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:saturate(1.4) blur(12px);-webkit-backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid var(--line);transition:background-color .25s,border-color .25s}
+.nav{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 52%,transparent);backdrop-filter:saturate(1.8) blur(24px);-webkit-backdrop-filter:saturate(1.8) blur(24px);border-bottom:1px solid var(--line);transition:background-color .25s,border-color .25s}
 .nav-in{display:flex;align-items:center;gap:8px;height:52px}
 .brand{display:flex;align-items:center;gap:8px;font-weight:800;font-size:17px;text-decoration:none;letter-spacing:-.01em}
 .logo{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:linear-gradient(135deg,var(--ac),#e16bff);color:#fff;font-size:14px;transition:transform .3s var(--ease)}.logo svg{width:72%;height:auto;fill:currentColor;stroke:none}.brand:hover .logo{transform:rotate(-8deg) scale(1.08)}
@@ -143,3 +143,9 @@ tbody tr,table tr{transition:background-color .15s}table tr:hover td{background:
 .ribbon{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:linear-gradient(110deg,#f5a524,#ffd166,#f5a524);background-size:200% 100%;color:#2a1a00;font-size:11px;font-weight:800;letter-spacing:.08em;padding:3px 12px;border-radius:99px;white-space:nowrap;box-shadow:0 4px 12px #f5a52455;animation:ribbonShine 3s linear infinite}
 @keyframes ribbonShine{to{background-position:-200% 0}}
 @media(prefers-reduced-motion:reduce){.ribbon{animation:none}}
+
+/* ---------- konfirmasi pembelian ---------- */
+.cfm{display:grid;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:6px}
+.cfm>div{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;font-size:13.5px}
+.cfm>div+div{border-top:1px solid var(--line)}
+.cfm span{color:var(--mut)}.cfm .tot{background:color-mix(in srgb,var(--ac) 9%,transparent)}.cfm .tot b{font-size:18px;letter-spacing:-.02em}
