@@ -16,7 +16,8 @@ import { store } from './utils/session.js'
 const createApp = () => {
     const app = new OpenAPIHono()
 
-    app.use('*', secureHeaders())
+    /* COOP default Hono = same-origin; itu memutus komunikasi popup Google Sign-In. allow-popups tetap aman. */
+    app.use('*', secureHeaders({ crossOriginOpenerPolicy: 'same-origin-allow-popups' }))
     app.use('*', cors())
     app.use('*', logApiRequest)
     app.use('*', rateLimiter())
