@@ -14,7 +14,7 @@ RATE_LIMIT_WINDOW_MS = "900000"
 RATE_LIMIT_MAX = "100"
 RATE_LIMIT_WHITELIST = "127.0.0.1"
 RATE_LIMIT_BAN_LIST = ""
-HERO_VIDEO =""
+HERO_VIDEO ="https://cloud.yardansh.com/2yf0iQ.mp4"
 HERO_POSTER = ""
 # IP owner (pisah koma): tanpa limit + akses panel admin. Isi IP publik kamu!
 OWNER_IPS = "103.150.16.3"
