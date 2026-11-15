@@ -1,5 +1,6 @@
 import { statsRoute, statsHandler } from './stats/routes.js'
 import { premiumPingRoute, premiumPingHandler } from './premium/routes.js'
+import {tiktokRoute, tiktokHandler} from './downloader/tiktok.js'
 
 import { register } from '../utils/route.js'
 
@@ -7,6 +8,7 @@ import { register } from '../utils/route.js'
 const BUILTIN = [
     [statsRoute, statsHandler],
     [premiumPingRoute, premiumPingHandler],
+    [tiktokRoute, tiktokHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
