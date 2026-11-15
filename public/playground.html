@@ -4,8 +4,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="site.css"><link rel="stylesheet" href="app.css"><link rel="stylesheet" href="motion.css"></head>
 <body><main class="pg">
-  <h1>Playground</h1><p class="sub">Coba endpoint langsung dari browser. Isi apikey di setiap endpoint (otomatis dipakai ke endpoint lain).</p>
-  <div class="row bar2"><div class="sbar" style="flex:1;margin:0;min-width:0"><span data-ico="search"></span><input id="sq" placeholder="Cari endpoint…" autocomplete="off"></div><button class="btn ghost sm" id="dl"><span data-ico="download"></span> Unduh spec</button></div>
+  <h1>Playground</h1><p class="sub">Coba endpoint langsung dari browser. Isi apikey sekali, dikirim lewat header <code>x-api-key</code> ke semua endpoint. IP kamu harus ada di whitelist (Profil › Settings).</p>
+  <div class="row bar2"><div class="sbar" style="flex:1;margin:0;min-width:0"><span data-ico="search"></span><input id="sq" placeholder="Cari endpoint…" autocomplete="off"></div></div>
   <div id="list"><p class="sub">Memuat…</p></div>
 </main>
 <script src="common.js"></script><script src="ui.js"></script><script src="playground.js"></script></body></html>
