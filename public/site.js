@@ -39,11 +39,11 @@ ready.then((s) => {
   else $('#s-rl').textContent = !q ? '–' : q.unlimited ? 'Unlimited' : `${q.remaining}/${q.limit}`
 })
 
-const BEST = 'premium3'   /* paket yang diberi sorotan BEST SELLER */
+const BEST = 'vip2'   /* paket yang diberi sorotan BEST SELLER */
 const price = (p, d, perm) => perm ? p.permanentPrice : Math.max(1000, Math.ceil(p.basePrice * d / p.baseDays / 100) * 100)
 const feats = (p) => [
   p.daily === null ? 'Request unlimited' : `${p.daily.toLocaleString('id-ID')} request / hari`,
-  'Akses API premium', `Whitelist IP hingga ${p.maxIps} IP`, p.customKey ? 'Custom API key' : null,
+  p.tier === 'vip' ? 'Akses semua endpoint (termasuk khusus VIP)' : 'Akses endpoint Premium', `Whitelist IP hingga ${p.maxIps} IP`, p.customKey ? 'Custom API key' : null,
   p.tier === 'vip' ? 'Badge VIP' : 'Badge Premium',
   p.tier === 'vip' ? 'Profil centang gold & username gold berkilau' : 'Profil centang biru berkilau',
   p.tier === 'vip' ? 'Border profil custom (pilih warna sendiri)' : null,
