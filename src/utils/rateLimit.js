@@ -69,7 +69,16 @@ export const meter = async (c, { path, access = 'free' }) => {
         if (apiKey && c.env.STORE) await storeOf(c).consume(apiKey, ip, path, Date.now(), access, true).catch((e) => console.error('[Usage]', e))
         return null
     }
-    if (access === 'owner') { if (c.env.STORE) await storeOf(c).flag(null, ip, path, 'tier', Date.now()).catch(() => {}); return hidden(c) }
+    /* Endpoint role owner/admin: wajib Access Key (x-access-key / ?accesskey=), API key biasa tidak cukup. */
+    if (access === 'owner') {
+        const ak = c.req.header('x-access-key') || c.req.query('accesskey')
+        if (ak && c.env.STORE) {
+            const v = await storeOf(c).verifyAccess(ak).catch(() => null)
+            if (v && v.ok !== false) { c.header('X-RateLimit-Limit', 'UNLIMITED'); c.header('X-RateLimit-Remaining', 'UNLIMITED'); c.set('account', { plan: 'owner', name: 'Admin', premium: true, vip: true }); return null }
+        }
+        if (c.env.STORE) await storeOf(c).flag(null, ip, path, 'tier', Date.now()).catch(() => {})
+        return hidden(c)
+    }
 
     if (apiKey) {
         if (!c.env.STORE) return json(c, 503, 'Service Unavailable', 'Store belum dikonfigurasi.')
