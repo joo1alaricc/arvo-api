@@ -240,7 +240,7 @@ function epForm(e) {
     <div><label>Status</label><select id="et"><option value="online" ${e.status === 'online' ? 'selected' : ''}>Online</option><option value="offline" ${e.status === 'offline' ? 'selected' : ''}>Offline</option></select></div>
     <div class="full"><label>Deskripsi</label><input id="ed" value="${esc(e.description || '')}" placeholder="Opsional"></div>
     <div class="full"><label id="ekl">Kode</label><textarea id="ek" rows="4" spellcheck="false">${esc(e.code)}</textarea><p class="msg" id="ekh"></p></div>
-    <div class="full" id="ehw"><label>Headers upstream (JSON, opsional)</label><textarea id="eh" rows="2" spellcheck="false">${esc(Object.keys(e.headers || {}).length ? JSON.stringify(e.headers, null, 2) : '')}</textarea></div>
+    <div class="full" id="ehw"><label>Headers upstream (JSON, opsional). Kosong = User-Agent browser otomatis. Isi \"User-Agent\" sendiri bila perlu.</label><textarea id="eh" rows="2" spellcheck="false">${esc(Object.keys(e.headers || {}).length ? JSON.stringify(e.headers, null, 2) : '')}</textarea></div>
     <div class="full"><label>Input endpoint</label><div id="eins">${e.inputs.map(inRow).join('')}</div><button class="btn ghost sm" id="eadd" type="button">${ico('plus')} Tambah input</button></div></div>
     <p class="msg" id="emsg"></p><div class="row" style="margin-top:10px"><button class="btn" id="es2">Simpan</button><button class="btn ghost" id="ec2">Batal</button></div>`, 'lg')
   const g = (id) => $('#' + id, d)
