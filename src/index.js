@@ -35,6 +35,8 @@ const createApp = () => {
     app.get('/api/catalog', async (c) => {
         const RANK = { free: 0, premium: 1, vip: 2, owner: 3 }, warn = []
         let rank = c.get('isOwner') ? 3 : 0
+        const ak = c.req.header('x-access-key') || c.req.query('accesskey')
+        if (!rank && ak) { try { if ((await store(c).verifyAccess(ak)).ok !== false) rank = 3 } catch {} }
         if (!rank) {
             try {
                 const u = await currentUser(c)
@@ -59,6 +61,17 @@ const createApp = () => {
         return c.json(rank === 3 && warn.length ? { ...doc, warnings: warn } : doc)
     })
 
+    /* Cek API key / Access key (publik, tidak mengurangi limit). Body: { type: 'apikey' | 'accesskey', key } */
+    app.post('/api/checkkey', async (c) => {
+        const b = await c.req.json().catch(() => ({}))
+        const r = await store(c).checkKey(b.type === 'accesskey' ? 'accesskey' : 'apikey', b.key, c.get('ip'), Date.now())
+        c.header('Cache-Control', 'no-store')
+        return c.json(r.ok === false ? { status: r.status, error: r.error, message: r.message } : { status: r.status, result: r.result }, r.ok === false ? r.status : 200)
+    })
+
+    /* Penghitung kunjungan halaman (beacon dari browser, sekali per sesi tab). */
+    app.post('/api/pv', async (c) => { await store(c).pageHit().catch(() => {}); return c.body(null, 204) })
+
     /* Statistik publik untuk halaman Dashboard. Hanya angka agregat; tidak mengurangi limit. */
     app.get('/api/dashboard', async (c) => {
         const now = Date.now()
@@ -72,7 +85,7 @@ const createApp = () => {
         const since = Number.isFinite(deployed) ? deployed : s.boot_at
         c.header('Cache-Control', 'public, max-age=20')
         return c.json({
-            requests: s.requests, users: s.users,
+            requests: s.requests, users: s.users, page_views: s.page_views, blocked: s.blocked,
             endpoints: list.filter((e) => e.status !== 'offline' && e.access !== 'owner').length,
             uptime_ms: Math.max(0, now - since), days: s.days,
         })
