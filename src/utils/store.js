@@ -625,7 +625,7 @@ export class StoreDO extends DurableObject {
     accessKeyOf(id, reset = false) {
         if (!this.isAdmin(id)) return fail(403, 'not_admin', 'Access key khusus admin.')
         let k = this.user(id).access_key
-        if (!k || reset) { k = 'Acc-' + hex(12); this.sql.exec('UPDATE users SET access_key=? WHERE id=?', k, id) }
+        if (!k || reset) { k = 'acc_' + hex(12); this.sql.exec('UPDATE users SET access_key=? WHERE id=?', k, id) }
         return { ok: true, access_key: k }
     }
     verifyAccess(key) {
@@ -666,4 +666,21 @@ export class StoreDO extends DurableObject {
     /* ---------- QRIS statis (payload teks hasil baca gambar QR) ---------- */
     getQrisStatic() { return this.setting('qris_static', null) }
     setQrisStatic(payload) { this.saveSetting('qris_static', payload); return { ok: true } }
+
+    /* ---------- konten dashboard (Contributor, S&K, Thanks To) ---------- */
+    siteContent() {
+        const d = this.setting('site_content', null) || {}
+        return { contributors: Array.isArray(d.contributors) ? d.contributors : [], terms: Array.isArray(d.terms) ? d.terms : [], thanks: Array.isArray(d.thanks) ? d.thanks : [] }
+    }
+    adminSaveSiteContent(b) {
+        const t = (v, n) => String(v ?? '').trim().slice(0, n)
+        const url = (v) => { v = t(v, 300); return /^https?:\/\//i.test(v) ? v : '' }
+        const img = (v) => { v = String(v ?? '').trim(); return /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(v) && v.length <= 150000 ? v : /^https?:\/\//i.test(v) && v.length <= 300 ? v : '' }
+        const list = (a, n) => (Array.isArray(a) ? a.map((x) => t(x, 400)).filter(Boolean).slice(0, n) : [])
+        const contributors = (Array.isArray(b.contributors) ? b.contributors : []).slice(0, 30)
+            .map((x) => ({ name: t(x && x.name, 80), role: t(x && x.role, 120), website: url(x && x.website), avatar: img(x && x.avatar) })).filter((x) => x.name)
+        const v = { contributors, terms: list(b.terms, 50), thanks: list(b.thanks, 50) }
+        this.saveSetting('site_content', v)
+        return { ok: true, ...v }
+    }
 }
