@@ -1,3 +1,4 @@
+import { setUpstreamUA } from './utils/upstream.js'   /* harus paling atas: memasang User-Agent browser untuk semua fetch keluar */
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
@@ -112,6 +113,7 @@ const app = createApp()
 
 export default {
     fetch(request, env, ctx) {
+        setUpstreamUA(env.UPSTREAM_UA)
         return app.fetch(request, env, ctx)
     },
 }
