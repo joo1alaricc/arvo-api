@@ -49,7 +49,7 @@ const drawInfo = (d) => {
 }
 
 /* ---------- Cek Apikey ---------- */
-const KT = { apikey: ['API Key', 'arvo_xxxxxx'], accesskey: ['Access Key', 'acc_xxxxxxxxxxxx'] }
+const KT = { apikey: ['API Key', 'arvo_xxxxxxxx'], accesskey: ['Access Key', 'acc_xxxxxxxxxxxx'] }
 $('#ckt').onchange = () => { const [l, ph] = KT[$('#ckt').value]; $('#ckl').textContent = l; $('#ckk').placeholder = ph; $('#ckr').innerHTML = ''; say($('#ckm'), '') }
 const fmtLimit = (n) => (n === null || n === undefined ? 'Unlimited' : nf(n))
 const fmtExp = (v) => (/^\d{4}-\d{2}-\d{2}T/.test(v) ? fmtDate(v) : v === 'Permanent' ? 'Permanen' : v === 'Expired' ? 'Kedaluwarsa' : v === 'No Subscription Found' ? 'Belum berlangganan' : v)
@@ -96,3 +96,18 @@ const load = () => api('/dashboard').then((d) => {
 load()
 setInterval(() => { if (!document.hidden) load() }, 30000)
 setInterval(tickUptime, 15000)
+
+/* ---------- Contributor, Syarat & Ketentuan, Thanks To (dikelola admin) ---------- */
+const initial = (n) => esc(String(n || '?').trim().charAt(0).toUpperCase())
+const drawSite = (d) => {
+  const box = $('#site'), parts = []
+  if (d.contributors.length) parts.push(`<div class="card"><div class="card-h">Contributor</div><div class="card-b ctb">${d.contributors.map((x) => {
+    const av = x.avatar ? `<img src="${esc(x.avatar)}" alt="" loading="lazy">` : `<span>${initial(x.name)}</span>`
+    const nm = x.website ? `<a href="${esc(x.website)}" target="_blank" rel="noopener noreferrer"><b>${esc(x.name)}</b></a>` : `<b>${esc(x.name)}</b>`
+    return `<div class="ctb-i"><div class="ctb-a">${av}</div><div>${nm}<small>${esc(x.role)}</small></div></div>`
+  }).join('')}</div></div>`)
+  const ul = (title, a) => a.length ? `<div class="card"><div class="card-h">${title}</div><div class="card-b"><ul class="sk-l">${a.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div></div>` : ''
+  parts.push(ul('Thanks To', d.thanks), ul('Syarat &amp; Ketentuan', d.terms))
+  box.innerHTML = parts.join('')
+}
+api('/site-content').then(drawSite).catch(() => {})
