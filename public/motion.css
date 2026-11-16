@@ -22,7 +22,7 @@ body{animation-duration:.6s;animation-fill-mode:backwards}
 .hero>*:nth-child(n){animation-timing-function:var(--ease)}
 
 /* ---- tekan & lepas: turun cepat, kembali dengan pegas ---- */
-.btn,.nb,.ib,.chips button,.tabs button,.seg button,.tile,.field,.links a,.mnav a,summary{-webkit-user-select:none;user-select:none}
+.btn,.nb,.ib,.chips button,.tabs button,.seg button,.tile,.field,.links a,.dr-nav a,summary{-webkit-user-select:none;user-select:none}
 .btn{transition:transform .55s var(--spring),filter .25s,background-color .25s,box-shadow .4s var(--ease),opacity .25s,border-color .25s}
 .btn:active{transform:scale(.95);transition-duration:.12s,.25s,.25s,.4s,.25s,.25s}
 .nb{transition:transform .55s var(--spring),background-color .25s,border-color .25s,color .25s}
@@ -42,11 +42,7 @@ body{animation-duration:.6s;animation-fill-mode:backwards}
 .field{transition:border-color .3s,background-color .3s,transform .5s var(--spring)}
 
 /* ---- kolom yang membuka/menutup: tinggi mengalir (grid 0fr↔1fr) ---- */
-.mnav,.grp-b,.pg-b{transition:grid-template-rows .55s var(--ease),border-color .3s}
-.mnav>div{transition:padding .55s var(--ease),opacity .4s var(--ease);opacity:0}.mnav.open>div{opacity:1}
-.mnav a{transform:translate3d(0,-6px,0);opacity:0;transition:transform .55s var(--ease),opacity .4s var(--ease),background-color .2s,color .2s}
-.mnav.open a{transform:none;opacity:1}
-.mnav.open a:nth-child(2){transition-delay:.04s,.04s,0s,0s}.mnav.open a:nth-child(3){transition-delay:.08s,.08s,0s,0s}.mnav.open a:nth-child(4){transition-delay:.12s,.12s,0s,0s}
+.grp-b,.pg-b{transition:grid-template-rows .55s var(--ease),border-color .3s}
 .chev,.pg-ep .chev,.grp-h .chev{transition:transform .55s var(--spring)}
 details>summary{transition:color .25s,padding .3s var(--ease)}
 
