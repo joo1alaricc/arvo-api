@@ -147,3 +147,14 @@ tbody tr,table tr{transition:background-color .15s}table tr:hover td{background:
 .cfm>div{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;font-size:13.5px}
 .cfm>div+div{border-top:1px solid var(--line)}
 .cfm span{color:var(--mut)}.cfm .tot{background:color-mix(in srgb,var(--ac) 9%,transparent)}.cfm .tot b{font-size:18px;letter-spacing:-.02em}
+
+/* Logo header beranimasi: digambar garisnya -> terisi -> berkilau -> terhapus halus -> ulang (sama dengan popup sambutan) */
+.logo-an{position:relative;overflow:hidden}
+.logo-an svg{width:74%;overflow:visible}
+.lg-p{fill:#fff;fill-opacity:0;stroke:#fff;stroke-width:5;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1;stroke-opacity:1}
+.lg-p.a{animation:lgA 6s cubic-bezier(.65,0,.35,1) infinite}.lg-p.r{animation:lgR 6s cubic-bezier(.65,0,.35,1) infinite}
+.lg-s{fill:#fff;opacity:0;transform:translateX(-30px) skewX(-20deg);animation:lgS 6s cubic-bezier(.4,0,.2,1) infinite}
+@keyframes lgA{0%{stroke-dashoffset:1;stroke-opacity:1;fill-opacity:0}26%{stroke-dashoffset:0;stroke-opacity:1;fill-opacity:0}42%{stroke-dashoffset:0;stroke-opacity:0;fill-opacity:1}86%{stroke-dashoffset:0;stroke-opacity:0;fill-opacity:1}96%{stroke-dashoffset:0;stroke-opacity:0;fill-opacity:0}100%{stroke-dashoffset:1;stroke-opacity:0;fill-opacity:0}}
+@keyframes lgR{0%{stroke-dashoffset:1;stroke-opacity:1;fill-opacity:0}10%{stroke-dashoffset:1;stroke-opacity:1;fill-opacity:0}38%{stroke-dashoffset:0;stroke-opacity:1;fill-opacity:0}52%{stroke-dashoffset:0;stroke-opacity:0;fill-opacity:1}86%{stroke-dashoffset:0;stroke-opacity:0;fill-opacity:1}96%{stroke-dashoffset:0;stroke-opacity:0;fill-opacity:0}100%{stroke-dashoffset:1;stroke-opacity:0;fill-opacity:0}}
+@keyframes lgS{0%,56%{opacity:0;transform:translateX(-30px) skewX(-20deg)}58%{opacity:.75}72%{opacity:.75;transform:translateX(130px) skewX(-20deg)}74%,100%{opacity:0;transform:translateX(130px) skewX(-20deg)}}
+@media(prefers-reduced-motion:reduce){.lg-p{animation:none!important;stroke-dashoffset:0;stroke-opacity:0;fill-opacity:1}.lg-s{animation:none}}
