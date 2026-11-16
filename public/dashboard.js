@@ -101,13 +101,16 @@ setInterval(tickUptime, 15000)
 const initial = (n) => esc(String(n || '?').trim().charAt(0).toUpperCase())
 const drawSite = (d) => {
   const box = $('#site'), parts = []
-  if (d.contributors.length) parts.push(`<div class="card"><div class="card-h">Contributor</div><div class="card-b ctb">${d.contributors.map((x) => {
+  const card = (title, body) => `<div class="card"><div class="card-h">${title}</div><div class="card-b">${body}</div></div>`
+  if (d.contributors.length) parts.push(card('Contributor', `<div class="ctb">${d.contributors.map((x) => {
     const av = x.avatar ? `<img src="${esc(x.avatar)}" alt="" loading="lazy">` : `<span>${initial(x.name)}</span>`
     const nm = x.website ? `<a href="${esc(x.website)}" target="_blank" rel="noopener noreferrer"><b>${esc(x.name)}</b></a>` : `<b>${esc(x.name)}</b>`
     return `<div class="ctb-i"><div class="ctb-a">${av}</div><div>${nm}<small>${esc(x.role)}</small></div></div>`
-  }).join('')}</div></div>`)
-  const ul = (title, a) => a.length ? `<div class="card"><div class="card-h">${title}</div><div class="card-b"><ul class="sk-l">${a.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div></div>` : ''
-  parts.push(ul('Thanks To', d.thanks), ul('Syarat &amp; Ketentuan', d.terms))
+  }).join('')}</div>`))
+  if (d.thanks.length) parts.push(card('Thanks To', `<ul class="sk-l">${d.thanks.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`))
+  const L = (i) => String.fromCharCode(65 + (i % 26))
+  if (d.terms.length) parts.push(card('Syarat dan Ketentuan', `<div class="tnc">${d.terms.map((t, i) => `<div class="tnc-i"><div class="tnc-t"><span>${String(i + 1).padStart(2, '0')}.</span> ${esc(t.title)}</div>
+    ${t.desc ? `<p class="tnc-d">${esc(t.desc)}</p>` : ''}${t.points.map((p, k) => `<div class="tnc-p"><span>${L(k)}.</span><div><b>${esc(p.title)}</b>${p.desc ? `<p class="tnc-d">${esc(p.desc)}</p>` : ''}</div></div>`).join('')}</div>`).join('')}</div>`))
   box.innerHTML = parts.join('')
 }
 api('/site-content').then(drawSite).catch(() => {})
