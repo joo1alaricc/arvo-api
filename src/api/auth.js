@@ -98,6 +98,8 @@ const uid = (c) => c.get('user').id
 
 auth.get('/me', (c) => c.json(c.get('user')))
 auth.get('/me/usage', async (c) => send(c, await store(c).usage(uid(c), Date.now())))
+auth.get('/me/accesskey', async (c) => send(c, await store(c).accessKeyOf(uid(c))))
+auth.post('/me/accesskey/reset', async (c) => send(c, await store(c).accessKeyOf(uid(c), true)))
 auth.get('/me/orders', async (c) => send(c, await store(c).userOrders(uid(c))))
 auth.put('/me/ips', async (c) => send(c, await store(c).setIps(uid(c), (await body(c)).ips, Date.now())))
 auth.get('/me/ips', async (c) => send(c, await store(c).listIps(uid(c))))
