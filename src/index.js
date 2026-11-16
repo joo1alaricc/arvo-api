@@ -91,6 +91,12 @@ const createApp = () => {
         })
     })
 
+    /* Konten Dashboard yang dikelola admin: Contributor, Syarat & Ketentuan, Thanks To. */
+    app.get('/api/site-content', async (c) => {
+        c.header('Cache-Control', 'no-store')
+        return c.json({ ok: true, ...(await store(c).siteContent()) })
+    })
+
     /* Endpoint buatan admin (harus paling akhir supaya tidak menimpa route bawaan). */
     app.all('/api/*', dynamicHandler(BUILTIN_PATHS))
 
