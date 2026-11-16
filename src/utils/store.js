@@ -1,6 +1,9 @@
 import { DurableObject } from 'cloudflare:workers'
 import { DEFAULT_PLANS, quote, jakartaDay } from './plans.js'
 
+/* Waktu instance Durable Object ini mulai hidup. Dipakai sebagai cadangan uptime kalau metadata versi deploy tidak tersedia. */
+const BOOT_AT = Date.now()
+
 const DAY = 864e5
 const GRACE = 10 * 60 * 1000
 const fail = (status, error, message) => ({ ok: false, status, error, message })
@@ -401,6 +404,13 @@ export class StoreDO extends DurableObject {
             pending_orders: one("SELECT COUNT(*) n FROM orders WHERE status='pending'").n,
             requests_today: one('SELECT COALESCE(SUM(count),0) n FROM usage WHERE day=?', day).n,
             top_paths: this.q('SELECT path,SUM(count) n FROM usage WHERE day=? GROUP BY path ORDER BY n DESC LIMIT 8', day) }
+    }
+    /* Statistik publik untuk halaman Dashboard (hanya angka agregat, tanpa data pribadi). */
+    publicStats(now) {
+        const one = (q, ...b) => this.q(q, ...b)[0]
+        return { ok: true, boot_at: BOOT_AT, users: one('SELECT COUNT(*) n FROM users').n,
+            requests: one('SELECT COALESCE(SUM(total),0) n FROM users').n,
+            days: this.q('SELECT day,SUM(count) n FROM usage WHERE day>=? GROUP BY day ORDER BY day', jakartaDay(now - 13 * 864e5)) }
     }
     adminUsers(search, now) {
         const l = `%${search || ''}%`
