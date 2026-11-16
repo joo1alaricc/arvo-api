@@ -59,6 +59,25 @@ const createApp = () => {
         return c.json(rank === 3 && warn.length ? { ...doc, warnings: warn } : doc)
     })
 
+    /* Statistik publik untuk halaman Dashboard. Hanya angka agregat; tidak mengurangi limit. */
+    app.get('/api/dashboard', async (c) => {
+        const now = Date.now()
+        let ov = {}
+        try { ov = (await getOverrides(c)) || {} } catch {}
+        const list = builtinInfo().map((e) => { const o = ov[e.path]; return o ? { ...e, access: o.access || e.access, status: o.status || e.status } : e })
+        try { const r = await store(c).listEndpoints(); if (r && r.ok !== false) list.push(...(r.endpoints || [])) } catch {}
+        const s = await store(c).publicStats(now)
+        /* uptime = waktu sejak versi Worker terakhir di-deploy; kalau metadata tidak ada, sejak Durable Object terakhir hidup */
+        const deployed = Date.parse(c.env.CF_VERSION_METADATA?.timestamp || '')
+        const since = Number.isFinite(deployed) ? deployed : s.boot_at
+        c.header('Cache-Control', 'public, max-age=20')
+        return c.json({
+            requests: s.requests, users: s.users,
+            endpoints: list.filter((e) => e.status !== 'offline' && e.access !== 'owner').length,
+            uptime_ms: Math.max(0, now - since), days: s.days,
+        })
+    })
+
     /* Endpoint buatan admin (harus paling akhir supaya tidak menimpa route bawaan). */
     app.all('/api/*', dynamicHandler(BUILTIN_PATHS))
 
