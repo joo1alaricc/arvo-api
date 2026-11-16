@@ -22,7 +22,7 @@ body{animation-duration:.6s;animation-fill-mode:backwards}
 .hero>*:nth-child(n){animation-timing-function:var(--ease)}
 
 /* ---- tekan & lepas: turun cepat, kembali dengan pegas ---- */
-.btn,.nb,.ib,.chips button,.tabs button,.seg button,.tile,.field,.links a,.dr-nav a,summary{-webkit-user-select:none;user-select:none}
+.btn,.nb,.ib,.chips button,.tabs button,.seg button,.tile,.field,.links a,.dr-it,.dr-gh,summary{-webkit-user-select:none;user-select:none}
 .btn{transition:transform .55s var(--spring),filter .25s,background-color .25s,box-shadow .4s var(--ease),opacity .25s,border-color .25s}
 .btn:active{transform:scale(.95);transition-duration:.12s,.25s,.25s,.4s,.25s,.25s}
 .nb{transition:transform .55s var(--spring),background-color .25s,border-color .25s,color .25s}
