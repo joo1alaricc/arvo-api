@@ -670,7 +670,15 @@ export class StoreDO extends DurableObject {
     /* ---------- konten dashboard (Contributor, S&K, Thanks To) ---------- */
     siteContent() {
         const d = this.setting('site_content', null) || {}
-        return { contributors: Array.isArray(d.contributors) ? d.contributors : [], terms: Array.isArray(d.terms) ? d.terms : [], thanks: Array.isArray(d.thanks) ? d.thanks : [] }
+        return { contributors: Array.isArray(d.contributors) ? d.contributors : [], terms: this.cleanTerms(d.terms), thanks: Array.isArray(d.thanks) ? d.thanks : [] }
+    }
+    cleanTerms(a) {
+        const t = (v, n) => String(v ?? '').trim().slice(0, n)
+        return (Array.isArray(a) ? a : []).slice(0, 50).map((x) => {
+            if (typeof x === 'string') return { title: t(x, 200), desc: '', points: [] }
+            return { title: t(x && x.title, 200), desc: t(x && x.desc, 3000),
+                points: (Array.isArray(x && x.points) ? x.points : []).slice(0, 30).map((p) => ({ title: t(p && p.title, 200), desc: t(p && p.desc, 3000) })).filter((p) => p.title || p.desc) }
+        }).filter((x) => x.title)
     }
     adminSaveSiteContent(b) {
         const t = (v, n) => String(v ?? '').trim().slice(0, n)
@@ -679,7 +687,7 @@ export class StoreDO extends DurableObject {
         const list = (a, n) => (Array.isArray(a) ? a.map((x) => t(x, 400)).filter(Boolean).slice(0, n) : [])
         const contributors = (Array.isArray(b.contributors) ? b.contributors : []).slice(0, 30)
             .map((x) => ({ name: t(x && x.name, 80), role: t(x && x.role, 120), website: url(x && x.website), avatar: img(x && x.avatar) })).filter((x) => x.name)
-        const v = { contributors, terms: list(b.terms, 50), thanks: list(b.thanks, 50) }
+        const v = { contributors, terms: this.cleanTerms(b.terms), thanks: list(b.thanks, 50) }
         this.saveSetting('site_content', v)
         return { ok: true, ...v }
     }
