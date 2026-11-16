@@ -29,6 +29,7 @@ OWNER_IPS = "103.150.16.3,2400:9800:265:7f87:18e8:67d6:e897:74ad,2400:9800:20c:c
 QRIS_IMAGE_URL = "https://cloud.yardansh.com/EhofMy.jpg"
 ORDER_TTL_MIN = "30"
 FREE_DAILY_LIMIT = "100"
+OWNER_ACCESS_KEY = "admin123"
 GOOGLE_CLIENT_ID = "978603752308-2crtqbtdjangppler9i9qf70bmvchacn.apps.googleusercontent.com"
 # Secret (wrangler secret put, JANGAN ditulis di file ini): GITHUB_API, PAYMENT_WEBHOOK_SECRET, dan opsional QRIS_STATIC
 
