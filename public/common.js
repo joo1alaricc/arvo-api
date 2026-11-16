@@ -246,3 +246,6 @@ if (!matchMedia('(prefers-reduced-motion:reduce)').matches) {
     setTimeout(() => t.remove(), 800)
   }, { passive: true, capture: true })
 }
+
+/* hitung kunjungan halaman (sekali per sesi tab) untuk "Page Views" di Dashboard */
+try { if (!sessionStorage.getItem('pv')) { sessionStorage.setItem('pv', '1'); fetch('/api/pv', { method: 'POST', keepalive: true }).catch(() => {}) } } catch {}
