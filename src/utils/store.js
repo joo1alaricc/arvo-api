@@ -48,6 +48,7 @@ export class StoreDO extends DurableObject {
         { user_id: ['uid', 'userid', 'user', 'owner_id'], total: ['amount', 'price'], created_at: ['created', 'ts', 'time'] })
         for (const col of ['phone', 'bio', 'avatar_url', 'banner_url', 'reg_ip', 'last_ip', 'avatar_data', 'avatar_ver', 'stack', 'border_colors']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`) } catch {} }
         try { this.sql.exec('ALTER TABLE users ADD COLUMN last_seen INTEGER') } catch {}
+        try { this.sql.exec('ALTER TABLE users ADD COLUMN access_key TEXT') } catch {}
         if (!this.q('SELECT 1 FROM plans LIMIT 1').length) {
             DEFAULT_PLANS.forEach((p, i) => this.sql.exec('INSERT INTO plans VALUES(?,?,?,?,?,?,?,?,?,1,?)', p.id, p.tier, p.name, p.daily, p.maxIps, p.customKey ? 1 : 0, p.baseDays, p.basePrice, p.permanentPrice, i))
         }
@@ -410,6 +411,7 @@ export class StoreDO extends DurableObject {
         const one = (q, ...b) => this.q(q, ...b)[0]
         return { ok: true, boot_at: BOOT_AT, users: one('SELECT COUNT(*) n FROM users').n,
             requests: one('SELECT COALESCE(SUM(total),0) n FROM users').n,
+            page_views: this.setting('page_views', 0), blocked: one('SELECT COUNT(*) n FROM blocked_ips').n,
             days: this.q('SELECT day,SUM(count) n FROM usage WHERE day>=? GROUP BY day ORDER BY day', jakartaDay(now - 13 * 864e5)) }
     }
     adminUsers(search, now) {
@@ -613,6 +615,53 @@ export class StoreDO extends DurableObject {
         return { ok: true, id: u.id, username: u.username }
     }
     removeAdmin(id) { this.sql.exec('DELETE FROM admins WHERE user_id=?', id); return { ok: true } }
+
+    /* ---------- Status & Info: hitungan kunjungan halaman ---------- */
+    pageHit() { this.saveSetting('page_views', this.setting('page_views', 0) + 1); return { ok: true } }
+
+    /* ---------- Access Key (khusus admin/owner) ----------
+     * API key biasa = milik user (limit, whitelist IP). Access key = kunci terpisah untuk endpoint/panel yang butuh role admin/owner.
+     * Super admin tanpa akun bisa memakai secret OWNER_ACCESS_KEY (wrangler secret put OWNER_ACCESS_KEY). */
+    accessKeyOf(id, reset = false) {
+        if (!this.isAdmin(id)) return fail(403, 'not_admin', 'Access key khusus admin.')
+        let k = this.user(id).access_key
+        if (!k || reset) { k = 'Acc-' + hex(12); this.sql.exec('UPDATE users SET access_key=? WHERE id=?', k, id) }
+        return { ok: true, access_key: k }
+    }
+    verifyAccess(key) {
+        key = String(key || '').trim()
+        const bad = fail(401, 'invalid_access_key', 'Access key tidak valid.')
+        if (!key) return bad
+        const env = this.env?.OWNER_ACCESS_KEY
+        if (env && key === String(env)) return { ok: true, level: 'super', name: 'owner', id: null }
+        const [u] = this.q('SELECT id,username FROM users WHERE access_key=?', key)
+        return u && this.isAdmin(u.id) ? { ok: true, level: 'admin', name: u.username, id: u.id } : bad
+    }
+
+    /* ---------- Cek API key (publik): type = apikey | accesskey ---------- */
+    checkKey(type, key, ip, now) {
+        key = String(key || '').trim()
+        if (!key) return fail(400, 'bad_request', 'Isi key dulu.')
+        let u
+        if (type === 'accesskey') {
+            const v = this.verifyAccess(key)
+            if (v.ok === false) { this.flag(null, ip, '/api/checkkey', 'key', now); return v }
+            if (v.id === null) return { ok: true, status: 200, result: { apikey: key, defaultapikey: null, email: null, nomor: null, username: 'owner', admin: true, limit: null, role: 'Owner', expired: 'Permanent', todayHit: 0, totalHit: 0, dataIP: [] } }
+            u = this.user(v.id)
+        } else {
+            u = this.q('SELECT * FROM users WHERE api_key=?', key)[0]
+            if (!u) { this.flag(null, ip, '/api/checkkey', 'key', now); return fail(401, 'invalid_api_key', 'API key tidak valid.') }
+        }
+        const p = this.pub(u, now), admin = this.isAdmin(u.id), white = new Set(p.ips)
+        const expired = p.active ? (u.expires_at ? new Date(u.expires_at).toISOString() : 'Permanent') : p.expired ? 'Expired' : 'No Subscription Found'
+        return { ok: true, status: 200, result: {
+            apikey: key, defaultapikey: u.api_key, email: u.email || null, nomor: u.phone || null, username: u.username, admin,
+            limit: p.daily_limit, role: admin && type === 'accesskey' ? 'Admin' : p.active ? p.plan_name : 'Free User', expired,
+            todayHit: p.used_today, totalHit: u.total || 0,
+            dataIP: this.q('SELECT ip,src,first_at,last_at,hits FROM seen_ips WHERE user_id=? ORDER BY last_at DESC LIMIT 50', u.id).map((r) => ({
+                whitelisted: white.has(r.ip), isBypass: false, accessType: r.src === 'api' ? 'server' : 'web', ip: r.ip, count: r.hits,
+                createdAt: new Date(r.first_at).toISOString(), lastUsed: new Date(r.last_at).toISOString() })) } }
+    }
 
     /* ---------- QRIS statis (payload teks hasil baca gambar QR) ---------- */
     getQrisStatic() { return this.setting('qris_static', null) }
