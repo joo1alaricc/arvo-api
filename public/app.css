@@ -236,3 +236,18 @@ svg.i.gi{stroke:none}
 .tnc-a textarea{width:100%;margin-top:6px}
 .tnc-sub{margin:8px 0 0 14px;padding-left:10px;border-left:2px solid var(--line)}
 .tnc-sub .cx-r{align-items:flex-start}
+
+/* Syarat & Ketentuan: bisa dibuka/tutup */
+.tnc-tg{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;-webkit-tap-highlight-color:transparent}
+.tnc-tg:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:6px}
+.tnc-t.tnc-tg{font-weight:700;font-size:15px;color:inherit}
+.tnc-pt{font-size:14px}.tnc-pt b{font-weight:700}
+.tnc-cv{flex:none;color:var(--mut);transition:transform .25s ease}
+.tnc-tg:hover .tnc-cv{color:inherit}
+.open>.tnc-tg .tnc-cv,.open>.tnc-pw>.tnc-tg .tnc-cv{transform:rotate(180deg)}
+.tnc-c{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s ease}
+.tnc-ci{overflow:hidden;min-height:0}
+.open>.tnc-c,.open>.tnc-pw>.tnc-c{grid-template-rows:1fr}
+.tnc-pw{flex:1;min-width:0}
+.tnc-x>.tnc-c>.tnc-ci{padding-top:2px}
+@media(prefers-reduced-motion:reduce){.tnc-c,.tnc-cv{transition:none}}
