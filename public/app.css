@@ -178,3 +178,33 @@ svg.i.gi{stroke:none}
 .stat.skel b{color:transparent;background:color-mix(in srgb,var(--mut) 18%,transparent);border-radius:8px;width:7ch}
 .dash h1{font-size:22px;margin:4px 0 2px}.dash>.sub{margin:0 0 14px}
 .rm-sum{margin-top:6px}
+
+/* ---------- Dashboard: Status & Info API + Cek Apikey ---------- */
+.dg2{margin-bottom:12px}
+.dg2>.card{animation-delay:.05s}
+.kv{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid var(--line);font-size:14px}
+.kv:first-child{padding-top:2px}.kv:last-child{border-bottom:0;padding-bottom:2px}
+.kv>span:first-child{color:var(--mut);flex:none}.kv>b{font-weight:700;text-align:right;min-width:0;overflow-wrap:anywhere}
+.kv code{font:500 12.5px 'JetBrains Mono',monospace;color:var(--ac);overflow-wrap:anywhere}
+.kv .badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 11px}
+.kv .badge .dot{width:6px;height:6px;background:currentColor;animation:none}
+.kv .badge.bad{background:color-mix(in srgb,var(--bad) 14%,transparent)}.kv .badge.online{background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.ck-f{margin-bottom:12px}.ck-f label{display:block;font-size:12.5px;color:var(--mut);margin-bottom:5px}.ck-f input,.ck-f select{width:100%;padding:10px 12px}
+.ck-f input{font-family:'JetBrains Mono',monospace}
+#ckb{margin-top:2px}
+#mykey{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+#mykey small{display:block;font-size:12px;color:var(--mut);margin-bottom:6px}
+#mykey .kline code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font-size:12.5px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg);scrollbar-width:none}
+#mykey .kline code::-webkit-scrollbar{display:none}
+.ck-res{animation:rise .4s var(--ease) both}
+.ck-id{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.ck-id .ico{width:44px;height:44px;border-radius:12px;flex:none;color:var(--ac);background:color-mix(in srgb,var(--ac) 14%,transparent);display:grid;place-items:center}
+.ck-id b{display:block;font-size:16px}.ck-id small{color:var(--mut);font-size:12.5px;overflow-wrap:anywhere}
+.ck-id .badge{margin-left:auto}
+.ck-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+.ck-h{font-size:12.5px;font-weight:700;color:var(--mut);margin:14px 0 8px}
+.ck-ips{display:grid;gap:8px}
+.ck-ip{border:1px solid var(--line);border-radius:11px;padding:10px 12px;display:grid;gap:6px;background:color-mix(in srgb,var(--bg) 60%,var(--card))}
+.ck-ip>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ck-ip code{font:500 13px 'JetBrains Mono',monospace}
+.ck-ip small{color:var(--mut);font-size:11.5px}.ck-ip .sp{margin-left:auto}
