@@ -22,7 +22,7 @@ GITHUB_REPO = "joo1alaricc/arvo-api"
 GITHUB_BRANCH = "main"
 GITHUB_API = "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"
 # IP owner (pisah koma): tanpa limit + akses panel admin. Isi IP publik kamu!
-OWNER_IPS = "103.150.16.3"
+OWNER_IPS = "103.150.16.3,2400:9800:265:7f87:18e8:67d6:e897:74ad"
 QRIS_IMAGE_URL = "https://cloud.yardansh.com/EhofMy.jpg"
 ORDER_TTL_MIN = "30"
 FREE_DAILY_LIMIT = "100"
