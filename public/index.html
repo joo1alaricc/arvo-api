@@ -6,9 +6,47 @@
 <title>Arvo - API Gateway</title>
 <meta name="description" content="API simpel dan cepat. Mulai gratis, upgrade ke Premium atau VIP kapan saja.">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="site.css?v=20261115a"><link rel="stylesheet" href="motion.css?v=20261115a">
+<link rel="stylesheet" href="site.css?v=4a1a870c"><link rel="stylesheet" href="motion.css?v=c1a6db75">
+<script>
+/* Splash hanya saat web dibuka / di-refresh. Pindah dari halaman lain di dalam situs (mis. /playground -> beranda) dan tombol back tidak memicunya. */
+(function(){var h=document.documentElement,n=performance.getEntriesByType&&performance.getEntriesByType('navigation')[0],t=n&&n.type,same=false;
+try{same=!!document.referrer&&new URL(document.referrer).origin===location.origin}catch(e){}
+var fresh=t==='reload'||(t!=='back_forward'&&!same);window.__fresh=fresh;
+if(fresh&&!matchMedia('(prefers-reduced-motion:reduce)').matches){h.classList.add('splash-on');setTimeout(function(){h.classList.remove('splash-on')},9000)}else{h.classList.add('no-splash')}})();
+</script>
+<style id="splash-css">
+html.splash-on{overflow:hidden}
+html.no-splash #splash{display:none}
+#splash{position:fixed;inset:0;z-index:2147483600;display:grid;place-items:center;background:#05060a;color:#fff;font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;transition:opacity .75s ease,filter .75s ease,visibility 0s .75s;animation:spFail .01s 9s forwards}
+#splash.out{opacity:0;visibility:hidden;filter:blur(10px);pointer-events:none}
+@keyframes spFail{to{opacity:0;visibility:hidden;pointer-events:none}}
+#splash::before{content:"";position:absolute;inset:0;background:radial-gradient(60% 40% at 50% 46%,rgba(124,140,255,.16),transparent 70%),linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px) 0 0/44px 44px,linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/44px 44px;-webkit-mask-image:radial-gradient(70% 55% at 50% 48%,#000,transparent 85%);mask-image:radial-gradient(70% 55% at 50% 48%,#000,transparent 85%);pointer-events:none}
+.sp-in{position:relative;display:grid;justify-items:center;gap:40px;width:min(78vw,300px);transition:transform .9s cubic-bezier(.22,1,.36,1)}
+#splash.out .sp-in{transform:scale(1.1)}
+.sp-logo{width:100%;height:auto;overflow:visible;transition:filter .8s ease}
+.sp-logo.done{filter:drop-shadow(0 0 22px rgba(124,140,255,.55))}
+.sp-ghost{fill:none;stroke:#2b3040;stroke-width:1.3;stroke-linejoin:round}
+.sp-line{fill:none;stroke:#fff;stroke-width:1.9;stroke-linejoin:round;stroke-linecap:round;filter:drop-shadow(0 0 2.5px #fff) drop-shadow(0 0 7px rgba(124,140,255,.95))}
+.sp-fill{fill:url(#spg);fill-opacity:0;stroke:none}
+.sp-dot{fill:#fff;opacity:0;filter:drop-shadow(0 0 3px #fff) drop-shadow(0 0 9px #7c8cff)}
+.sp-bar{width:100%;display:grid;gap:10px}
+.sp-top{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:600;letter-spacing:.03em;color:#9aa3b5}
+.sp-top b{font-weight:600;font-variant-numeric:tabular-nums;color:#c9d0e0}
+.sp-track{height:4px;border-radius:9px;background:#1a1f2d;overflow:hidden}
+.sp-fillbar{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,#7c8cff,#e16bff);box-shadow:0 0 14px rgba(124,140,255,.75)}
+</style>
 </head>
 <body>
+<div id="splash" role="status" aria-live="polite" aria-label="Memuat Arvo"><div class="sp-in">
+  <svg class="sp-logo" viewBox="-4 -4 108 78.9" aria-hidden="true">
+    <defs><linearGradient id="spg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cfd6ff"/></linearGradient></defs>
+    <path class="sp-ghost" d="M40.6 0.5L0.1 70.9L14.2 70.9L40.5 25.6L41.7 27.3L56.0 27.3Z"/><path class="sp-ghost" d="M49.3 0.0L56.4 12.5L85.2 12.4L85.5 12.9L72.7 34.9L43.4 34.9L36.3 47.3L53.1 47.4L66.8 70.9L81.1 70.9L67.9 47.5L80.1 47.2L100.0 12.4L92.8 0.0Z"/>
+    <path class="sp-fill" id="spfa" d="M40.6 0.5L0.1 70.9L14.2 70.9L40.5 25.6L41.7 27.3L56.0 27.3Z"/><path class="sp-fill" id="spfr" d="M49.3 0.0L56.4 12.5L85.2 12.4L85.5 12.9L72.7 34.9L43.4 34.9L36.3 47.3L53.1 47.4L66.8 70.9L81.1 70.9L67.9 47.5L80.1 47.2L100.0 12.4L92.8 0.0Z"/>
+    <path class="sp-line" id="spla" d="M40.6 0.5L0.1 70.9L14.2 70.9L40.5 25.6L41.7 27.3L56.0 27.3Z"/><path class="sp-line" id="splr" d="M49.3 0.0L56.4 12.5L85.2 12.4L85.5 12.9L72.7 34.9L43.4 34.9L36.3 47.3L53.1 47.4L66.8 70.9L81.1 70.9L67.9 47.5L80.1 47.2L100.0 12.4L92.8 0.0Z"/>
+    <circle class="sp-dot" id="spda" r="1.7"/><circle class="sp-dot" id="spdr" r="1.7"/>
+  </svg>
+  <div class="sp-bar"><div class="sp-top"><span id="spt">Menginisiasi sistem...</span><b id="spp">0%</b></div><div class="sp-track"><i class="sp-fillbar" id="spf"></i></div></div>
+</div></div>
 
 <main>
 <div class="herobox" id="herobox">
@@ -57,8 +95,9 @@
 
 
 <dialog id="pay"><div id="paybody"></div><button class="btn ghost" id="payclose">Tutup</button></dialog>
-<script src="common.js?v=20261115a"></script>
-<script src="site.js?v=20261115a"></script>
-<script src="welcome.js?v=20261115a"></script>
+<script src="common.js?v=ecb333a7"></script>
+<script src="splash.js?v=a55d8701"></script>
+<script src="site.js?v=208337b6"></script>
+<script src="welcome.js?v=0b4948b4"></script>
 </body>
 </html>
