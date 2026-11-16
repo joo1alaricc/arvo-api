@@ -49,7 +49,7 @@ const drawInfo = (d) => {
 }
 
 /* ---------- Cek Apikey ---------- */
-const KT = { apikey: ['API Key', 'Btz-xxxxxx'], accesskey: ['Access Key', 'Acc-xxxxxxxxxxxx'] }
+const KT = { apikey: ['API Key', 'arvo_xxxxxx'], accesskey: ['Access Key', 'acc_xxxxxxxxxxxx'] }
 $('#ckt').onchange = () => { const [l, ph] = KT[$('#ckt').value]; $('#ckl').textContent = l; $('#ckk').placeholder = ph; $('#ckr').innerHTML = ''; say($('#ckm'), '') }
 const fmtLimit = (n) => (n === null || n === undefined ? 'Unlimited' : nf(n))
 const fmtExp = (v) => (/^\d{4}-\d{2}-\d{2}T/.test(v) ? fmtDate(v) : v === 'Permanent' ? 'Permanen' : v === 'Expired' ? 'Kedaluwarsa' : v === 'No Subscription Found' ? 'Belum berlangganan' : v)
