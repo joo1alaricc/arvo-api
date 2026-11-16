@@ -48,8 +48,14 @@ const NI = {
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>', sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>', shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
   user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  home: '<path d="m3 10.5 9-7.5 9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>', compass: '<circle cx="12" cy="12" r="10"/><path d="m16 8-2.5 5.5L8 16l2.5-5.5z"/>',
+  code: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', up: '<path d="m6 15 6-6 6 6"/>',
 }
 const ni = (n) => `<svg viewBox="0 0 24 24" aria-hidden="true">${NI[n]}</svg>`
+const DR_GROUPS = [   /* [judul grup, ikon, [[href, label, ikon], ...]] */
+  ['Utama', 'compass', [['/', 'Beranda', 'home'], ['/#paket', 'Paket', 'bag'], ['/#cara', 'Cara kerja', 'list'], ['/#faq', 'FAQ', 'help']]],
+  ['Developer', 'code', [['/playground.html', 'Playground', 'play']]],
+]
 const LINKS = [['/#paket', 'Paket', 'bag'], ['/#cara', 'Cara kerja', 'list'], ['/playground.html', 'Playground', 'play'], ['/#faq', 'FAQ', 'help']]
 
 /* header & footer dipakai semua halaman */
@@ -64,7 +70,10 @@ document.body.insertAdjacentHTML('beforeend', `<footer><div class="wrap foot"><b
 /* ---------- drawer menu: meluncur dari kiri, ikon garis tiga berubah jadi silang ---------- */
 document.body.insertAdjacentHTML('beforeend', `<div class="dr-bd" id="drbd"></div>
 <aside class="dr" id="dr" aria-label="Menu navigasi" aria-hidden="true" inert>
-  <nav class="dr-nav" id="drnav">${LINKS.map(([h, t, ic], i) => `<a href="${h}" style="--i:${i}"><span class="dr-ic">${ni(ic)}</span><span>${t}</span></a>`).join('')}<span id="drme" style="display:contents"></span></nav>
+  <nav class="dr-nav" id="drnav">${DR_GROUPS.map(([g, gi, items], gx) => `<section class="dr-g open" style="--i:${gx * 3}">
+      <button type="button" class="dr-gh" aria-expanded="true"><span class="dr-gic">${ni(gi)}</span><span>${g}</span>${ni('up')}</button>
+      <div class="dr-gb"><div class="dr-gl">${items.map(([h, t, ic]) => `<a class="dr-it" href="${h}"><span class="dr-ic">${ni(ic)}</span><span>${t}</span>${ni('check')}</a>`).join('')}</div></div></section>`).join('')}
+    <hr class="dr-hr"><div class="dr-loose" id="drme"></div></nav>
   <div class="dr-card">
     <div class="dr-row"><span>Tampilan</span><button type="button" class="dr-sw" id="drtheme" role="switch" aria-label="Mode gelap"><i></i><b></b></button></div>
     <a class="dr-row dr-soc" href="${WA_LINK}" target="_blank" rel="noopener noreferrer"><span class="dr-sic wa"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="${WA_PATH}"/></svg></span><span class="dr-st"><b>Ikuti saluran</b><small>Saluran WhatsApp resmi</small></span>${ni('chev')}</a>
@@ -116,36 +125,76 @@ addEventListener('resize', () => { if (innerWidth > 760) drawer(false) })
 .dr,.dr-bd{display:none}
 @media(max-width:760px){
 html.dr-lock{overflow:hidden}
-.dr-bd{display:block;position:fixed;left:0;right:0;bottom:0;top:var(--navh,53px);z-index:49;background:rgba(0,0,0,.55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);opacity:0;visibility:hidden;transition:opacity .45s var(--ease,ease),visibility 0s .45s}
+.dr-bd{display:block;position:fixed;left:0;right:0;bottom:0;top:var(--navh,53px);z-index:49;background:rgba(0,0,0,.38);opacity:0;visibility:hidden;transition:opacity .45s var(--ease,ease),visibility 0s .45s}
 .dr-bd.open{opacity:1;visibility:visible;transition:opacity .45s var(--ease,ease),visibility 0s}
-.dr{display:flex;flex-direction:column;position:fixed;left:0;top:var(--navh,53px);bottom:0;width:min(82vw,320px);z-index:50;background:var(--card,#151a23);color:var(--tx,#e8ecf3);border-right:1px solid var(--line,#242b38);border-radius:0 22px 22px 0;overscroll-behavior:contain;transform:translate3d(-102%,0,0);visibility:hidden;transition:transform .55s cubic-bezier(.32,.72,0,1),visibility 0s .55s,box-shadow .55s}
-.dr.open{transform:none;visibility:visible;box-shadow:22px 0 60px -24px #000c;transition:transform .55s cubic-bezier(.32,.72,0,1),visibility 0s,box-shadow .55s}
-.dr-nav{flex:1;min-height:0;overflow:auto;display:grid;align-content:start;gap:4px;padding:16px 12px 8px}
-.dr-nav a{display:flex;align-items:center;gap:14px;padding:11px 10px;border-radius:14px;color:var(--mut,#8b95a7);font-weight:600;font-size:16px;text-decoration:none;opacity:0;transform:translate3d(-20px,0,0);transition:transform .5s var(--ease,ease),opacity .35s,background-color .2s,color .2s}
-.dr.open .dr-nav a{opacity:1;transform:none;transition-delay:calc(var(--i,0)*45ms + 110ms),calc(var(--i,0)*45ms + 110ms),0s,0s}
-.dr-nav a:hover,.dr-nav a:active,.dr-nav a.on{color:var(--tx,#e8ecf3);background:color-mix(in srgb,var(--mut,#8b95a7) 12%,transparent)}
-.dr-ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:none;background:color-mix(in srgb,var(--mut,#8b95a7) 14%,transparent)}
-.dr-ic svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.dr-card{margin:8px 12px calc(14px + env(safe-area-inset-bottom,0px));border:1px solid var(--line,#242b38);border-radius:18px;padding:2px 14px;background:color-mix(in srgb,var(--tx,#e8ecf3) 3%,transparent);opacity:0;transform:translate3d(0,14px,0);transition:transform .55s var(--ease,ease) .2s,opacity .4s .2s}
+.dr{display:flex;flex-direction:column;position:fixed;left:0;top:var(--navh,53px);bottom:0;width:min(68vw,268px);z-index:50;background:color-mix(in srgb,var(--bg,#0d1016) 52%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(24px);backdrop-filter:saturate(1.8) blur(24px);color:var(--tx,#e8ecf3);border-right:1px solid var(--line,#242b38);border-radius:0 20px 20px 0;overscroll-behavior:contain;transform:translate3d(-102%,0,0);visibility:hidden;transition:transform .55s cubic-bezier(.32,.72,0,1),visibility 0s .55s,box-shadow .55s}
+.dr.open{transform:none;visibility:visible;box-shadow:18px 0 50px -26px #000c;transition:transform .55s cubic-bezier(.32,.72,0,1),visibility 0s,box-shadow .55s}
+.dr-nav{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:8px 8px 4px}
+.dr-g,.dr-loose>*{opacity:0;transform:translate3d(-14px,0,0);transition:transform .5s var(--ease,ease),opacity .35s}
+.dr.open .dr-g,.dr.open .dr-loose>*{opacity:1;transform:none;transition-delay:calc(var(--i,0)*45ms + 90ms),calc(var(--i,0)*45ms + 90ms)}
+.dr-gh{display:flex;align-items:center;gap:10px;width:100%;padding:9px 8px;border:0;background:none;color:var(--tx,#e8ecf3);font:700 14px/1.2 inherit;font-family:inherit;cursor:pointer;text-align:left;border-radius:10px;-webkit-tap-highlight-color:transparent}
+.dr-gh>span:nth-child(2){flex:1}
+.dr-gic{width:20px;height:20px;display:grid;place-items:center;flex:none}
+.dr-gh svg{width:16px;height:16px;fill:none;stroke:var(--mut,#8b95a7);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;flex:none;transition:transform .35s var(--ease,ease)}
+.dr-gic svg{width:18px;height:18px;stroke:currentColor}
+.dr-g:not(.open) .dr-gh>svg:last-child{transform:rotate(180deg)}
+.dr-gb{display:grid;grid-template-rows:0fr;transition:grid-template-rows .4s var(--ease,ease)}
+.dr-g.open .dr-gb{grid-template-rows:1fr}
+.dr-gl{overflow:hidden;min-height:0;padding:0 0 0 12px}
+.dr-it{position:relative;display:flex;align-items:center;gap:10px;margin-top:2px;padding:0 8px;height:38px;border-radius:11px;border:1px solid transparent;color:var(--mut,#8b95a7);font-weight:600;font-size:13.5px;text-decoration:none;-webkit-tap-highlight-color:transparent;transition:background-color .2s,color .2s,border-color .2s}
+.dr-it:first-child{margin-top:0}
+.dr-it::after{content:"";position:absolute;left:36px;right:0;bottom:-1.5px;height:1px;background:var(--line,#242b38);transform:scaleY(.5);transform-origin:bottom;pointer-events:none}
+.dr-it:last-child::after,.dr-it.on::after,.dr-it:has(+ .dr-it.on)::after{opacity:0}
+.dr-it:active{background:color-mix(in srgb,var(--mut,#8b95a7) 14%,transparent)}
+.dr-it.on{color:var(--tx,#e8ecf3);background:color-mix(in srgb,var(--tx,#e8ecf3) 7%,transparent);border-color:color-mix(in srgb,var(--tx,#e8ecf3) 14%,transparent)}
+.dr-ic{width:20px;height:20px;display:grid;place-items:center;flex:none}
+.dr-ic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.dr-it>span:nth-child(2){flex:1;min-width:0;white-space:nowrap}
+.dr-it>svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;flex:none;opacity:0;transform:scale(.6);transition:opacity .25s,transform .35s var(--ease,ease)}
+.dr-it.on>svg{opacity:1;transform:none}
+.dr-hr{border:0;height:1px;margin:8px 8px 6px;background:var(--line,#242b38);transform:scaleY(.5);flex:none}
+.dr-loose{display:flex;flex-direction:column}
+.dr-loose .dr-it{height:40px;margin-top:0;padding:0 8px}
+.dr-loose .dr-it::after{left:36px}
+.dr-loose .dr-it .dr-ic svg{width:19px;height:19px}
+.dr-card{margin:6px 8px calc(10px + env(safe-area-inset-bottom,0px));border:1px solid var(--line,#242b38);border-radius:16px;padding:0 12px;background:color-mix(in srgb,var(--tx,#e8ecf3) 3%,transparent);opacity:0;transform:translate3d(0,12px,0);transition:transform .55s var(--ease,ease) .2s,opacity .4s .2s}
 .dr.open .dr-card{opacity:1;transform:none}
-.dr-row{display:flex;align-items:center;gap:12px;padding:12px 0;font-size:14px;font-weight:600;color:var(--tx,#e8ecf3);text-decoration:none}
-.dr-row+.dr-row{border-top:1px solid var(--line,#242b38)}
+.dr-row{position:relative;display:flex;align-items:center;gap:10px;padding:9px 0;font-size:13px;font-weight:600;color:var(--tx,#e8ecf3);text-decoration:none}
+.dr-row+.dr-row::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--line,#242b38);transform:scaleY(.5);transform-origin:top}
+.dr-soc::before{left:42px!important}
 .dr-row>span:first-child:not(.dr-sic){flex:1}
-.dr-sw{display:flex;align-items:center;gap:9px;border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:0}
-.dr-sw i{position:relative;width:44px;height:26px;border-radius:99px;background:color-mix(in srgb,var(--mut,#8b95a7) 35%,transparent);transition:background-color .3s;flex:none}
-.dr-sw i::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 4px #0006;transition:transform .45s cubic-bezier(.34,1.5,.64,1)}
-.dr-sw[aria-checked=true] i{background:var(--ac,#7c8cff)}.dr-sw[aria-checked=true] i::after{transform:translateX(18px)}
-.dr-sw b{min-width:38px;text-align:left;font-style:italic}
-.dr-sic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none;color:#fff}.dr-sic svg{width:19px;height:19px}
+.dr-sw{display:flex;align-items:center;gap:8px;border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:0}
+.dr-sw i{position:relative;width:40px;height:24px;border-radius:99px;background:color-mix(in srgb,var(--mut,#8b95a7) 35%,transparent);transition:background-color .3s;flex:none}
+.dr-sw i::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 4px #0006;transition:transform .45s cubic-bezier(.34,1.5,.64,1)}
+.dr-sw[aria-checked=true] i{background:var(--ac,#7c8cff)}.dr-sw[aria-checked=true] i::after{transform:translateX(16px)}
+.dr-sw b{min-width:34px;text-align:left;font-style:italic;font-size:13px}
+.dr-sic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none;color:#fff}.dr-sic svg{width:17px;height:17px}
 .dr-sic.wa{background:#25d366}.dr-sic.ig{background:linear-gradient(45deg,#f9ce34,#ee2a7b 55%,#6228d7)}
-.dr-st{flex:1;min-width:0;display:grid;line-height:1.25}.dr-st small{color:var(--mut,#8b95a7);font-weight:500;font-size:12px}
-.dr-soc>svg{width:16px;height:16px;fill:none;stroke:var(--mut,#8b95a7);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.dr-st{flex:1;min-width:0;display:grid;line-height:1.25}.dr-st b{font-size:13px}.dr-st small{color:var(--mut,#8b95a7);font-weight:500;font-size:11.5px}
+.dr-soc>svg{width:15px;height:15px;fill:none;stroke:var(--mut,#8b95a7);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
 }
-@media(prefers-reduced-motion:reduce){.dr,.dr-bd,.dr-nav a,.dr-card,.burger,.burger path{transition-duration:.01s!important;transition-delay:0s!important}}`
+@media(prefers-reduced-motion:reduce){.dr,.dr-bd,.dr-g,.dr-loose>*,.dr-gb,.dr-it,.dr-card,.burger,.burger path{transition-duration:.01s!important;transition-delay:0s!important}}`
   document.head.append(st)
 }
 document.querySelectorAll('.links a').forEach((a) => { if (a.pathname === location.pathname && !a.hash) a.classList.add('on') })
 syncTheme()
+
+/* item drawer yang sesuai halaman aktif diberi kotak + centang; grup bisa dilipat */
+const drNorm = (p) => p.replace(/\.html$/, '').replace(/\/$/, '') || '/'
+const drActive = () => {
+  const links = [...document.querySelectorAll('#drnav a.dr-it')].map((a) => ({ a, u: new URL(a.href) }))
+  const hashes = links.map(({ u }) => u.hash).filter(Boolean)
+  links.forEach(({ a, u }) => {
+    const on = drNorm(u.pathname) === drNorm(location.pathname) && (u.hash ? u.hash === location.hash : !hashes.includes(location.hash))
+    a.classList.toggle('on', on); on ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')
+  })
+}
+addEventListener('hashchange', drActive)
+document.querySelectorAll('.dr-g').forEach((g) => {
+  const h = g.querySelector('.dr-gh'), b = g.querySelector('.dr-gb')
+  h.onclick = () => { const o = !g.classList.contains('open'); g.classList.toggle('open', o); h.setAttribute('aria-expanded', o); b.inert = !o }
+})
+drActive()
 
 const ready = Promise.all([
   api('/auth/me').catch(() => null),
@@ -153,9 +202,10 @@ const ready = Promise.all([
 ]).then(([user, who]) => {
   $('#navr').innerHTML = (who.is_admin || who.is_owner ? `<a class="nb adm" href="/admin.html" title="Admin" aria-label="Admin">${ni('shield')}</a>` : '') +
     (user ? `<a class="nb" href="/profile.html" title="${esc(user.username)}" aria-label="Profil ${esc(user.username)}">${ni('user')}</a>` : '<a class="btn" href="/login.html">Masuk</a>')
-  $('#drme').innerHTML = (who.is_admin || who.is_owner ? `<a href="/admin.html" style="--i:4"><span class="dr-ic">${ni('shield')}</span><span>Admin</span></a>` : '') +
-    (user ? `<a href="/profile.html" style="--i:5"><span class="dr-ic">${ni('user')}</span><span>Profil</span></a>` : `<a href="/login.html" style="--i:5"><span class="dr-ic">${ni('login')}</span><span>Masuk</span></a>`)
-  document.querySelectorAll('.dr-nav a').forEach((a) => { if (a.pathname === location.pathname && !a.hash && a.pathname !== '/') a.classList.add('on') })
+  const loose = (h, t, ic, i) => `<a class="dr-it" href="${h}" style="--i:${i}"><span class="dr-ic">${ni(ic)}</span><span>${t}</span>${ni('check')}</a>`
+  $('#drme').innerHTML = (who.is_admin || who.is_owner ? loose('/admin.html', 'Admin', 'shield', 6) : '') +
+    (user ? loose('/profile.html', 'Profil', 'user', 7) : loose('/login.html', 'Masuk', 'login', 7))
+  drActive()
   return { user, who }
 })
 
