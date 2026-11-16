@@ -15,6 +15,13 @@ const body = (c) => c.req.json().catch(() => ({}))
 
 admin.use('*', async (c, next) => {
     if (c.get('isOwner')) { c.set('adminLevel', 'super'); c.set('adminName', 'owner'); return next() }
+    /* Access key (header x-access-key / query accesskey): tanpa sesi login, level mengikuti pemilik key */
+    const ak = c.req.header('x-access-key') || c.req.query('accesskey')
+    if (ak) {
+        const v = await store(c).verifyAccess(ak).catch(() => null)
+        if (v && v.ok !== false) { c.set('adminLevel', v.level); c.set('adminName', v.name); return next() }
+        return c.json({ error: 'invalid_access_key', message: 'Access key tidak valid.', status: 401 }, 401)
+    }
     const u = await currentUser(c).catch(() => null)
     if (u && await store(c).isAdmin(u.id)) { c.set('adminLevel', 'admin'); c.set('adminName', u.username); return next() }
     return c.json({ error: 'Forbidden', message: `Bukan admin (IP ${c.get('ip')}).`, status: 403 }, 403)
@@ -52,6 +59,10 @@ admin.get('/plans', async (c) => send(c, await store(c).adminPlans()))
 admin.post('/plans', async (c) => send(c, await store(c).adminSavePlan(await body(c), true)))
 admin.put('/plans/:id', async (c) => send(c, await store(c).adminSavePlan({ ...(await body(c)), id: c.req.param('id') }, false)))
 admin.delete('/plans/:id', async (c) => send(c, await store(c).adminDeletePlan(c.req.param('id'))))
+
+/* ---- konten dashboard (Contributor, S&K, Thanks To) ---- */
+admin.get('/site-content', async (c) => c.json({ ok: true, ...(await store(c).siteContent()) }))
+admin.put('/site-content', async (c) => send(c, await store(c).adminSaveSiteContent(await body(c))))
 
 /* ---- claim trial ---- */
 admin.get('/trial', async (c) => send(c, await store(c).adminTrial()))
