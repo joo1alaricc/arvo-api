@@ -20,6 +20,8 @@ root.classList.add('js')
 
 /* Logo Arvo (huruf A + R) hasil tracing logo asli ke vektor. Sama dengan /logo.svg; fill=currentColor supaya ikut warna tile. */
 const LOGO_PATH = 'M40.6 0.5L0.1 70.9L14.2 70.9L40.5 25.6L41.7 27.3L56.0 27.3ZM49.3 0.0L56.4 12.5L85.2 12.4L85.5 12.9L72.7 34.9L43.4 34.9L36.3 47.3L53.1 47.4L66.8 70.9L81.1 70.9L67.9 47.5L80.1 47.2L100.0 12.4L92.8 0.0Z'
+/* Versi animasi untuk header: A + R dipecah dua path supaya digambar bergantian (garis -> terisi -> berkilau -> ulang) */
+const LOGO_AN = `<svg viewBox="-4 -4 108 78.9" aria-hidden="true"><defs><clipPath id="lgc"><path d="${LOGO_PATH.split('ZM')[0]}Z"/><path d="M${LOGO_PATH.split('ZM')[1]}"/></clipPath></defs><path class="lg-p a" pathLength="1" d="${LOGO_PATH.split('ZM')[0]}Z"/><path class="lg-p r" pathLength="1" d="M${LOGO_PATH.split('ZM')[1]}"/><g clip-path="url(#lgc)"><rect class="lg-s" x="0" y="-10" width="16" height="92"/></g></svg>`
 const LOGO = `<svg viewBox="0 0 100 70.9" aria-hidden="true"><path d="${LOGO_PATH}"/></svg>`
 
 /* Muncul halus saat di-scroll. Tandai elemen dengan class "rv" lalu panggil reveal(). */
@@ -61,7 +63,7 @@ const LINKS = [['/dashboard.html', 'Dashboard', 'grid'], ['/#paket', 'Paket', 'b
 /* header & footer dipakai semua halaman */
 document.body.insertAdjacentHTML('afterbegin', `<header class="nav"><div class="wrap nav-in">
   <button id="mbtn" class="nb mbtn" aria-label="Buka menu" aria-expanded="false" aria-controls="dr"><svg viewBox="0 0 24 24" class="burger" aria-hidden="true"><path class="b1" d="M4 6h16"/><path class="b2" d="M4 12h16"/><path class="b3" d="M4 18h16"/></svg></button>
-  <a class="brand" href="/"><span class="logo">${LOGO}</span>Arvo</a>
+  <a class="brand" href="/"><span class="logo logo-an">${LOGO_AN}</span>Arvo</a>
   <nav class="links">${LINKS.map(([h, t]) => `<a href="${h}">${t}</a>`).join('')}</nav>
   <span class="sp"></span>
   <span id="navr" class="navr"></span>
