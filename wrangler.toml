@@ -2,11 +2,15 @@ name = "arvo-api"
 main = "src/index.js"
 compatibility_date = "2026-11-15"
 
+# Kunci tingkat-atas HARUS di atas tabel pertama ([assets], [vars], dst).
+# Kalau ditaruh di bawah tabel, TOML menganggapnya milik tabel itu dan wrangler mengabaikannya.
+routes = [{ pattern = "arvo-api.my.id", custom_domain = true }]
+keep_vars = true   # jangan hapus variabel yang diisi lewat dashboard saat deploy
+
 [assets]
 directory = "./public"
 binding = "ASSETS"
 not_found_handling = "none"
-routes = [{ pattern = "arvo-api.my.id", custom_domain = true }]
 
 [vars]
 API_NAME = "Arvo"
@@ -25,9 +29,8 @@ OWNER_IPS = "103.150.16.3,2400:9800:265:7f87:18e8:67d6:e897:74ad"
 QRIS_IMAGE_URL = "https://cloud.yardansh.com/EhofMy.jpg"
 ORDER_TTL_MIN = "30"
 FREE_DAILY_LIMIT = "100"
-keep_vars = true 
 GOOGLE_CLIENT_ID = "978603752308-2crtqbtdjangppler9i9qf70bmvchacn.apps.googleusercontent.com"
-# Secret (wrangler secret put): PAYMENT_WEBHOOK_SECRET, dan opsional QRIS_STATIC
+# Secret (wrangler secret put, JANGAN ditulis di file ini): GITHUB_API, PAYMENT_WEBHOOK_SECRET, dan opsional QRIS_STATIC
 
 [[durable_objects.bindings]]
 name = "RATE_LIMITER"
