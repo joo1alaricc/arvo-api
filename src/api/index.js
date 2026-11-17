@@ -17,6 +17,7 @@ import { pinterestRoute as downloaderPinterestRoute, pinterestHandler as downloa
 import { spotifyRoute as downloaderSpotifyRoute, spotifyHandler as downloaderSpotifyHandler } from './downloader/spotify.js'
 import { twitterRoute as downloaderTwitterRoute, twitterHandler as downloaderTwitterHandler } from './downloader/twitter.js'
 import { claudeRoute as aiClaudeRoute, claudeHandler as aiClaudeHandler } from './ai/claude.js'
+import { copilotRoute as aiCopilotRoute, copilotHandler as aiCopilotHandler } from './ai/copilot.js'
 
 /* Tambah endpoint bawaan baru cukup di sini: otomatis terdaftar, masuk /docs, dan tampil di dashboard admin. */
 const BUILTIN = [
@@ -37,6 +38,7 @@ const BUILTIN = [
     [downloaderSpotifyRoute, downloaderSpotifyHandler],
     [downloaderTwitterRoute, downloaderTwitterHandler],
     [aiClaudeRoute, aiClaudeHandler],
+    [aiCopilotRoute, aiCopilotHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
