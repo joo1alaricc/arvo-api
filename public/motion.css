@@ -150,3 +150,68 @@ dialog>.tap{position:absolute}
 @keyframes tapGlow{from{transform:scale(.25);opacity:.95}to{transform:scale(1.25);opacity:0}}
 @keyframes tapRing{from{transform:scale(.3);opacity:.9}to{transform:scale(1.9);opacity:0}}
 @media(prefers-reduced-motion:reduce){.tap-layer{display:none}}
+
+
+/* =====================================================================
+   v3 — teks berjalan kategori + penghalusan gerak ala iOS di seluruh situs
+   ===================================================================== */
+
+/* ---- teks berjalan (kiri → kanan), tepi memudar ---- */
+.mq{position:relative;overflow:hidden;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:16px 0;margin-top:8px;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent);mask-image:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent)}
+.mq[hidden]{display:none}
+.mq-t{display:flex;width:max-content;animation:mqRun var(--mq-d,28s) linear infinite;will-change:transform;backface-visibility:hidden}
+.mq-g{display:flex;align-items:center;flex:none}
+.mq-g span{font:600 clamp(13px,3.4vw,16px) 'JetBrains Mono',monospace;letter-spacing:.14em;color:var(--mut);white-space:nowrap}
+.mq-g i{width:7px;height:7px;border-radius:50%;background:var(--tx);opacity:.9;margin:0 clamp(22px,7vw,40px);flex:none}
+@keyframes mqRun{from{transform:translate3d(-50%,0,0)}to{transform:translate3d(0,0,0)}}
+@media(hover:hover){.mq:hover .mq-t{animation-play-state:paused}}
+@media(prefers-reduced-motion:reduce){.mq-t{animation:none;width:auto;flex-wrap:wrap;justify-content:center;padding:0 16px}.mq-t>.mq-g:nth-child(2){display:none}}
+
+/* ---- dasar: tanpa jeda ketuk, komposit GPU untuk elemen yang sering bergerak ---- */
+html{touch-action:manipulation;overscroll-behavior-y:none}
+.nav{will-change:transform}
+.nav{-webkit-backdrop-filter:saturate(1.6) blur(18px);backdrop-filter:saturate(1.6) blur(18px)}
+*{-webkit-tap-highlight-color:transparent}
+
+/* ---- kurva & durasi akordeon lebih panjang dan seragam (tinggi + isi + panah) ---- */
+:root{--ease-ios:cubic-bezier(.32,.72,0,1)}
+.grp-b,.pg-b{transition:grid-template-rows .62s var(--ease-ios)}
+.grp-b>.in,.pg-b>.in{transition:opacity .4s var(--ease-ios),transform .62s var(--ease-ios),padding .62s var(--ease-ios),visibility 0s linear .62s}
+.grp .grp-h .chev,.pg-ep .chev{transition:transform .62s var(--spring)}
+details>p{animation:none}
+details[open]>p{animation:rise .55s var(--ease-ios) both}
+
+/* ---- baris yang bisa diketuk ikut "tertekan" seperti list iOS ---- */
+.grp-h,.pg-ep>button.hd,summary,.dr-it,.links a,.nb,.kv-a{transition:transform .55s var(--spring),background-color .25s,color .25s}
+.grp-h:active,.pg-ep>button.hd:active,summary:active,.dr-it:active{transform:scale(.985);transition-duration:.1s,.25s,.25s;background-color:color-mix(in srgb,var(--mut) 10%,transparent)}
+.card,.panel,.tile,.stat{transition:transform .55s var(--spring),box-shadow .45s var(--ease-ios),border-color .3s,background-color .3s}
+@media(hover:hover){.card:hover,.stat:hover{transform:translate3d(0,-2px,0);box-shadow:0 14px 34px -22px #000b}}
+
+/* ---- hasil yang berganti (response, hasil cek key, tabel) masuk dengan lembut ---- */
+.cbox>pre,.cbox>img,.cbox>.empty,#ckr>.card,.ck-res{animation:rise .5s var(--ease-ios) both}
+.tw tr{animation:rowIn .55s var(--ease-ios) both}
+.tw tr:nth-child(2){animation-delay:.03s}.tw tr:nth-child(3){animation-delay:.06s}.tw tr:nth-child(4){animation-delay:.09s}.tw tr:nth-child(5){animation-delay:.12s}.tw tr:nth-child(6){animation-delay:.15s}.tw tr:nth-child(n+7){animation-delay:.18s}
+@keyframes rowIn{from{opacity:0;transform:translate3d(0,10px,0)}to{opacity:1;transform:none}}
+
+/* ---- tombol memuat, indikator & pill ---- */
+.pill,.badge{transition:background-color .3s,color .3s,border-color .3s,transform .5s var(--spring)}
+.btn:disabled{transition:opacity .3s}
+.dot.up{animation-timing-function:var(--ease-ios)}
+
+/* ---- transisi halaman: geser tipis + pudar (push ala iOS) ---- */
+::view-transition-old(root){animation:vtOut2 .38s var(--ease-ios) both}
+::view-transition-new(root){animation:vtIn2 .6s var(--ease-ios) both}
+@keyframes vtOut2{to{opacity:0;transform:translate3d(-14px,0,0) scale(.99)}}
+@keyframes vtIn2{from{opacity:0;transform:translate3d(22px,0,0)}}
+html[data-vt=theme]::view-transition-old(root){animation:vtFadeOut .5s var(--ease-ios) both}
+html[data-vt=theme]::view-transition-new(root){animation:vtFadeIn .5s var(--ease-ios) both}
+
+/* ---- scroll reveal lebih mengalir ---- */
+.js .rv{transform:translate3d(0,26px,0) scale(.99);transition:opacity 1.05s var(--ease-ios),transform 1.2s var(--ease-ios);transition-delay:calc(var(--i,0)*90ms)}
+.js .rv.in{transform:none}
+
+@media(prefers-reduced-motion:reduce){
+  .tw tr,.cbox>*,.ck-res,details[open]>p{animation:none}
+  .card:hover,.stat:hover{transform:none}
+}
