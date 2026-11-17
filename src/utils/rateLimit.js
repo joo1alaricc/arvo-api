@@ -59,62 +59,55 @@ export const rateLimiter = () => async (c, next) => {
 
 const NEED_RANK = { free: 0, premium: 1, vip: 2, owner: 3 }
 
-/* Dipanggil HANYA saat endpoint API benar-benar diakses. Mengembalikan Response bila ditolak, atau null bila lolos. */
+/* Dipanggil HANYA saat endpoint API benar-benar diakses. Mengembalikan Response bila ditolak, atau null bila lolos.
+ *
+ * SEMUA endpoint wajib API key (header x-api-key atau ?apikey=). Satu parameter itu bisa berisi:
+ *  - Access key admin (acc_... atau OWNER_ACCESS_KEY): tanpa batas, boleh memanggil endpoint apa pun termasuk khusus owner.
+ *  - API key biasa: tunduk pada tier, whitelist IP, dan limit harian akun.
+ * IP tidak pernah dipakai untuk memberi akses; khusus endpoint owner, IP owner pun tidak berlaku. */
 export const meter = async (c, { path, access = 'free' }) => {
     const owner = !!c.get('isOwner'), ip = c.get('ip')
-    const apiKey = c.req.header('x-api-key') || c.req.query('apikey')
-    if (owner) {
+    const apiKey = (c.req.header('x-api-key') || c.req.query('apikey') || c.req.header('x-access-key') || c.req.query('accesskey') || '').trim()
+    const flagTier = () => (c.env.STORE ? storeOf(c).flag(null, ip, path, 'tier', Date.now()).catch(() => {}) : null)
+
+    /* tanpa key: endpoint berbayar/owner pura-pura tidak ada (404, dicatat); endpoint gratis minta key (401) */
+    if (!apiKey) {
+        if (NEED_RANK[access] > 0) { await flagTier(); return hidden(c) }
+        return json(c, 401, 'Unauthorized', 'API key wajib. Kirim lewat header x-api-key atau query ?apikey=.', { code: 'apikey_required' })
+    }
+    if (!c.env.STORE) return json(c, 503, 'Service Unavailable', 'Store belum dikonfigurasi.')
+
+    /* apakah key ini sebuah access key admin? */
+    const v = await storeOf(c).verifyAccess(apiKey).catch(() => null)
+    if (v && v.ok !== false) {
         c.header('X-RateLimit-Limit', 'UNLIMITED'); c.header('X-RateLimit-Remaining', 'UNLIMITED')
-        /* owner tetap tanpa batas, tapi kalau mengirim key, pemakaian dicatat di riwayat akun pemilik key */
-        if (apiKey && c.env.STORE) await storeOf(c).consume(apiKey, ip, path, Date.now(), access, true).catch((e) => console.error('[Usage]', e))
+        c.set('account', { plan: 'owner', name: 'Admin', premium: true, vip: true })
         return null
     }
-    /* Endpoint role owner/admin: wajib Access Key (x-access-key / ?accesskey=), API key biasa tidak cukup. */
+
+    /* endpoint khusus owner: hanya access key. API key biasa (dan IP owner) tidak cukup. */
     if (access === 'owner') {
-        const ak = c.req.header('x-access-key') || c.req.query('accesskey')
-        if (ak && c.env.STORE) {
-            const v = await storeOf(c).verifyAccess(ak).catch(() => null)
-            if (v && v.ok !== false) { c.header('X-RateLimit-Limit', 'UNLIMITED'); c.header('X-RateLimit-Remaining', 'UNLIMITED'); c.set('account', { plan: 'owner', name: 'Admin', premium: true, vip: true }); return null }
-        }
-        if (c.env.STORE) await storeOf(c).flag(null, ip, path, 'tier', Date.now()).catch(() => {})
+        await storeOf(c).flag(null, ip, path, 'tier', Date.now()).catch(() => {})
         return hidden(c)
     }
 
-    if (apiKey) {
-        if (!c.env.STORE) return json(c, 503, 'Service Unavailable', 'Store belum dikonfigurasi.')
-        const r = await storeOf(c).consume(apiKey, ip, path, Date.now(), access)
-        if (r.hide) return hidden(c)
-        if (r.ok === false) return json(c, r.status, r.error, r.message)
-        c.header('X-RateLimit-Limit', r.limit === null ? 'UNLIMITED' : String(r.limit))
-        c.header('X-RateLimit-Remaining', r.remaining === null ? 'UNLIMITED' : String(r.remaining))
-        if (r.premium) {
-            c.set('account', { plan: r.plan, name: r.name, premium: true })
-            c.header('X-Plan', r.name)
-        } else c.set('account', { plan: 'member', name: 'Member', premium: false })
-        /* key valid: kuota dihitung per akun (harian), bukan per IP */
+    /* IP owner + API key biasa: tanpa batas, pemakaian tetap dicatat di akun pemilik key */
+    if (owner) {
+        c.header('X-RateLimit-Limit', 'UNLIMITED'); c.header('X-RateLimit-Remaining', 'UNLIMITED')
+        await storeOf(c).consume(apiKey, ip, path, Date.now(), access, true).catch((e) => console.error('[Usage]', e))
         return null
     }
 
-    /* Endpoint berbayar tanpa key: 404 dan dicatat (tidak mengurangi limit IP gratis). */
-    if (NEED_RANK[access] > 0) { if (c.env.STORE) await storeOf(c).flag(null, ip, path, 'tier', Date.now()).catch(() => {}); return hidden(c) }
-
-    if (parseList(c.env.RATE_LIMIT_WHITELIST || '127.0.0.1').includes(ip)) return null
-
-    const windowMs = Math.max(1000, Number(c.env.RATE_LIMIT_WINDOW_MS) || DEFAULT_WINDOW_MS)
-    const max = Math.max(1, Number(c.env.RATE_LIMIT_MAX) || DEFAULT_MAX)
-    const namespace = c.env.RATE_LIMITER
-    if (!namespace) return json(c, 503, 'Service Unavailable', 'Rate limiter is not configured.')
-
-    const res = await namespace.get(namespace.idFromName(ip)).fetch('https://rate-limit.internal/consume', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ windowMs, max, now: Date.now() }),
-    })
-    const state = await res.json()
-    c.header('X-RateLimit-Limit', String(max))
-    c.header('X-RateLimit-Remaining', String(state.remaining))
-    if (!state.allowed) {
-        c.header('Retry-After', String(state.retryAfter))
-        return json(c, 429, 'Too Many Requests', `Limit IP gratis habis. Coba lagi dalam ${state.retryAfter} detik.`, { retry_after: state.retryAfter })
-    }
+    const r = await storeOf(c).consume(apiKey, ip, path, Date.now(), access)
+    if (r.hide) return hidden(c)
+    if (r.ok === false) return json(c, r.status, r.error, r.message)
+    c.header('X-RateLimit-Limit', r.limit === null ? 'UNLIMITED' : String(r.limit))
+    c.header('X-RateLimit-Remaining', r.remaining === null ? 'UNLIMITED' : String(r.remaining))
+    if (r.premium) {
+        c.set('account', { plan: r.plan, name: r.name, premium: true })
+        c.header('X-Plan', r.name)
+    } else c.set('account', { plan: 'member', name: 'Member', premium: false })
+    /* key valid: kuota dihitung per akun (harian), bukan per IP */
     return null
 }
 
