@@ -76,14 +76,15 @@ function card(path, method, d, tag) {
     })
     const raw = q('[data-body]')?.value.trim()
     const rel = p + (qs.toString() ? '?' + qs : '')
-    return { rel, url: location.origin + rel, body: raw || (Object.keys(bd).length ? JSON.stringify(bd) : ''), key: keyEl.value.trim() }
+    const k = keyEl.value.trim(), full = location.origin + p + '?' + [`apikey=${encodeURIComponent(k || 'KEY_KAMU')}`, qs.toString()].filter(Boolean).join('&')
+    return { rel, url: location.origin + rel, full, body: raw || (Object.keys(bd).length ? JSON.stringify(bd) : ''), key: keyEl.value.trim() }
   }
   const showCode = () => {
     const l = q('[data-lang]').value, box = q('[data-code]'); box.hidden = !l; q('[data-cc]').hidden = !l
     if (l) { const { url, body, key } = build(true); box.querySelector('pre').textContent = snippets(method.toUpperCase(), url, body, key)[l] }
   }
   el._r = () => {
-    const { rel, url, key } = build(true); q('[data-ru]').textContent = rel; q('[data-fu]').textContent = url
+    const { rel, full, key } = build(true); q('[data-ru]').textContent = rel; q('[data-fu]').textContent = full
     q('[data-warn]').hidden = !!key; showCode()
   }
   el.addEventListener('input', el._r); el._r()
@@ -91,7 +92,7 @@ function card(path, method, d, tag) {
   el.addEventListener('click', async (e) => {
     const b = e.target.closest('button'); if (!b) return
     if ('hd' in b.dataset) el.classList.toggle('open')
-    else if ('cu' in b.dataset) navigator.clipboard.writeText(build(true).url).then(() => flash(b))
+    else if ('cu' in b.dataset) navigator.clipboard.writeText(build(true).full).then(() => flash(b))
     else if ('cc' in b.dataset) navigator.clipboard.writeText(q('[data-code] pre').textContent).then(() => flash(b))
     else if ('cr' in b.dataset) { if (last) navigator.clipboard.writeText(last).then(() => flash(b, 'Tersalin')) }
     else if ('run' in b.dataset) {
