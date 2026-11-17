@@ -22,11 +22,11 @@ V.konten = async function () {
       <button class="btn ghost red sm" data-dc="${i}">${ico('trash')}</button></div>`).join('') || '<p class="sub">Belum ada contributor.</p>'}
       <button class="btn sm" id="ac">${ico('plus')} Tambah contributor</button></div>
     ${list('thanks', 'Thanks To', 'Nama / ucapan')}
-    <div class="panel"><h3>Syarat dan Ketentuan</h3><p class="sub" style="font-size:12px;margin:0 0 8px">Setiap ketentuan bernomor otomatis (01, 02, …), punya definisi, dan bisa punya poin (A, B, …).</p>
-      ${S.terms.map((t, i) => `<div class="tnc-a"><div class="cx-r"><span class="mt">${String(i + 1).padStart(2, '0')}</span><input data-t="title:${i}" value="${esc(t.title)}" placeholder="Judul ketentuan, mis. Ketentuan umum">
+    <div class="panel"><h3>Syarat dan Ketentuan</h3><p class="sub" style="font-size:12px;margin:0 0 8px">Setiap ketentuan bernomor otomatis (1, 2, …), punya definisi, dan bisa punya poin (1.1, 1.2, …).</p>
+      ${S.terms.map((t, i) => `<div class="tnc-a"><div class="cx-r"><span class="mt">${i + 1}</span><input data-t="title:${i}" value="${esc(t.title)}" placeholder="Judul ketentuan, mis. Ketentuan umum">
         <button class="btn ghost sm" data-mv="${i}:-1" title="Naik">↑</button><button class="btn ghost sm" data-mv="${i}:1" title="Turun">↓</button><button class="btn ghost red sm" data-dt="${i}">${ico('trash')}</button></div>
         <textarea rows="2" data-t="desc:${i}" placeholder="Definisi / penjelasan (opsional)">${esc(t.desc)}</textarea>
-        <div class="tnc-sub">${t.points.map((p, k) => `<div class="cx-r"><span class="mt">${String.fromCharCode(65 + (k % 26))}</span><div style="flex:1;min-width:140px"><input data-p="title:${i}:${k}" value="${esc(p.title)}" placeholder="Judul poin, mis. Apa itu Arvo API" style="width:100%"><textarea rows="2" data-p="desc:${i}:${k}" placeholder="Definisi poin (opsional)">${esc(p.desc)}</textarea></div><button class="btn ghost red sm" data-dp="${i}:${k}">${ico('trash')}</button></div>`).join('')}
+        <div class="tnc-sub">${t.points.map((p, k) => `<div class="cx-r"><span class="mt">${i + 1}.${k + 1}</span><div style="flex:1;min-width:140px"><input data-p="title:${i}:${k}" value="${esc(p.title)}" placeholder="Judul poin, mis. Apa itu Arvo API" style="width:100%"><textarea rows="2" data-p="desc:${i}:${k}" placeholder="Definisi poin (opsional)">${esc(p.desc)}</textarea></div><button class="btn ghost red sm" data-dp="${i}:${k}">${ico('trash')}</button></div>`).join('')}
           <button class="btn sm" data-ap="${i}">${ico('plus')} Tambah poin</button></div></div>`).join('') || '<p class="sub">Belum ada ketentuan.</p>'}
       <button class="btn sm" id="at">${ico('plus')} Tambah ketentuan</button></div>
     <div class="row"><button class="btn" id="sv">Simpan</button></div><p class="msg" id="svm"></p>`
