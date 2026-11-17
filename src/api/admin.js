@@ -8,7 +8,7 @@ import { analyze, build, readBack, patchIndex, exportNames, EXAMPLE, STRUCTURE_H
 import { makeQris, qrisInfo } from '../utils/payment.js'
 
 /* Dashboard admin.
- *  - super admin : IP owner (OWNER_IPS), tanpa login. Boleh semuanya.
+ *  - super admin : IP owner (OWNER_IPS) tanpa login, atau akun dengan email Google terverifikasi di ADMIN_EMAILS. Boleh semuanya.
  *  - admin       : user yang ditambahkan super admin (tab Tim). TIDAK boleh: tambah/hapus admin, endpoint, update kode (GitHub). */
 export const admin = new Hono()
 const body = (c) => c.req.json().catch(() => ({}))
@@ -23,7 +23,8 @@ admin.use('*', async (c, next) => {
         return c.json({ error: 'invalid_access_key', message: 'Access key tidak valid.', status: 401 }, 401)
     }
     const u = await currentUser(c).catch(() => null)
-    if (u && await store(c).isAdmin(u.id)) { c.set('adminLevel', 'admin'); c.set('adminName', u.username); return next() }
+    const lv = u && await store(c).adminLevel(u.id)
+    if (lv) { c.set('adminLevel', lv); c.set('adminName', u.username); return next() }
     return c.json({ error: 'Forbidden', message: `Bukan admin (IP ${c.get('ip')}).`, status: 403 }, 403)
 })
 const superOnly = async (c, next) => c.get('adminLevel') === 'super' ? next()
