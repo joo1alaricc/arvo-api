@@ -251,3 +251,78 @@ if (!matchMedia('(prefers-reduced-motion:reduce)').matches) {
 
 /* hitung kunjungan halaman (sekali per sesi tab) untuk "Page Views" di Dashboard */
 try { if (!sessionStorage.getItem('pv')) { sessionStorage.setItem('pv', '1'); fetch('/api/pv', { method: 'POST', keepalive: true }).catch(() => {}) } } catch {}
+
+
+/* ---- Dropdown kustom: menggantikan tampilan <select> bawaan browser dengan menu bergaya situs.
+ * <select> asli tetap ada (tersembunyi) sebagai sumber nilai, jadi kode lain (.value, onchange) tidak berubah.
+ * Pilihan di-opt-out dengan atribut data-native. Select yang muncul belakangan (modal, render ulang) ikut ditangani. ---- */
+(() => {
+  const CH = '<svg class="sel-c" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>'
+  const CK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>'
+  let menu = null, cur = null, curBtn = null, off = []
+  const close = (instant) => {
+    if (!menu) return
+    const m = menu; menu = null
+    off.forEach((f) => f()); off = []
+    if (curBtn) { curBtn.classList.remove('open'); curBtn.setAttribute('aria-expanded', 'false') }
+    cur = curBtn = null
+    if (instant) return m.remove()
+    m.classList.remove('in'); m.classList.add('out'); setTimeout(() => m.remove(), 200)
+  }
+  const open = (s, b) => {
+    close(true)
+    const m = document.createElement('div'); m.className = 'sel-m'; m.setAttribute('role', 'listbox')
+    m.innerHTML = [...s.options].map((o, i) => `<button type="button" role="option" class="sel-o${i === s.selectedIndex ? ' on' : ''}" data-i="${i}" aria-selected="${i === s.selectedIndex}"${o.disabled ? ' disabled' : ''}><span>${esc(o.textContent)}</span>${CK}</button>`).join('')
+    ;(b.closest('dialog') || document.body).append(m)
+    const r = b.getBoundingClientRect(), w = Math.max(r.width, 170), mh = Math.min(m.scrollHeight, innerHeight * 0.5, 360)
+    const below = innerHeight - r.bottom - 12, up = below < mh && r.top > below
+    m.style.width = Math.min(w, innerWidth - 16) + 'px'
+    m.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + 'px'
+    m.style.top = (up ? Math.max(8, r.top - mh - 6) : r.bottom + 6) + 'px'
+    if (up) m.dataset.o = 'up'
+    m.style.maxHeight = Math.max(120, up ? r.top - 14 : below) + 'px'
+    requestAnimationFrame(() => m.classList.add('in'))
+    b.classList.add('open'); b.setAttribute('aria-expanded', 'true'); menu = m; cur = s; curBtn = b
+    const on = m.querySelector('.on') || m.firstElementChild; if (on) { m.scrollTop = Math.max(0, on.offsetTop - m.clientHeight / 2 + on.offsetHeight / 2); setTimeout(() => on.focus({ preventScroll: true }), 30) }
+    m.onclick = (e) => {
+      const o = e.target.closest('.sel-o'); if (!o || o.disabled) return
+      s.selectedIndex = +o.dataset.i; s._sync()
+      s.dispatchEvent(new Event('input', { bubbles: true })); s.dispatchEvent(new Event('change', { bubbles: true }))
+      const btn = b; close(); btn.focus({ preventScroll: true })
+    }
+    m.onkeydown = (e) => {
+      const it = [...m.querySelectorAll('.sel-o:not(:disabled)')], i = it.indexOf(document.activeElement)
+      if (e.key === 'ArrowDown') { e.preventDefault(); it[Math.min(it.length - 1, i + 1)]?.focus() }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); it[Math.max(0, i - 1)]?.focus() }
+      else if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); const btn = b; close(); btn.focus() }
+    }
+    const down = (e) => { if (!m.contains(e.target) && !b.contains(e.target)) close() }
+    const t0 = performance.now(), scr = (e) => { if (performance.now() - t0 > 500 && !m.contains(e.target)) close() }
+    const rs = () => close(true)
+    document.addEventListener('pointerdown', down, true); addEventListener('scroll', scr, true); addEventListener('resize', rs)
+    off = [() => document.removeEventListener('pointerdown', down, true), () => removeEventListener('scroll', scr, true), () => removeEventListener('resize', rs)]
+  }
+  const enhance = (s) => {
+    if (s._sel || s.multiple || s.size > 1 || s.hasAttribute('data-native')) return
+    s._sel = true
+    const w = document.createElement('span'); w.className = 'sel-w'
+    for (const k of ['width', 'flex', 'minWidth', 'maxWidth', 'margin', 'marginTop']) if (s.style[k]) w.style[k] = s.style[k]
+    s.before(w)
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'sel-btn'
+    b.setAttribute('aria-haspopup', 'listbox'); b.setAttribute('aria-expanded', 'false')
+    const al = s.getAttribute('aria-label'); if (al) b.setAttribute('aria-label', al)
+    b.innerHTML = `<span class="sel-t"></span>${CH}`
+    w.append(b, s); s.tabIndex = -1; s.setAttribute('aria-hidden', 'true')
+    const sync = () => { const o = s.options[s.selectedIndex]; b.firstChild.textContent = o ? o.textContent : 'Pilih'; b.disabled = s.disabled }
+    s._sync = sync
+    const d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')
+    Object.defineProperty(s, 'value', { get() { return d.get.call(this) }, set(v) { d.set.call(this, v); sync() }, configurable: true })
+    s.addEventListener('change', sync)
+    new MutationObserver(sync).observe(s, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['disabled'] })
+    b.onclick = () => (cur === s ? close() : open(s, b))
+    sync()
+  }
+  const scan = (n) => { if (n.nodeType !== 1) return; if (n.tagName === 'SELECT') enhance(n); else n.querySelectorAll && n.querySelectorAll('select').forEach(enhance) }
+  new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach(scan))).observe(document.documentElement, { childList: true, subtree: true })
+  scan(document.documentElement)
+})()
