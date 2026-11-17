@@ -406,6 +406,13 @@ export class StoreDO extends DurableObject {
         const [o] = this.q("SELECT * FROM orders WHERE id=? AND status='pending'", id)
         return o ? this.fulfill(o, now) : fail(404, 'no_match', 'Order pending tidak ditemukan.')
     }
+    cancelOwnOrder(id, userId) {
+        const [o] = this.q('SELECT user_id,status FROM orders WHERE id=?', id)
+        if (!o || o.user_id !== userId) return fail(404, 'not_found', 'Order tidak ditemukan.')
+        if (o.status !== 'pending') return fail(409, 'not_pending', 'Order ini sudah tidak tertunda.')
+        this.sql.exec("UPDATE orders SET status='cancelled' WHERE id=? AND status='pending'", id)
+        return { ok: true }
+    }
     cancelOrder(id) { this.sql.exec("UPDATE orders SET status='cancelled' WHERE id=? AND status='pending'", id); return { ok: true } }
     getOrder(id, userId, isOwner) {
         const [o] = this.q('SELECT * FROM orders WHERE id=?', id)
