@@ -35,12 +35,12 @@ const createApp = () => {
     app.get('/api/catalog', async (c) => {
         const RANK = { free: 0, premium: 1, vip: 2, owner: 3 }, warn = []
         let rank = c.get('isOwner') ? 3 : 0
-        const ak = c.req.header('x-access-key') || c.req.query('accesskey')
+        const ak = c.req.header('x-access-key') || c.req.query('accesskey') || c.req.header('x-api-key')
         if (!rank && ak) { try { if ((await store(c).verifyAccess(ak)).ok !== false) rank = 3 } catch {} }
         if (!rank) {
             try {
                 const u = await currentUser(c)
-                if (u) rank = (await store(c).isAdmin(u.id)) ? 3 : RANK[u.role === 'member' ? 'free' : u.role] ?? 0
+                if (u) rank = (await store(c).adminLevel(u.id)) ? 3 : RANK[u.role === 'member' ? 'free' : u.role] ?? 0
             } catch (e) { warn.push('sesi: ' + (e.message || e)) }
         }
         /* Tiap sumber dipisah: kalau database/override bermasalah, endpoint bawaan TETAP tampil (tidak pernah kosong gara-gara satu error). */
