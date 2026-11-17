@@ -434,7 +434,7 @@ export class StoreDO extends DurableObject {
         return { ok: true, users: rows.map((u) => {
             const p = this.pub(u, now)
             return { id: u.id, username: u.username, email: u.email, role: p.role, plan_name: p.plan_name, expires_at: u.expires_at, total_requests: u.total,
-                created_at: u.created_at, last_seen: u.last_seen, last_ip: u.last_ip, reg_ip: u.reg_ip, last_ip_blocked: blocked.has(u.last_ip), used_today: p.used_today, daily_limit: p.daily_limit }
+                created_at: u.created_at, last_seen: u.last_seen, last_ip: u.last_ip, reg_ip: u.reg_ip, last_ip_blocked: blocked.has(u.last_ip), used_today: p.used_today, daily_limit: p.daily_limit, admin: this.adminLevel(u.id) }
         }) }
     }
     adminUserIps(id) {
@@ -628,14 +628,53 @@ export class StoreDO extends DurableObject {
     }
     isAdmin(id) { return !!this.adminLevel(id) }
     listAdmins() { return { ok: true, admins: this.q('SELECT a.user_id id,u.username,u.email,a.added_by,a.added_at FROM admins a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.added_at') } }
+    /* Jadikan user admin DAN langsung buatkan access key-nya. */
+    makeAdmin(id, by, now) {
+        const u = this.user(id)
+        if (!u) return fail(404, 'no_user', 'User tidak ditemukan.')
+        if (!this.isAdmin(u.id)) this.sql.exec('INSERT INTO admins VALUES(?,?,?)', u.id, String(by || 'owner').slice(0, 60), now)
+        let k = u.access_key
+        if (!k) { k = 'acc_' + hex(12); this.sql.exec('UPDATE users SET access_key=? WHERE id=?', k, u.id) }
+        return { ok: true, id: u.id, username: u.username, access_key: k }
+    }
     addAdmin(username, by, now) {
         const [u] = this.q('SELECT id,username FROM users WHERE username=?', String(username || '').trim())
         if (!u) return fail(404, 'no_user', 'User itu belum terdaftar. Minta dia daftar dulu.')
-        if (this.isAdmin(u.id)) return fail(409, 'already_admin', `${u.username} sudah jadi admin.`)
-        this.sql.exec('INSERT INTO admins VALUES(?,?,?)', u.id, String(by || 'owner').slice(0, 60), now)
-        return { ok: true, id: u.id, username: u.username }
+        if (this.q('SELECT 1 FROM admins WHERE user_id=?', u.id).length) return fail(409, 'already_admin', `${u.username} sudah jadi admin.`)
+        return this.makeAdmin(u.id, by, now)
     }
-    removeAdmin(id) { this.sql.exec('DELETE FROM admins WHERE user_id=?', id); return { ok: true } }
+    /* Cabut admin: access key ikut dihapus supaya tidak bisa dipakai lagi. */
+    removeAdmin(id) { this.sql.exec('DELETE FROM admins WHERE user_id=?', id); this.sql.exec('UPDATE users SET access_key=NULL WHERE id=?', id); return { ok: true } }
+
+    /* Login pengelola: email + access key (tanpa password). Access key milik akun harus cocok dengan email akun itu.
+     * Secret OWNER_ACCESS_KEY dipakai bersama email yang terdaftar di ADMIN_EMAILS; akunnya dibuat otomatis bila belum ada. */
+    adminKeyLogin(email, key, ip, now) {
+        const bad = fail(401, 'invalid_admin_login', 'Email atau Access Key salah.')
+        const e = String(email || '').trim().toLowerCase()
+        if (!e || !String(key || '').trim()) return bad
+        const v = this.verifyAccess(key)
+        if (v.ok === false) { this.flag(null, ip, '/api/auth/admin-login', 'key', now); return bad }
+        if (v.id !== null) {
+            const u = this.user(v.id)
+            const mine = [u.email, u.verified_email].map((x) => String(x || '').trim().toLowerCase()).filter(Boolean)
+            if (!mine.includes(e)) { this.flag(v.id, ip, '/api/auth/admin-login', 'key', now); return bad }
+            this.touchIp(u.id, ip, now, 'web')
+            return { ok: true, id: u.id, level: this.adminLevel(u.id) }
+        }
+        /* secret owner */
+        if (!this.adminEmails().includes(e)) { this.flag(null, ip, '/api/auth/admin-login', 'key', now); return bad }
+        let [u] = this.q('SELECT id FROM users WHERE verified_email=? OR lower(email)=? ORDER BY (verified_email=?) DESC LIMIT 1', e, e, e)
+        let id = u && u.id
+        if (!id) {
+            const base = (e.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 14) || 'admin').padEnd(3, '0')
+            let name = base
+            while (this.q('SELECT 1 FROM users WHERE username=?', name).length) name = base + Math.floor(Math.random() * 9000 + 1000)
+            id = this.insertUser({ username: name, email: e, now, ip })
+        }
+        this.sql.exec('UPDATE users SET verified_email=? WHERE id=?', e, id)
+        this.touchIp(id, ip, now, 'web')
+        return { ok: true, id, level: 'super' }
+    }
 
     /* ---------- Status & Info: hitungan kunjungan halaman ---------- */
     pageHit() { this.saveSetting('page_views', this.setting('page_views', 0) + 1); return { ok: true } }
