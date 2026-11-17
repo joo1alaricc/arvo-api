@@ -13,8 +13,8 @@
     <label id="admrow" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px;cursor:pointer"><input type="checkbox" id="adm" style="width:auto;margin:0"> Login sebagai Pengelola</label>
   </form>
   <p class="msg" id="m"></p>
-  <div id="gwrap" hidden><div class="sep">atau</div>
-    <div class="gbtn" id="gb"><span class="gface" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="width:18px;height:18px;flex:none"><path fill="#4285F4" d="M22 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.6a4.8 4.8 0 0 1-2.1 3.1v2.6h3.4c2-1.8 3.1-4.5 3.1-7.5z"/><path fill="#34A853" d="M12 22c2.8 0 5.2-.9 6.9-2.5l-3.4-2.6c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.7v2.7A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.2 13.6a6 6 0 0 1 0-3.8V7.1H2.7a10 10 0 0 0 0 9z"/><path fill="#EA4335" d="M12 6.1c1.5 0 2.8.5 3.9 1.5l2.9-2.9A10 10 0 0 0 2.7 7.1l3.5 2.7C7 7.9 9.3 6.1 12 6.1z"/></svg><span>Lanjutkan dengan Google</span></span><div class="gov" id="gbtn"></div></div></div>
+  <div id="gwrapbox"><div id="gwrap" hidden><div class="sep">atau</div>
+    <div class="gbtn" id="gb"><span class="gface" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="width:18px;height:18px;flex:none"><path fill="#4285F4" d="M22 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.6a4.8 4.8 0 0 1-2.1 3.1v2.6h3.4c2-1.8 3.1-4.5 3.1-7.5z"/><path fill="#34A853" d="M12 22c2.8 0 5.2-.9 6.9-2.5l-3.4-2.6c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.7v2.7A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.2 13.6a6 6 0 0 1 0-3.8V7.1H2.7a10 10 0 0 0 0 9z"/><path fill="#EA4335" d="M12 6.1c1.5 0 2.8.5 3.9 1.5l2.9-2.9A10 10 0 0 0 2.7 7.1l3.5 2.7C7 7.9 9.3 6.1 12 6.1z"/></svg><span>Lanjutkan dengan Google</span></span><div class="gov" id="gbtn"></div></div></div></div>
 </div></main>
 <script src="common.js?v=1d3c13df"></script>
 <script>
@@ -24,23 +24,33 @@ const nx = qs.get('next') || sessionStorage.getItem('arvo_next')
 const dest = nx && nx.startsWith('/') && !nx.startsWith('//') ? nx : '/profile.html'
 if (qs.get('next')) sessionStorage.setItem('arvo_next', dest)
 let mode = 'login'
-ready.then(({ user }) => { if (user) { sessionStorage.removeItem('arvo_next'); location.href = dest } })
+ready.then(({ user, who }) => { if (user) { sessionStorage.removeItem('arvo_next'); location.href = qs.get('as') === 'admin' && who && who.is_admin ? '/admin.html' : dest } })
 if (qs.get('err') === 'google') say($('#m'), 'Masuk dengan Google gagal. Coba lagi.', 1)
+/* Login sebagai Pengelola: hanya "Masuk", input Email + Access Key (tanpa password). Berhasil = masuk ke dashboard admin. */
+const isAdm = () => $('#adm').checked
+const admUi = () => {
+  const a = isAdm()
+  if (a) { mode = 'login'; document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x.dataset.m === 'login')); $('#e').hidden = true; $('#go').textContent = 'Masuk' }
+  document.querySelector('.tabs [data-m="register"]').disabled = a
+  $('#u').placeholder = a ? 'Email' : 'Username atau email'; $('#u').type = a ? 'email' : 'text'; $('#u').autocomplete = a ? 'email' : 'username'
+  $('#p').placeholder = a ? 'Access Key' : 'Password (min. 8 karakter)'; $('#p').autocomplete = a ? 'off' : mode === 'login' ? 'current-password' : 'new-password'
+  $('#gwrapbox').style.display = a ? 'none' : ''
+}
 document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => {
+  if (isAdm() && b.dataset.m !== 'login') return
   mode = b.dataset.m
   document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b))
   $('#e').hidden = mode !== 'register'; $('#go').textContent = mode === 'login' ? 'Masuk' : 'Buat akun'
   $('#admrow').hidden = mode !== 'login'; if (mode !== 'login') $('#adm').checked = false; admUi()
-  $('#p').autocomplete = mode === 'login' ? 'current-password' : 'new-password'
 }))
-/* Login sebagai Pengelola: isi email pengelola + password; akun harus pengelola, lalu langsung ke panel admin. */
-const admUi = () => { const a = $('#adm').checked; $('#u').placeholder = a ? 'Email pengelola' : 'Username atau email'; $('#u').type = a ? 'email' : 'text'; $('#u').autocomplete = a ? 'email' : 'username' }
 $('#adm').onchange = admUi
+if (qs.get('as') === 'admin') { $('#adm').checked = true; admUi() }
 $('#f').onsubmit = async (ev) => {
   ev.preventDefault()
-  const adm = mode === 'login' && $('#adm').checked
-  try { await put('/auth/' + mode, { username: $('#u').value, password: $('#p').value, email: $('#e').value, ...(adm ? { as: 'admin' } : {}) }, 'POST'); location.href = adm ? '/admin.html' : dest }
-  catch (e) { say($('#m'), e.message, 1) }
+  try {
+    if (isAdm()) { await put('/auth/admin-login', { email: $('#u').value, access_key: $('#p').value }, 'POST'); location.href = '/admin.html'; return }
+    await put('/auth/' + mode, { username: $('#u').value, password: $('#p').value, email: $('#e').value }, 'POST'); location.href = dest
+  } catch (e) { say($('#m'), e.message, 1) }
 }
 /* Google: mode redirect. Tombol membawa kamu ke Google lalu kembali ke /api/auth/google/callback,
    tanpa popup. Di Google Cloud Console daftarkan origin situs ini dan URI callback tersebut. */
