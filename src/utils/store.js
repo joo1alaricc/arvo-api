@@ -51,6 +51,8 @@ export class StoreDO extends DurableObject {
         try { this.sql.exec('ALTER TABLE users ADD COLUMN access_key TEXT') } catch {}
         /* email yang sudah diverifikasi Google. Dipakai untuk status admin lewat email; kolom email biasa bisa diubah user sendiri sehingga tidak dipercaya. */
         try { this.sql.exec('ALTER TABLE users ADD COLUMN verified_email TEXT') } catch {}
+        /* API key panel SMM milik user (Tools > Layanan SMM). Tidak pernah ikut dikirim di pub()/profil. */
+        try { this.sql.exec('ALTER TABLE users ADD COLUMN smm_key TEXT') } catch {}
         if (!this.q('SELECT 1 FROM plans LIMIT 1').length) {
             DEFAULT_PLANS.forEach((p, i) => this.sql.exec('INSERT INTO plans VALUES(?,?,?,?,?,?,?,?,?,1,?)', p.id, p.tier, p.name, p.daily, p.maxIps, p.customKey ? 1 : 0, p.baseDays, p.basePrice, p.permanentPrice, i))
         }
@@ -466,6 +468,8 @@ export class StoreDO extends DurableObject {
         if (!permanent && !(d >= 1 && d <= 3650)) return fail(400, 'bad_request', 'Durasi 1-3650 hari.')
         return this.applyPlan(u, plan, permanent ? null : d, now)
     }
+    smmKeyGet(id) { const [u] = this.q('SELECT smm_key FROM users WHERE id=?', id); return u && u.smm_key ? u.smm_key : null }
+    smmKeySet(id, key) { this.sql.exec('UPDATE users SET smm_key=? WHERE id=?', key || null, id); return { ok: true } }
     adminRevoke(id) { this.sql.exec('UPDATE users SET plan=NULL,stack=NULL,expires_at=NULL,ips=? WHERE id=?', '[]', id); return { ok: true } }
     adminCreateCode({ code, plan, days, permanent, max_uses }, now) {
         if (!this.plans[plan]) return fail(400, 'bad_request', 'Paket tidak dikenal.')
