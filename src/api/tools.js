@@ -208,3 +208,246 @@ tools.get('/smm/deposit-status', async (c) => {
     c.header('Cache-Control', 'no-store')
     return c.json({ ok: true, deposit: id, ...r })
 })
+
+/* ================= Layanan OTP (SMSCode) =================
+ * Satu API token SMSCode milik Arvo (secret SMSCODE_API_KEY), memakai API v1 (semua nominal sudah rupiah bulat).
+ * Saldo memakai dompet yang sama dengan Layanan SMM (isi saldo lewat deposit di halaman SMM).
+ *  - pesan: saldo user dipotong dulu, baru order ke SMSCode; gagal = dikembalikan
+ *  - batal / kedaluwarsa tanpa SMS: saldo dikembalikan SEKALI (dijaga kolom refunded di database)
+ * Operator selalu "Any" (tanpa operator_id). Harga jual = harga SMSCode + markup (OTP_MARKUP_PCT persen + OTP_MARKUP_FLAT rupiah, opsional). */
+const SC = 'https://api.smscode.gg/v1'
+const OTP_MAX_QTY = 3
+const OTP_LIVE = new Set(['ACTIVE', 'OTP_RECEIVED'])
+const intStr = (v) => /^\d{1,12}$/.test(String(v ?? '').trim())
+const markup = (c, n) => Math.max(1, Math.ceil(Number(n) * (1 + (Number(c.env.OTP_MARKUP_PCT) || 0) / 100) + (Number(c.env.OTP_MARKUP_FLAT) || 0)))
+
+/* panggil SMSCode. Mengembalikan { j } (isi "data") atau { status, error, message, uncertain }.
+ * uncertain = hasil tidak pasti (timeout / 5xx): untuk order uang, jangan anggap gagal. */
+const scCall = async (c, method, path, { query, body, idem } = {}) => {
+    const key = c.env.SMSCODE_API_KEY
+    if (!key) return { status: 503, error: 'not_configured', message: 'Layanan OTP belum dikonfigurasi (SMSCODE_API_KEY belum diisi).' }
+    const headers = { Authorization: 'Bearer ' + key }
+    if (body) headers['Content-Type'] = 'application/json'
+    if (idem) headers['Idempotency-Key'] = idem
+    let r
+    try {
+        r = await fetch(SC + path + (query ? '?' + new URLSearchParams(query) : ''), { method, headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(20000) })
+    } catch (e) { return { status: 504, error: 'upstream_unreachable', uncertain: true, message: e.name === 'TimeoutError' ? 'Penyedia OTP tidak merespons (timeout).' : 'Tidak bisa menghubungi penyedia OTP.' } }
+    const j = await r.json().catch(() => null)
+    if (!j || typeof j !== 'object') return { status: 502, error: 'upstream_bad_response', uncertain: r.status >= 500, message: 'Respons penyedia OTP tidak valid.' }
+    if (r.ok && j.success === true) return { j: j.data, meta: j.meta }
+    const code = String(j.error?.code || ''), msg = String(j.error?.message || '').slice(0, 300)
+    if (code === 'UNAUTHORIZED' || code === 'FORBIDDEN' || code === 'INSUFFICIENT_BALANCE' || code === 'SERVICE_UNAVAILABLE') {   /* masalah akun/kunci kita, bukan salah user */
+        console.error('[otp] upstream', r.status, code, msg)
+        return { status: 502, error: 'upstream_' + code.toLowerCase(), message: code === 'SERVICE_UNAVAILABLE' ? 'Penyedia OTP sedang maintenance. Coba lagi nanti.' : 'Layanan OTP sedang bermasalah. Hubungi admin.' }
+    }
+    if (code === 'NO_OFFER_AVAILABLE' || code === 'PROVIDER_ERROR') return { status: 409, error: 'no_stock', message: 'Nomor sedang kosong di server ini. Coba server lain.' }
+    if (code === 'CANCEL_TOO_EARLY') return { status: 409, error: 'too_early', message: 'Pembatalan baru bisa dilakukan 2 menit setelah order.' }
+    if (code === 'RATE_LIMIT_EXCEEDED') return { status: 429, error: 'rate_limited', message: 'Terlalu banyak permintaan, coba lagi sebentar.' }
+    if (code === 'NOT_FOUND') return { status: 404, error: 'not_found', message: 'Pesanan tidak ditemukan di penyedia OTP.' }
+    if (code === 'REQUEST_IN_PROGRESS') return { status: 409, error: 'in_progress', message: 'Permintaan sebelumnya masih diproses. Tunggu sebentar.' }
+    if (r.status >= 500) return { status: 502, error: 'upstream_error', uncertain: true, message: 'Penyedia OTP sedang bermasalah.' }
+    return { status: r.status === 409 ? 409 : 400, error: 'otp_error', message: msg || 'Permintaan ditolak penyedia OTP.' }
+}
+const scOut = (c, r) => out(c, r.status, r.error, r.message)
+
+/* daftar negara & layanan jarang berubah: simpan di memori Worker */
+let OC = { t: 0, list: null }
+const getCountries = async (c) => {
+    if (OC.list && Date.now() - OC.t < 3600000) return { list: OC.list }
+    const r = await scCall(c, 'GET', '/catalog/countries'); if (r.j === undefined) return { res: scOut(c, r) }
+    if (!Array.isArray(r.j)) return { res: out(c, 502, 'upstream_bad_response', 'Daftar negara tidak valid.') }
+    OC = { t: Date.now(), list: r.j.filter((x) => x.active !== false).map((x) => ({ id: Number(x.id), code: String(x.code || ''), name: String(x.name || ''), dial: String(x.dial_code || ''), emoji: String(x.emoji || '') })) }
+    return { list: OC.list }
+}
+const OS = new Map()
+const getServicesOtp = async (c, country) => {
+    const hit = OS.get(country)
+    if (hit && Date.now() - hit.t < 600000) return { list: hit.list }
+    const r = await scCall(c, 'GET', '/catalog/services', { query: { country_id: String(country) } }); if (r.j === undefined) return { res: scOut(c, r) }
+    if (!Array.isArray(r.j)) return { res: out(c, 502, 'upstream_bad_response', 'Daftar layanan tidak valid.') }
+    const list = r.j.filter((x) => x.active !== false).map((x) => ({ id: Number(x.id), code: String(x.code || ''), name: String(x.name || '') }))
+    if (OS.size > 300) OS.clear()
+    OS.set(country, { t: Date.now(), list })
+    return { list }
+}
+/* server = produk "Any operator", diurutkan termurah (Server 1 = termurah). Harga SELALU dihitung ulang di server. */
+const getServers = async (c, country, platform) => {
+    const r = await scCall(c, 'GET', '/catalog/products', { query: { country_id: String(country), platform_id: String(platform), sort: 'price_asc', limit: '1000', page: '1' } })
+    if (r.j === undefined) return { res: scOut(c, r) }
+    if (!Array.isArray(r.j)) return { res: out(c, 502, 'upstream_bad_response', 'Daftar server tidak valid.') }
+    const list = r.j.filter((p) => p.active !== false && Number(p.available) > 0 && Number(p.price) > 0 && p.operator_id == null)
+        .map((p, i) => ({ id: Number(p.id), server: i + 1, available: Number(p.available), price: markup(c, p.price) }))
+    return { list }
+}
+
+/* baris database -> bentuk untuk browser (tanpa data internal) */
+const otpView = (o, extra) => {
+    const live = OTP_LIVE.has(o.status)
+    return {
+        order_id: o.order_id, country: o.country, dial: o.dial, service: o.service, svc_code: o.svc_code, server_no: o.server_no, phone: o.phone,
+        cost: o.cost, status: o.status, otp_code: o.otp_code, otp_message: o.otp_message, refunded: !!o.refunded, expires_at: o.expires_at, created_at: o.created_at,
+        can_cancel: o.status === 'ACTIVE', can_resend: live, can_finish: o.status === 'OTP_RECEIVED', can_reactivate: false,
+        cancel_available_at: o.status === 'ACTIVE' ? o.created_at + 120000 : null, ...extra,
+    }
+}
+const ms = (t) => { const n = Date.parse(t || ''); return Number.isFinite(n) ? n : null }
+
+/* sinkronkan satu pesanan dengan penyedia; batal/kedaluwarsa tanpa SMS = saldo kembali (sekali) */
+const otpRefresh = async (c, uid, o) => {
+    const r = await scCall(c, 'GET', '/orders/' + o.order_id); if (r.j === undefined) return { r }
+    const u = r.j, st = store(c), status = String(u.status || o.status).toUpperCase()
+    await st.otpSave(o.order_id, uid, { status, otp_code: u.otp_code || o.otp_code, otp_message: u.otp_message || o.otp_message, expires_at: ms(u.expires_at) })
+    let rf = 0
+    if ((status === 'CANCELED' || status === 'EXPIRED') && !o.refunded) rf = (await st.otpRefund(o.order_id, uid, status)).refunded || 0
+    const fresh = await st.otpGet(o.order_id, uid), live = OTP_LIVE.has(status)
+    return {
+        view: otpView(fresh, {
+            can_cancel: u.can_cancel ?? status === 'ACTIVE', can_resend: u.can_resend ?? live, can_finish: u.can_finish ?? status === 'OTP_RECEIVED', can_reactivate: !!u.can_reactivate,
+            cancel_available_at: status === 'ACTIVE' ? ms(u.cancel_available_at) || (ms(u.created_at) || o.created_at) + 120000 : null,
+            resend_available_at: ms(u.resend_available_at), refunded_now: rf,
+        }), balance: await st.smmBal(uid),
+    }
+}
+const myOtp = async (c) => {
+    const order = String(c.req.query('order') || (await body(c)).order || '').trim()
+    if (!intStr(order)) return { res: out(c, 400, 'bad_order', 'ID pesanan tidak valid.') }
+    const o = await store(c).otpGet(order, uidOf(c))
+    return o ? { o } : { res: out(c, 404, 'not_found', 'Pesanan tidak ditemukan di akunmu.') }
+}
+const idemKey = () => 'arvo-' + crypto.randomUUID()
+/* order uang: kalau hasil tidak pasti, coba SEKALI lagi dengan Idempotency-Key yang sama (aman, tidak menggandakan pesanan) */
+const scCreate = async (c, path, payload) => {
+    const idem = idemKey()
+    let r = await scCall(c, 'POST', path, { body: payload, idem })
+    if (r.j === undefined && r.uncertain) r = await scCall(c, 'POST', path, { body: payload, idem })
+    return r
+}
+
+tools.get('/otp/countries', async (c) => {
+    const { list, res } = await getCountries(c); if (res) return res
+    c.header('Cache-Control', 'private, max-age=600')
+    return c.json({ ok: true, countries: list })
+})
+
+tools.get('/otp/services', async (c) => {
+    const country = c.req.query('country_id'); if (!intStr(country)) return out(c, 400, 'bad_country', 'Negara tidak valid.')
+    const { list, res } = await getServicesOtp(c, Number(country)); if (res) return res
+    c.header('Cache-Control', 'private, max-age=300')
+    return c.json({ ok: true, services: list })
+})
+
+tools.get('/otp/servers', async (c) => {
+    const country = c.req.query('country_id'), platform = c.req.query('platform_id')
+    if (!intStr(country) || !intStr(platform)) return out(c, 400, 'bad_request', 'Negara atau layanan tidak valid.')
+    const { list, res } = await getServers(c, Number(country), Number(platform)); if (res) return res
+    c.header('Cache-Control', 'no-store')
+    return c.json({ ok: true, servers: list.slice(0, 60) })
+})
+
+tools.post('/otp/order', async (c) => {
+    const b = await body(c), country = Number(b.country_id), platform = Number(b.platform_id), product = Number(b.product_id), q = Number(b.quantity || 1)
+    if (![country, platform, product].every((n) => Number.isInteger(n) && n > 0)) return out(c, 400, 'bad_request', 'Pilihan tidak valid.')
+    if (!Number.isInteger(q) || q < 1 || q > OTP_MAX_QTY) return out(c, 400, 'bad_qty', `Jumlah nomor 1-${OTP_MAX_QTY}.`)
+    if (!c.env.SMSCODE_API_KEY) return out(c, 503, 'not_configured', 'Layanan OTP belum dikonfigurasi (SMSCODE_API_KEY belum diisi).')
+    const [cs, ss, sv] = await Promise.all([getCountries(c), getServicesOtp(c, country), getServers(c, country, platform)])
+    if (cs.res) return cs.res; if (ss.res) return ss.res; if (sv.res) return sv.res
+    const ct = cs.list.find((x) => x.id === country), svc = ss.list.find((x) => x.id === platform), p = sv.list.find((x) => x.id === product)
+    if (!ct || !svc) return out(c, 400, 'bad_request', 'Negara atau layanan tidak ditemukan.')
+    if (!p) return out(c, 409, 'no_stock', 'Server ini sudah tidak tersedia. Pilih server lain.')
+    if (p.available < q) return out(c, 409, 'no_stock', `Stok server ini tinggal ${p.available} nomor.`)
+    const unit = p.price, cost = unit * q, st = store(c), uid = uidOf(c)
+
+    const rv = await st.smmReserve(uid, cost)   /* saldo dipotong dulu (atomik) */
+    if (rv.ok === false) return c.json({ ok: false, error: rv.error, message: rv.message, balance: rv.balance ?? 0, need: cost, status: rv.status }, rv.status)
+
+    const r = await scCreate(c, '/orders/create', { product_id: product, quantity: q })
+    if (r.j === undefined) {
+        if (r.uncertain) return out(c, 504, 'uncertain', 'Penyedia OTP tidak merespons, status pesanan tidak pasti. Saldo ditahan, jangan kirim ulang dan hubungi admin.')
+        await st.smmAdd(uid, cost)   /* gagal pasti: kembalikan saldo */
+        return scOut(c, r)
+    }
+    const made = Array.isArray(r.j.orders) ? r.j.orders.filter((x) => x && x.id) : []
+    const now = Date.now()
+    for (const x of made) {
+        await st.otpAdd({ order_id: String(x.id), uid, country: ct.name, dial: ct.dial, service: svc.name, svc_code: svc.code, server_no: p.server, product_id: product, phone: String(x.phone_number || ''),
+            cost: unit, status: String(x.status || 'ACTIVE').toUpperCase(), expires_at: ms(x.expires_at), now })
+    }
+    const back = (q - made.length) * unit   /* nomor yang gagal dibuat dikembalikan */
+    if (back > 0) await st.smmAdd(uid, back)
+    if (!made.length) return out(c, 409, 'no_stock', 'Nomor sedang kosong di server ini. Saldo dikembalikan, coba server lain.')
+    const rows = (await st.otpList(uid)).filter((o) => made.some((x) => String(x.id) === o.order_id))
+    return c.json({ ok: true, orders: rows.map((o) => otpView(o)), refunded: back, balance: await st.smmBal(uid) })
+})
+
+tools.get('/otp/orders', async (c) => {
+    const st = store(c), uid = uidOf(c)
+    let rows = await st.otpList(uid)
+    /* pesanan yang masih berjalan disinkronkan dulu, supaya yang kedaluwarsa otomatis mengembalikan saldo walau halaman sempat ditutup */
+    const live = rows.filter((o) => OTP_LIVE.has(o.status)).slice(0, 5)
+    if (live.length && c.env.SMSCODE_API_KEY) {
+        const rs = await Promise.allSettled(live.map((o) => otpRefresh(c, uid, o)))
+        const fresh = new Map(rs.filter((x) => x.status === 'fulfilled' && x.value.view).map((x) => [x.value.view.order_id, x.value.view]))
+        rows = (await st.otpList(uid)).map((o) => fresh.get(o.order_id) || otpView(o))
+    } else rows = rows.map((o) => otpView(o))
+    c.header('Cache-Control', 'no-store')
+    return c.json({ ok: true, orders: rows, balance: await st.smmBal(uid) })
+})
+
+tools.get('/otp/status', async (c) => {
+    const { o, res } = await myOtp(c); if (res) return res
+    c.header('Cache-Control', 'no-store')
+    if (!OTP_LIVE.has(o.status)) return c.json({ ok: true, order: otpView(o), balance: await store(c).smmBal(uidOf(c)) })
+    const x = await otpRefresh(c, uidOf(c), o)
+    if (!x.view) return scOut(c, x.r)
+    return c.json({ ok: true, order: x.view, balance: x.balance })
+})
+
+tools.post('/otp/cancel', async (c) => {
+    const { o, res } = await myOtp(c); if (res) return res
+    const st = store(c), uid = uidOf(c)
+    if (o.refunded) return c.json({ ok: true, status: o.status, refunded: 0, balance: await st.smmBal(uid) })
+    const r = await scCall(c, 'POST', '/orders/cancel', { body: { id: Number(o.order_id) } })
+    if (r.j === undefined) {
+        if (r.error === 'otp_error' || r.error === 'not_found') { try { await otpRefresh(c, uid, o) } catch {} }   /* mungkin sudah batal/kedaluwarsa: sinkronkan (dan refund bila perlu) */
+        return scOut(c, r)
+    }
+    const rf = await st.otpRefund(o.order_id, uid, 'CANCELED')   /* refund hanya SETELAH penyedia mengonfirmasi pembatalan */
+    return c.json({ ok: true, status: 'CANCELED', refunded: rf.refunded || 0, balance: rf.balance })
+})
+
+tools.post('/otp/finish', async (c) => {
+    const { o, res } = await myOtp(c); if (res) return res
+    const r = await scCall(c, 'POST', '/orders/finish', { body: { id: Number(o.order_id) } })
+    if (r.j === undefined) return scOut(c, r)
+    await store(c).otpSave(o.order_id, uidOf(c), { status: 'COMPLETED', otp_code: o.otp_code, otp_message: o.otp_message })
+    return c.json({ ok: true, status: 'COMPLETED' })
+})
+
+tools.post('/otp/resend', async (c) => {
+    const { o, res } = await myOtp(c); if (res) return res
+    const r = await scCall(c, 'POST', '/orders/resend', { body: { id: Number(o.order_id) } })
+    if (r.j === undefined) return scOut(c, r)
+    return c.json({ ok: true, resent: r.j.resent !== false, message: r.j.resent === false ? 'Layanan ini tidak mendukung kirim ulang.' : 'Permintaan kirim ulang OTP dikirim.' })
+})
+
+/* pakai lagi nomor yang sama untuk kode berikutnya; biaya = harga reaktivasi saat ini + markup, dipotong dulu seperti order biasa */
+tools.post('/otp/reactivate', async (c) => {
+    const { o, res } = await myOtp(c); if (res) return res
+    if (o.status !== 'COMPLETED') return out(c, 409, 'bad_status', 'Hanya pesanan yang sudah selesai yang bisa diaktifkan ulang.')
+    const opt = await scCall(c, 'GET', `/orders/${o.order_id}/reactivate-options`); if (opt.j === undefined) return scOut(c, opt)
+    const base = Number(opt.j.cost); if (!(base > 0)) return out(c, 409, 'not_available', 'Nomor ini tidak bisa diaktifkan ulang.')
+    const cost = markup(c, base), st = store(c), uid = uidOf(c)
+    const rv = await st.smmReserve(uid, cost)
+    if (rv.ok === false) return c.json({ ok: false, error: rv.error, message: rv.message, balance: rv.balance ?? 0, need: cost, status: rv.status }, rv.status)
+    const r = await scCreate(c, '/orders/reactivate', { id: Number(o.order_id), max_price: Math.ceil(base) })
+    if (r.j === undefined) {
+        if (r.uncertain) return out(c, 504, 'uncertain', 'Penyedia OTP tidak merespons, status tidak pasti. Saldo ditahan, jangan kirim ulang dan hubungi admin.')
+        await st.smmAdd(uid, cost); return scOut(c, r)
+    }
+    const x = Array.isArray(r.j.orders) ? r.j.orders.find((y) => y && y.id) : null
+    if (!x) { await st.smmAdd(uid, cost); return out(c, 409, 'not_available', 'Nomor ini tidak bisa diaktifkan ulang. Saldo dikembalikan.') }
+    await st.otpAdd({ order_id: String(x.id), uid, country: o.country, dial: o.dial, service: o.service, svc_code: o.svc_code, server_no: o.server_no, product_id: o.product_id,
+        phone: String(x.phone_number || o.phone), cost, status: String(x.status || 'ACTIVE').toUpperCase(), expires_at: ms(x.expires_at), now: Date.now() })
+    return c.json({ ok: true, order: otpView(await st.otpGet(String(x.id), uid)), balance: await st.smmBal(uid) })
+})
