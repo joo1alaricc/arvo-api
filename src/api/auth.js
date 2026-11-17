@@ -24,15 +24,25 @@ auth.post('/register', async (c) => {
     return send(c, r)
 })
 
+/* Login: kolom username boleh berisi username ATAU email (email terverifikasi Google / email akun).
+ * as:'admin' = "Login sebagai Pengelola": akun harus pengelola (email di ADMIN_EMAILS atau admin dari tab Tim), kalau bukan ditolak. */
 auth.post('/login', async (c) => {
-    const b = await body(c)
-    const info = await store(c).authInfo({ username: String(b.username || '').trim() })
-    const bad = fail(401, 'invalid_login', 'Username atau password salah.')
-    if (!info.ok || !info.hash) return send(c, bad)
-    const { hash } = await hashPw(String(b.password || ''), info.salt)
-    if (!sameHash(hash, info.hash)) return send(c, bad)
-    await store(c).loginOk(info.id, c.get('ip'), Date.now())
-    await startSession(c, info.id)
+    const b = await body(c), ident = String(b.username || b.email || '').trim(), pw = String(b.password || '')
+    const bad = fail(401, 'invalid_login', 'Username/email atau password salah.')
+    const cands = ident.includes('@') ? await store(c).authByEmail(ident) : [await store(c).authInfo({ username: ident })]
+    let hit = null
+    for (const info of cands) {
+        if (!info || info.ok === false || !info.hash) continue
+        const { hash } = await hashPw(pw, info.salt)
+        if (sameHash(hash, info.hash)) { hit = info; break }
+    }
+    if (!hit) return send(c, bad)
+    if (b.as === 'admin') {
+        const level = await store(c).adminLevel(hit.id)
+        if (!level) return send(c, fail(403, 'not_admin', 'Akun ini bukan pengelola.'))
+    }
+    await store(c).loginOk(hit.id, c.get('ip'), Date.now())
+    await startSession(c, hit.id)
     return c.json({ ok: true })
 })
 
