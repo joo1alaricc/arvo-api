@@ -4,7 +4,7 @@ import { refreshBlocked } from '../utils/rateLimit.js'
 import { getOverrides, refreshOverrides } from '../utils/overrides.js'
 import { BUILTIN_PATHS, builtinInfo } from './index.js'
 import { ghStatus, ghTree, ghGet, ghPut, ghDelete, ghRuns, safePath, b64ToText, textToB64 } from '../utils/github.js'
-import { analyze, build, readBack, patchIndex, exportNames, EXAMPLE, STRUCTURE_HELP } from '../utils/endpointGen.js'
+import { analyze, build, readBack, patchIndex, exportNames, slugFrom, EXAMPLE, STRUCTURE_HELP } from '../utils/endpointGen.js'
 import { makeQris, qrisInfo } from '../utils/payment.js'
 
 /* Dashboard admin.
@@ -177,11 +177,13 @@ admin.get('/code-endpoints/file', async (c) => {
     return c.json({ ok: true, ...readBack(b64ToText(f.content)) })
 })
 const prepare = async (c) => {
-    const b = await body(c), cat = String(b.category || '').trim().toLowerCase(), slug = String(b.slug || '').trim().toLowerCase()
-    const r = build(b, analyze(b.code, { category: cat, slug }))
+    const b = await body(c), { category: cat, slug } = slugFrom(b.path || b.slug, b.category || '')
+    if (!cat || !slug) return { fail: { ok: true, valid: false, issues: ['Path & kategori wajib diisi (mis. path /api/downloader/tiktok, kategori downloader).'], notes: [] } }
+    Object.assign(b, { category: cat, slug })
+    const r = build(b, analyze(b.code, { category: cat, slug, name: String(b.name || '').trim(), access: b.access || 'free', status: b.status === 'offline' ? 'offline' : 'online' }))
     if (!r.ok) return { fail: { ok: true, valid: false, issues: r.issues, notes: r.notes } }
     const dup = await store(c).findEndpoint(r.endpoint.category, r.endpoint.slug)
-    if (dup.ok !== false) return { fail: { ok: true, valid: false, issues: [`Path /api/${cat}/${slug} sudah dipakai endpoint buatan dashboard (tab Endpoint). Hapus/ganti slug dulu.`], notes: r.notes } }
+    if (dup.ok !== false) return { fail: { ok: true, valid: false, issues: [`Path /api/${cat}/${slug} sudah dipakai endpoint buatan dashboard (tab Endpoint). Hapus/ganti path dulu.`], notes: r.notes } }
     return { r, b }
 }
 admin.post('/code-endpoints/preview', async (c) => {
@@ -199,7 +201,7 @@ admin.post('/code-endpoints', async (c) => {
     if (w.ok === false) return send(c, w)
     steps.push({ path: file.path, ...w })
     const idx = await ghGet(c.env, 'src/api/index.js'); if (idx.ok === false || !idx.exists) return send(c, idx.ok === false ? idx : fail(404, 'no_index', 'src/api/index.js tidak ada di repo.'))
-    const pt = patchIndex(b64ToText(idx.content), { file: r.names.file, route: r.names.route, handler: r.names.handler })
+    const pt = patchIndex(b64ToText(idx.content), { file: r.names.file, route: r.names.route, handler: r.names.handler, ...(() => { const c2 = exportNames(r.endpoint.category, r.endpoint.slug); return { routeAs: c2.route, handlerAs: c2.handler } })() })
     if (!pt.ok) return send(c, fail(422, 'index_unknown', `File endpoint sudah dibuat, tapi pendaftaran otomatis gagal: ${pt.message}`))
     if (pt.changed) { const w2 = await ghPut(c.env, 'src/api/index.js', textToB64(pt.src), `${who(c)} daftarkan ${r.endpoint.category}/${r.endpoint.slug}`); if (w2.ok === false) return send(c, w2); steps.push({ path: 'src/api/index.js', ...w2 }) }
     return c.json({ ok: true, path: `/api/${r.endpoint.category}/${r.endpoint.slug}`, steps, notes: r.notes })
@@ -213,7 +215,7 @@ admin.delete('/code-endpoints/:category/:slug', async (c) => {
     /* index.js dulu (lepas referensi), baru hapus file, supaya build tidak pernah mengimpor file yang hilang */
     const idx = await ghGet(c.env, 'src/api/index.js')
     if (idx.ok && idx.exists) {
-        const pt = patchIndex(b64ToText(idx.content), { file: n.file, route: rb.route || n.route, handler: rb.handler || n.handler }, true)
+        const pt = patchIndex(b64ToText(idx.content), { file: n.file, route: rb.route || n.route, handler: rb.handler || n.handler, routeAs: n.route, handlerAs: n.handler }, true)
         if (pt.changed) { const w = await ghPut(c.env, 'src/api/index.js', textToB64(pt.src), `${who(c)} lepas ${n.file}`); if (w.ok === false) return send(c, w) }
     }
     return send(c, await ghDelete(c.env, n.path, `${who(c)} hapus endpoint ${n.file}`))
