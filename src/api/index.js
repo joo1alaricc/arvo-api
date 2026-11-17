@@ -3,12 +3,14 @@ import { premiumPingRoute, premiumPingHandler } from './premium/routes.js'
 import {tiktokRoute, tiktokHandler} from './downloader/tiktok.js'
 
 import { register } from '../utils/route.js'
+import { instagramRoute as downloaderInstagramRoute, instagramHandler as downloaderInstagramHandler } from './downloader/instagram.js'
 
 /* Tambah endpoint bawaan baru cukup di sini: otomatis terdaftar, masuk /docs, dan tampil di dashboard admin. */
 const BUILTIN = [
     [statsRoute, statsHandler],
     [premiumPingRoute, premiumPingHandler],
     [tiktokRoute, tiktokHandler],
+    [downloaderInstagramRoute, downloaderInstagramHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
