@@ -50,7 +50,7 @@ const drawInfo = (d) => {
 
 /* ---------- Cek Apikey ---------- */
 const KT = { apikey: ['API Key', 'arvo_xxxxxxxx'], accesskey: ['Access Key', 'acc_xxxxxxxxxxxx'] }
-$('#ckt').onchange = () => { const [l, ph] = KT[$('#ckt').value]; $('#ckl').textContent = l; $('#ckk').placeholder = ph; $('#ckr').innerHTML = ''; say($('#ckm'), '') }
+$('#ckt').onchange = () => { const [l, ph] = KT[$('#ckt').value]; $('#ckk').setAttribute('aria-label', l); $('#ckk').placeholder = ph; $('#ckr').innerHTML = ''; say($('#ckm'), '') }
 const fmtLimit = (n) => (n === null || n === undefined ? 'Unlimited' : nf(n))
 const fmtExp = (v) => (/^\d{4}-\d{2}-\d{2}T/.test(v) ? fmtDate(v) : v === 'Permanent' ? 'Permanen' : v === 'Expired' ? 'Kedaluwarsa' : v === 'No Subscription Found' ? 'Belum berlangganan' : v)
 const drawKey = (r) => {
@@ -81,7 +81,7 @@ $('#ckk').onkeydown = (e) => { if (e.key === 'Enter') submitKey() }
 /* Admin yang sedang login: tampilkan Access Key miliknya (user biasa dapat 403/401, diabaikan) */
 const showMyKey = (k) => {
   const box = $('#mykey'); box.hidden = false
-  box.innerHTML = `<small>Access Key kamu (admin)</small><div class="kline"><code>${esc(k)}</code><button class="btn sm" type="button" id="mkc" data-txt="1">${ico('copy')} Salin</button><button class="btn sm" type="button" id="mkr" title="Buat key baru">${ico('refresh')}</button></div>`
+  box.innerHTML = `<small>Access Key kamu (admin)</small><div class="kline"><code>${esc(k)}</code><button class="btn sm ib2" type="button" id="mkc" data-txt="1" title="Salin" aria-label="Salin">${ico('copy')}<span>Salin</span></button><button class="btn sm ib2 ghost" type="button" id="mkr" title="Buat key baru" aria-label="Buat key baru">${ico('refresh')}</button></div>`
   $('#mkc').onclick = (e) => copy(k, e.currentTarget)
   $('#mkr').onclick = async () => { if (!confirm('Buat Access Key baru? Key lama langsung tidak berlaku.')) return; try { showMyKey((await put('/auth/me/accesskey/reset', {}, 'POST')).access_key) } catch (e) { toast(e.message) } }
 }
