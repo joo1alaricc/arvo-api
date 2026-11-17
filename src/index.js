@@ -9,6 +9,7 @@ import { rateLimiter } from './utils/rateLimit.js'
 import { billing } from './api/billing.js'
 import { auth } from './api/auth.js'
 import { admin } from './api/admin.js'
+import { tools } from './api/tools.js'
 import { prettyPrint } from './utils/pretty.js'
 import { dynamicHandler, mergeSpec } from './api/dynamic.js'
 import { BUILTIN_PATHS, builtinInfo } from './api/index.js'
@@ -28,6 +29,7 @@ const createApp = () => {
     app.route('/api/billing', billing)
     app.route('/api/auth', auth)
     app.route('/api/admin', admin)
+    app.route('/api/tools', tools)
     setupRoutes(app)
 
     /* Katalog untuk Playground: hanya info yang perlu untuk memanggil endpoint (path, method, input, akses). Tidak ada skema respons,
