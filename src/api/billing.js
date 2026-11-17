@@ -18,8 +18,9 @@ const attachQris = async (c, o) => {
 
 billing.get('/plans', async (c) => c.json({ min_days: MIN_DAYS, max_days: MAX_DAYS, plans: await store(c).publicPlans() }))
 billing.get('/whoami', async (c) => {
-    let level = c.get('isOwner') ? 'super' : null
-    if (!level) { const u = await currentUser(c).catch(() => null); if (u) level = await store(c).adminLevel(u.id) }
+    let level = null
+    const u = await currentUser(c).catch(() => null)
+    if (u) level = await store(c).adminLevel(u.id)
     return c.json({ ip: c.get('ip'), is_owner: !!c.get('isOwner'), is_admin: !!level, admin_level: level, quota: await peekQuota(c).catch(() => null) })
 })
 
