@@ -240,48 +240,44 @@ V.endpoint = async function () {
 }
 async function codePanel(host) {
   const { files } = await api('/admin/code-endpoints')
-  host.innerHTML = `<div class="bar" style="margin-top:18px"><h2 style="margin:0">Endpoint kode (nyata, di GitHub)</h2><button class="btn" id="cadd">${ico('plus')} Tambah endpoint kode</button></div>
-    <p class="sub">JavaScript sungguhan: dibuat sebagai file di <span class="mono">src/api/&lt;kategori&gt;/&lt;slug&gt;.js</span>, didaftarkan otomatis, lalu di-deploy. Aktif setelah deploy selesai.</p>
+  host.innerHTML = `<div class="bar" style="margin-top:18px"><h2 style="margin:0">Endpoint kode (di GitHub)</h2></div>
+    <p class="sub">Dibuat dari tombol <b>Tambah endpoint</b> di atas: kode JavaScript disimpan sebagai file di <span class="mono">src/api/&lt;kategori&gt;/&lt;slug&gt;.js</span>, didaftarkan otomatis, lalu di-deploy. Aktif setelah deploy selesai.</p>
     <div class="panel tw" style="padding:6px 10px"><table><tr><th>Fitur</th><th>Path</th><th>Akses</th><th>Status</th><th>Aksi</th></tr>${files.map((f) => { const b = BI['/api/' + f.category + '/' + f.slug]; return `<tr>
       <td><b>${esc(b ? b.name : f.slug)}</b></td><td class="mono" style="font-size:12px">${esc(b ? b.method + ' ' : '')}/api/${esc(f.category)}/${esc(f.slug)}</td>
       <td>${b ? accessBadge(b.access) : '–'}</td><td>${b ? '<span class="badge online">Live</span>' : '<span class="badge">Menunggu deploy</span>'}</td>
       <td><div class="acts">${b ? `<button class="btn go sm" data-ct="${esc(f.category)}/${esc(f.slug)}">Tes</button>` : ''}<button class="btn ghost sm" data-ce="${esc(f.category)}/${esc(f.slug)}">Edit</button><button class="btn ghost red sm" data-cx="${esc(f.category)}/${esc(f.slug)}">Hapus</button></div></td></tr>` }).join('') || '<tr><td colspan="5" class="sub">Belum ada endpoint kode buatan dashboard.</td></tr>'}</table></div>`
-  $('#cadd', host).onclick = () => codeForm()
   host.querySelectorAll('[data-ct]').forEach((b) => (b.onclick = () => epTest(BI['/api/' + b.dataset.ct])))
-  host.querySelectorAll('[data-ce]').forEach((b) => (b.onclick = async () => { const [c, s] = b.dataset.ce.split('/'); try { codeForm({ ...(await api(`/admin/code-endpoints/file?category=${c}&slug=${s}`)), category: c, slug: s, edit: true }) } catch (e) { toast(e.message) } }))
+  host.querySelectorAll('[data-ce]').forEach((b) => (b.onclick = async () => { const [c, s] = b.dataset.ce.split('/'); try { const bi = BI['/api/' + c + '/' + s], f = await api(`/admin/code-endpoints/file?category=${c}&slug=${s}`); codeForm({ ...f, name: f.info?.name || bi?.name || '', category: c, slug: s, edit: true }) } catch (e) { toast(e.message) } }))
   host.querySelectorAll('[data-cx]').forEach((b) => (b.onclick = async () => { if (confirm(`Hapus endpoint ${b.dataset.cx} dari repo? (commit, lalu deploy)`)) { try { await api('/admin/code-endpoints/' + b.dataset.cx, { method: 'DELETE' }); toast('Dihapus dari repo, menunggu deploy'); V.endpoint() } catch (e) { toast(e.message) } } }))
 }
 
 async function codeForm(e) {
   const edit = !!e?.edit, info = e?.info || {}
-  e = { category: '', slug: '', name: info.name || '', description: e?.description || '', method: e?.method || 'GET', access: e?.access || 'free', status: e?.status || 'online', code: e?.code || '', inputs: info.inputs || [{ name: 'url', in: 'query', required: true, example: '' }], ...(e || {}) }
+  e = { path: '', category: '', name: info.name || '', access: e?.access || 'free', status: e?.status || 'online', code: e?.code || '', ...(e || {}) }
+  if (edit) e.path = `/api/${e.category}/${e.slug}`
   const help = await api('/admin/code-endpoints/help').catch(() => ({ example: '', structure: [] }))
-  const inRow = (i = {}) => `<div class="inrow"><input data-n placeholder="nama input (url, query…)" value="${esc(i.name || '')}"><select data-in><option value="query" ${i.in !== 'body' ? 'selected' : ''}>query</option><option value="body" ${i.in === 'body' ? 'selected' : ''}>body</option></select><label class="chk" style="padding:0"><input type="checkbox" data-rq ${i.required ? 'checked' : ''}> wajib</label><input data-ex placeholder="contoh nilai" value="${esc(i.example || '')}"><button class="ib" data-rm aria-label="Hapus input">${ico('x')}</button></div>`
-  const d = modal(`<h3>${edit ? 'Edit' : 'Tambah'} endpoint kode</h3><div class="frm">
-    <div class="full"><label>Nama fitur</label><input id="cn" value="${esc(e.name)}" placeholder="CapCut Downloader"></div>
-    <div><label>Kategori</label><input id="cc" value="${esc(e.category)}" ${edit ? 'disabled' : ''} placeholder="download"></div>
-    <div><label>Slug</label><input id="cs" value="${esc(e.slug)}" ${edit ? 'disabled' : ''} placeholder="capcut"></div>
-    <div><label>Method</label><select id="cm"><option ${e.method === 'GET' ? 'selected' : ''}>GET</option><option ${e.method === 'POST' ? 'selected' : ''}>POST</option></select></div>
-    <div><label>Akses</label><select id="ca">${[['free', 'Gratis'], ['premium', 'Premium'], ['vip', 'VIP'], ['owner', 'Hanya owner']].map(([v, t]) => `<option value="${v}" ${e.access === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
-    <div><label>Status</label><select id="ct"><option value="online" ${e.status === 'online' ? 'selected' : ''}>Online</option><option value="offline" ${e.status === 'offline' ? 'selected' : ''}>Offline</option></select></div>
-    <div class="full"><label>Deskripsi</label><input id="cd" value="${esc(e.description)}" placeholder="Opsional"></div>
-    <div class="full"><label>Input endpoint (struktur parameter)</label><div id="cins">${e.inputs.map(inRow).join('')}</div><button class="btn ghost sm" id="cadd2" type="button">${ico('plus')} Tambah input</button></div>
-    <div class="full"><label>Kode handler (JavaScript)</label>
-      <details style="margin:0 0 6px"><summary class="sub" style="cursor:pointer;margin:0">Struktur yang diminta + contoh</summary>
+  const d = modal(`<h3>${edit ? 'Edit' : 'Tambah'} endpoint</h3><div class="frm">
+    <div class="full"><label>Nama endpoint</label><input id="cn" value="${esc(e.name)}" placeholder="TikTok Downloader"></div>
+    <div><label>Path</label><input id="cp" value="${esc(e.path)}" ${edit ? 'disabled' : ''} placeholder="/api/downloader/tiktok" autocapitalize="off" spellcheck="false"></div>
+    <div><label>Kategori</label><input id="cc" value="${esc(e.category)}" ${edit ? 'disabled' : ''} placeholder="downloader" autocapitalize="off" spellcheck="false"></div>
+    <div class="full"><label>Akses</label><select id="ca">${[['free', 'Free'], ['premium', 'Premium'], ['vip', 'VIP'], ['owner', 'Admin / Owner']].map(([v, t]) => `<option value="${v}" ${e.access === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <div class="full"><label>Kode</label>
+      <textarea id="ck" rows="14" spellcheck="false" class="mono" style="font-size:12.5px" placeholder="Tempel kode JavaScript endpoint (seperti src/api/downloader/tiktok.js)">${esc(e.code)}</textarea>
+      <details style="margin:6px 0 0"><summary class="sub" style="cursor:pointer;margin:0">Contoh &amp; catatan</summary>
         <ul class="sub" style="font-size:12.5px;margin:6px 0 6px 16px">${help.structure.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
-        <pre class="mono" style="font-size:12px;white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px">${esc(help.example)}</pre>
-        <button class="btn ghost sm" id="cex" type="button">Pakai contoh ini</button></details>
-      <textarea id="ck" rows="11" spellcheck="false" class="mono" style="font-size:12.5px" placeholder="Tulis isi handler, atau tempel kode lengkap. Sistem menyesuaikan strukturnya.">${esc(e.code)}</textarea></div></div>
+        <button class="btn ghost sm" id="cex" type="button">Pakai contoh ini</button></details></div></div>
     <div id="cr"></div><p class="msg" id="cmsg"></p>
-    <div class="row" style="margin-top:10px"><button class="btn ghost" id="cck">Periksa &amp; pratinjau</button><button class="btn go" id="cpub" disabled>Terbitkan ke GitHub</button><button class="btn ghost" id="ccl">Batal</button></div>`, 'lg')
+    <div class="row" style="margin-top:10px"><button class="btn ghost" id="cck">Periksa</button><button class="btn go" id="cpub" disabled>Terbitkan</button><button class="btn ghost" id="ccl">Batal</button></div>`, 'lg')
   const g = (id) => $('#' + id, d)
-  g('cadd2').onclick = () => g('cins').insertAdjacentHTML('beforeend', inRow())
-  g('cex').onclick = () => (g('ck').value = help.example)
-  d.addEventListener('click', (ev) => { const r = ev.target.closest('[data-rm]'); if (r) r.closest('.inrow').remove() })
+  g('cex').onclick = () => { g('ck').value = help.example; g('cpub').disabled = true }
   g('ccl').onclick = () => d.close()
-  const payload = () => ({ name: g('cn').value, category: g('cc').value, slug: g('cs').value, method: g('cm').value, access: g('ca').value, status: g('ct').value, description: g('cd').value, code: g('ck').value,
-    inputs: [...d.querySelectorAll('.inrow')].map((r) => ({ name: r.querySelector('[data-n]').value.trim(), in: r.querySelector('[data-in]').value, required: r.querySelector('[data-rq]').checked, example: r.querySelector('[data-ex]').value.trim() })).filter((i) => i.name) })
-  ;['cn', 'cc', 'cs', 'cm', 'ca', 'ck'].forEach((id) => (g(id).oninput = () => (g('cpub').disabled = true)))
+  /* kategori otomatis dari path (/api/<kategori>/<nama>) selama belum diisi manual */
+  let catAuto = !e.category
+  g('cp').oninput = () => { if (catAuto) { const m = g('cp').value.trim().replace(/^\/?api\//, '').split('/').filter(Boolean); g('cc').value = m.length > 1 ? m[m.length - 2].toLowerCase() : '' } }
+  g('cc').oninput = () => { catAuto = !g('cc').value }
+  const payload = () => ({ name: g('cn').value, path: g('cp').value, category: g('cc').value, access: g('ca').value, status: e.status, code: g('ck').value })
+  ;['cn', 'cp', 'cc', 'ca', 'ck'].forEach((id) => g(id).addEventListener('input', () => (g('cpub').disabled = true)))
+  g('ca').onchange = () => (g('cpub').disabled = true)
   g('cck').onclick = async () => {
     g('cpub').disabled = true; g('cr').innerHTML = ''; say(g('cmsg'), 'Memeriksa…')
     try {
@@ -290,7 +286,7 @@ async function codeForm(e) {
       const noteHtml = (r.notes || []).length ? `<div class="sub" style="font-size:12.5px"><b>Disesuaikan otomatis:</b><ul style="margin:4px 0 4px 16px">${r.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>` : ''
       if (issues.length) { g('cr').innerHTML = `<div class="panel"><b class="err">Perlu diperbaiki:</b><ul style="margin:4px 0 4px 16px">${issues.map((n) => `<li class="err">${esc(n)}</li>`).join('')}</ul>${noteHtml}</div>`; say(g('cmsg'), 'Belum bisa diterbitkan.', 1); return }
       g('cr').innerHTML = `<div class="panel">${noteHtml}<b>${esc(r.path)}</b> akan dibuat sebagai:${r.files.map((f) => `<div class="sub mono" style="margin:6px 0 2px">${esc(f.path)}</div><pre class="mono" style="font-size:11.5px;max-height:200px;overflow:auto;white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px">${esc(f.content)}</pre>`).join('')}</div>`
-      g('cpub').disabled = false; say(g('cmsg'), 'Struktur sesuai. Siap diterbitkan.')
+      g('cpub').disabled = false; say(g('cmsg'), 'Sesuai. Siap diterbitkan.')
     } catch (er) { say(g('cmsg'), er.message, 1) }
   }
   g('cpub').onclick = async () => {
