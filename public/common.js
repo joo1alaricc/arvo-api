@@ -52,15 +52,15 @@ const NI = {
   user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
   home: '<path d="m3 10.5 9-7.5 9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>', compass: '<circle cx="12" cy="12" r="10"/><path d="m16 8-2.5 5.5L8 16l2.5-5.5z"/>',
   code: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>', grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', up: '<path d="m6 15 6-6 6 6"/>',
-  tool: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  tool: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>', trend: '<path d="m3 17 6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
 }
 const ni = (n) => `<svg viewBox="0 0 24 24" aria-hidden="true">${NI[n]}</svg>`
 const DR_GROUPS = [   /* [judul grup, ikon, [[href, label, ikon], ...]] */
   ['Utama', 'compass', [['/', 'Beranda', 'home'], ['/dashboard.html', 'Dashboard', 'grid'], ['/#paket', 'Paket', 'bag'], ['/#cara', 'Cara kerja', 'list'], ['/#faq', 'FAQ', 'help']]],
   ['Developer', 'code', [['/playground.html', 'Playground', 'play']]],
-  ['Tools', 'tool', [['/am', 'Aktivasi AM', 'bolt']]],
+  ['Tools', 'tool', [['/am', 'Aktivasi AM', 'bolt'], ['/smm', 'Layanan SMM', 'trend']]],
 ]
-const LINKS = [['/dashboard.html', 'Dashboard', 'grid'], ['/#paket', 'Paket', 'bag'], ['/#cara', 'Cara kerja', 'list'], ['/playground.html', 'Playground', 'play'], ['/am', 'Aktivasi AM', 'bolt'], ['/#faq', 'FAQ', 'help']]
+const LINKS = [['/dashboard.html', 'Dashboard', 'grid'], ['/#paket', 'Paket', 'bag'], ['/#cara', 'Cara kerja', 'list'], ['/playground.html', 'Playground', 'play'], ['/am', 'Aktivasi AM', 'bolt'], ['/smm', 'Layanan SMM', 'trend'], ['/#faq', 'FAQ', 'help']]
 
 /* header & footer dipakai semua halaman */
 document.body.insertAdjacentHTML('afterbegin', `<header class="nav"><div class="wrap nav-in">
