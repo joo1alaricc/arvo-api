@@ -1,16 +1,19 @@
-
 import { createRoute, z } from '@hono/zod-openapi'
+import { upstreamFetch } from '../../utils/upstream.js'
+
+const AUTHOR = 'Arvo - Endpoint'
+const UPSTREAM = 'https://api.nexray.eu.cc/downloader/tiktok'
 
 const TikTokQuerySchema = z.object({
     url: z.string().url().openapi({
-        example: 'https://vt.tiktok.com/ZSpb9Vn8u/',
+        example: 'https://vt.tiktok.com/ZSpGGC8Kx/',
         description: 'URL video TikTok yang ingin diunduh.',
     }),
 })
 
 export const tiktokRoute = createRoute({
     method: 'get',
-    path: '/api/tiktok',
+    path: '/api/downloader/tiktok',
     tags: ['downloader'],
     description: 'Download video TikTok tanpa watermark melalui Arvo API.',
     'x-status': 'ONLINE',
@@ -25,7 +28,7 @@ export const tiktokRoute = createRoute({
                 'application/json': {
                     schema: z.object({
                         status: z.boolean(),
-                        creator: z.string(),
+                        author: z.string(),
                         result: z.any(),
                         timestamp: z.string(),
                         response_time: z.string(),
@@ -43,48 +46,32 @@ export const tiktokRoute = createRoute({
     },
 })
 
+const fail = (c, message, extra = {}) => c.json({ status: false, author: AUTHOR, message, ...extra }, 502)
+
 export const tiktokHandler = async (c) => {
     const { url } = c.req.valid('query')
 
     try {
-        const start = Date.now()
+        const response = await upstreamFetch(`${UPSTREAM}?url=${encodeURIComponent(url)}`, {
+            headers: { accept: 'application/json' },
+            signal: AbortSignal.timeout(25000),
+        })
 
-        const response = await fetch(
-            `https://api-faa.my.id/faa/tiktok?url=${encodeURIComponent(url)}`
-        )
+        const data = await response.json().catch(() => null)
 
-        if (!response.ok) {
-            return c.json({
-                status: false,
-                creator: 'Arvo',
-                message: 'Scraper API sedang bermasalah.',
-            }, 502)
+        if (!response.ok || !data) {
+            return fail(c, 'Scraper API sedang bermasalah.', { upstream_status: response.status })
         }
-
-        const data = await response.json()
-
         if (!data.status || !data.result) {
-            return c.json({
-                status: false,
-                creator: 'Arvo',
-                message: 'Gagal mendapatkan data video TikTok.',
-            }, 502)
+            return fail(c, 'Gagal mendapatkan data video TikTok.')
         }
 
-        return c.json({
-            ...data,
-            creator: 'Arvo',
-            response_time: `${Date.now() - start}ms`,
-        }, 200)
+        /* Hasil upstream dikembalikan apa adanya; hanya "author" tingkat atas yang diganti. */
+        const { author: _upstreamAuthor, ...rest } = data
+        return c.json({ status: rest.status, author: AUTHOR, ...rest }, 200)
 
     } catch (error) {
         console.error('[ARVO TIKTOK]', error)
-
-        return c.json({
-            status: false,
-            creator: 'Arvo',
-            message: 'Terjadi kesalahan saat memproses permintaan.',
-        }, 502)
+        return fail(c, error?.name === 'TimeoutError' ? 'Scraper API timeout.' : 'Terjadi kesalahan saat memproses permintaan.')
     }
 }
-
