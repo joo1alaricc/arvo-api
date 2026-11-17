@@ -8,13 +8,13 @@ import { analyze, build, readBack, patchIndex, exportNames, EXAMPLE, STRUCTURE_H
 import { makeQris, qrisInfo } from '../utils/payment.js'
 
 /* Dashboard admin.
- *  - super admin : IP owner (OWNER_IPS) tanpa login, atau akun dengan email Google terverifikasi di ADMIN_EMAILS. Boleh semuanya.
+ *  - Panel hanya bisa dibuka setelah login (sesi) sebagai pengelola, atau memakai access key di header x-access-key. IP tidak memberi akses.
+ *  - super admin : akun dengan email terverifikasi di ADMIN_EMAILS. Boleh semuanya.
  *  - admin       : user yang ditambahkan super admin (tab Tim). TIDAK boleh: tambah/hapus admin, endpoint, update kode (GitHub). */
 export const admin = new Hono()
 const body = (c) => c.req.json().catch(() => ({}))
 
 admin.use('*', async (c, next) => {
-    if (c.get('isOwner')) { c.set('adminLevel', 'super'); c.set('adminName', 'owner'); return next() }
     /* Access key (header x-access-key / query accesskey): tanpa sesi login, level mengikuti pemilik key */
     const ak = c.req.header('x-access-key') || c.req.query('accesskey')
     if (ak) {
@@ -86,6 +86,7 @@ admin.delete('/endpoints/:id', async (c) => send(c, await store(c).adminDeleteEn
 /* ---------- tim admin (super admin saja) ---------- */
 admin.get('/admins', async (c) => send(c, await store(c).listAdmins()))
 admin.post('/admins', async (c) => send(c, await store(c).addAdmin((await body(c)).username, 'owner', Date.now())))
+admin.post('/admins/user/:id', async (c) => send(c, await store(c).makeAdmin(+c.req.param('id'), c.get('adminName'), Date.now())))
 admin.delete('/admins/:id', async (c) => send(c, await store(c).removeAdmin(+c.req.param('id'))))
 
 /* ---------- pembayaran / QRIS ---------- */
