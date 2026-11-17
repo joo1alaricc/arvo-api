@@ -9,6 +9,7 @@ import { ytmp4Route as downloaderYtmp4Route, ytmp4Handler as downloaderYtmp4Hand
 import { aioRoute as downloaderAioRoute, aioHandler as downloaderAioHandler } from './downloader/aio.js'
 import { appleMusicRoute as downloaderApplemusicRoute, appleMusicHandler as downloaderApplemusicHandler } from './downloader/applemusic.js'
 import { capcutRoute as downloaderCapcutRoute, capcutHandler as downloaderCapcutHandler } from './downloader/capcut.js'
+import { facebookRoute as downloaderFacebookRoute, facebookHandler as downloaderFacebookHandler } from './downloader/facebook.js'
 
 /* Tambah endpoint bawaan baru cukup di sini: otomatis terdaftar, masuk /docs, dan tampil di dashboard admin. */
 const BUILTIN = [
@@ -21,6 +22,7 @@ const BUILTIN = [
     [downloaderAioRoute, downloaderAioHandler],
     [downloaderApplemusicRoute, downloaderApplemusicHandler],
     [downloaderCapcutRoute, downloaderCapcutHandler],
+    [downloaderFacebookRoute, downloaderFacebookHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
