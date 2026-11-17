@@ -134,6 +134,7 @@ html.dr-lock{overflow:hidden}
 .dr{display:flex;flex-direction:column;position:fixed;left:0;top:var(--navh,53px);bottom:0;width:min(68vw,268px);z-index:50;background:color-mix(in srgb,var(--bg,#0d1016) 52%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(24px);backdrop-filter:saturate(1.8) blur(24px);color:var(--tx,#e8ecf3);border-right:1px solid var(--line,#242b38);border-radius:0 20px 20px 0;overscroll-behavior:contain;transform:translate3d(-102%,0,0);visibility:hidden;transition:transform .75s cubic-bezier(.22,.8,.24,1),visibility 0s .75s,box-shadow .75s}
 .dr.open{transform:none;visibility:visible;box-shadow:18px 0 50px -26px #000c;transition:transform .75s cubic-bezier(.22,.8,.24,1),visibility 0s,box-shadow .75s}
 .dr-nav{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:8px 8px 4px}
+.dr-g{padding:0}.dr-g+.dr-g{margin-top:2px}
 .dr-g,.dr-loose>*{opacity:0;transform:translate3d(-14px,0,0);transition:transform .5s var(--ease,ease),opacity .35s}
 .dr.open .dr-g,.dr.open .dr-loose>*{opacity:1;transform:none;transition-delay:calc(var(--i,0)*45ms + 90ms),calc(var(--i,0)*45ms + 90ms)}
 .dr-gh{display:flex;align-items:center;gap:10px;width:100%;padding:9px 8px;border:0;background:none;color:var(--tx,#e8ecf3);font:700 14px/1.2 inherit;font-family:inherit;cursor:pointer;text-align:left;border-radius:10px;-webkit-tap-highlight-color:transparent}
