@@ -37,7 +37,7 @@ const inputsOf = (r) => [...fieldsOf(r.request && r.request.query, 'query'), ...
 export const builtinInfo = () => BUILTIN.map(([r]) => ({
     path: r.path,
     method: String(r.method).toUpperCase(),
-    name: r.path.replace(/^\/api\//, ''),
+    name: r.summary || r.path.replace(/^\/api\//, ''),
     category: (r.tags && r.tags[0]) || 'bawaan',
     description: r.description || '',
     access: r['x-access'] || (r['x-premium'] ? 'premium' : 'free'),
