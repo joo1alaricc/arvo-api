@@ -40,3 +40,5 @@ billing.post('/orders', requireUser, async (c) => {
 })
 billing.get('/orders/:id', requireUser, async (c) =>
     send(c, await attachQris(c, await store(c).getOrder(c.req.param('id'), c.get('user').id, !!c.get('isOwner')))))
+billing.post('/orders/:id/cancel', requireUser, async (c) =>
+    send(c, await store(c).cancelOwnOrder(c.req.param('id'), c.get('user').id)))
