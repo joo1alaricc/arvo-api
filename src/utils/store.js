@@ -49,6 +49,8 @@ export class StoreDO extends DurableObject {
         for (const col of ['phone', 'bio', 'avatar_url', 'banner_url', 'reg_ip', 'last_ip', 'avatar_data', 'avatar_ver', 'stack', 'border_colors']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`) } catch {} }
         try { this.sql.exec('ALTER TABLE users ADD COLUMN last_seen INTEGER') } catch {}
         try { this.sql.exec('ALTER TABLE users ADD COLUMN access_key TEXT') } catch {}
+        /* email yang sudah diverifikasi Google. Dipakai untuk status admin lewat email; kolom email biasa bisa diubah user sendiri sehingga tidak dipercaya. */
+        try { this.sql.exec('ALTER TABLE users ADD COLUMN verified_email TEXT') } catch {}
         if (!this.q('SELECT 1 FROM plans LIMIT 1').length) {
             DEFAULT_PLANS.forEach((p, i) => this.sql.exec('INSERT INTO plans VALUES(?,?,?,?,?,?,?,?,?,1,?)', p.id, p.tier, p.name, p.daily, p.maxIps, p.customKey ? 1 : 0, p.baseDays, p.basePrice, p.permanentPrice, i))
         }
@@ -137,16 +139,26 @@ export class StoreDO extends DurableObject {
     }
     googleLogin({ sub, email, now, ip }) {
         const [u] = this.q('SELECT id,avatar_data,avatar_url,avatar_ver FROM users WHERE google_sub=?', sub)
+        const ve = String(email || '').trim().toLowerCase()
         /* avatar_ver terisi = user pernah mengatur/menghapus foto sendiri, jangan ditimpa foto Google lagi */
-        if (u) { this.touchIp(u.id, ip, now, 'web'); return { ok: true, id: u.id, needAvatar: !u.avatar_data && !u.avatar_url && u.avatar_ver == null } }
+        if (u) { this.sql.exec('UPDATE users SET verified_email=? WHERE id=?', ve, u.id); this.touchIp(u.id, ip, now, 'web'); return { ok: true, id: u.id, needAvatar: !u.avatar_data && !u.avatar_url && u.avatar_ver == null } }
         const base = (email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 14) || 'user').padEnd(3, '0')
         let name = base
         while (this.q('SELECT 1 FROM users WHERE username=?', name).length) name = base + Math.floor(Math.random() * 9000 + 1000)
-        return { ok: true, id: this.insertUser({ username: name, email, sub, now, ip }), needAvatar: true }
+        const id = this.insertUser({ username: name, email, sub, now, ip })
+        this.sql.exec('UPDATE users SET verified_email=? WHERE id=?', ve, id)
+        return { ok: true, id, needAvatar: true }
     }
     authInfo({ username, id }) {
         const [u] = id ? this.q('SELECT * FROM users WHERE id=?', id) : this.q('SELECT * FROM users WHERE username=?', username)
         return u ? { ok: true, id: u.id, hash: u.pass_hash, salt: u.pass_salt } : fail(401, 'invalid_login', 'Username atau password salah.')
+    }
+    /* login dengan email: kembalikan semua akun yang cocok (email terverifikasi Google didahulukan); password tetap harus cocok. */
+    authByEmail(email) {
+        const e = String(email || '').trim().toLowerCase()
+        if (!e) return []
+        const rows = this.q('SELECT id,pass_hash hash,pass_salt salt,(verified_email=?) v FROM users WHERE verified_email=? OR lower(email)=?', e, e, e)
+        return rows.sort((a, b) => (b.v || 0) - (a.v || 0))
     }
     createSession(userId, tokenHash, now, ttl) {
         this.sql.exec('DELETE FROM sessions WHERE expires_at<?', now)
@@ -605,7 +617,16 @@ export class StoreDO extends DurableObject {
     adminDeleteEndpoint(id) { this.sql.exec('DELETE FROM endpoints WHERE id=?', id); return { ok: true } }
 
     /* ---------- tim admin (hanya owner yang boleh menambah; admin tambahan tidak bisa menambah admin/endpoint) ---------- */
-    isAdmin(id) { return this.q('SELECT 1 FROM admins WHERE user_id=?', id).length > 0 }
+    /* Level admin sebuah akun: 'super' bila email terverifikasi Google-nya ada di ADMIN_EMAILS (setara IP owner),
+     * 'admin' bila ditambahkan lewat tab Tim, selain itu null. */
+    adminEmails() { return String(this.env?.ADMIN_EMAILS || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean) }
+    adminLevel(id) {
+        const u = this.user(id)
+        if (!u) return null
+        if (u.verified_email && this.adminEmails().includes(String(u.verified_email).toLowerCase())) return 'super'
+        return this.q('SELECT 1 FROM admins WHERE user_id=?', id).length > 0 ? 'admin' : null
+    }
+    isAdmin(id) { return !!this.adminLevel(id) }
     listAdmins() { return { ok: true, admins: this.q('SELECT a.user_id id,u.username,u.email,a.added_by,a.added_at FROM admins a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.added_at') } }
     addAdmin(username, by, now) {
         const [u] = this.q('SELECT id,username FROM users WHERE username=?', String(username || '').trim())
@@ -625,6 +646,7 @@ export class StoreDO extends DurableObject {
     accessKeyOf(id, reset = false) {
         if (!this.isAdmin(id)) return fail(403, 'not_admin', 'Access key khusus admin.')
         let k = this.user(id).access_key
+        if (!k && !reset) return { ok: true, access_key: null }   /* belum pernah dibuat: tampilkan tombol Generate */
         if (!k || reset) { k = 'acc_' + hex(12); this.sql.exec('UPDATE users SET access_key=? WHERE id=?', k, id) }
         return { ok: true, access_key: k }
     }
@@ -635,7 +657,8 @@ export class StoreDO extends DurableObject {
         const env = this.env?.OWNER_ACCESS_KEY
         if (env && key === String(env)) return { ok: true, level: 'super', name: 'owner', id: null }
         const [u] = this.q('SELECT id,username FROM users WHERE access_key=?', key)
-        return u && this.isAdmin(u.id) ? { ok: true, level: 'admin', name: u.username, id: u.id } : bad
+        const lv = u && this.adminLevel(u.id)
+        return lv ? { ok: true, level: lv, name: u.username, id: u.id } : bad
     }
 
     /* ---------- Cek API key (publik): type = apikey | accesskey ---------- */
