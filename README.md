@@ -148,7 +148,7 @@ API/
 
 ## AKUN, PREMIUM / VIP & PEMBAYARAN
 
-- Halaman: `/` (landing), `/login.html`, `/profile.html`, `/playground.html`, `/admin.html`.
+- Halaman: `/` (landing), `/dashboard.html` (statistik publik: total request, endpoint, uptime, user, grafik 14 hari), `/login.html`, `/profile.html`, `/playground.html`, `/admin.html`.
 - Akun: username + password (PBKDF2), atau Google (isi `GOOGLE_CLIENT_ID` di `wrangler.toml`). Tiap akun dapat API key.
 - Login Google memakai mode redirect (tanpa popup). Di Google Cloud Console > Credentials > OAuth client (Web), isi:
   - Authorized JavaScript origins: `https://DOMAIN-KAMU` (dan `http://localhost:8787` untuk dev)
@@ -157,6 +157,9 @@ API/
 - Video hero beranda: taruh file di `public/media/hero.mp4` lalu atur `HERO_VIDEO` di `wrangler.toml` (kosongkan untuk mematikan).
 - Owner: isi `OWNER_IPS` dengan IP publikmu. Dari IP itu: request unlimited dan `/admin.html` bisa dibuka tanpa login.
 - Paket diatur di `src/utils/plans.js`. Semua akun (member/premium/vip/owner) bisa beli.
+  - **Premium** (1-3): limit harian selalu terbatas (1.000 / 2.000 / 3.000 per hari), tidak ada unlimited. Premium 3 permanen.
+  - **VIP** (1-3): VIP 1 = 10.000/hari, VIP 2 & VIP 3 = unlimited. Hanya VIP yang bisa akses endpoint khusus VIP, slot IP lebih banyak (10-15), badge gold, dan border profil custom.
+  - Seed ini hanya terpakai saat database baru. Untuk database yang sudah jalan, ubah lewat Admin > Paket.
 - Pembayaran: QRIS statis (`QRIS_IMAGE_URL`) diubah jadi dinamis via `qris-swap` dengan kode unik.
   Konfirmasi otomatis: `POST /api/billing/webhook` + `Authorization: Bearer <PAYMENT_WEBHOOK_SECRET>`, body `{"amount": 5037}`.
   Atau manual dari Admin > Order.
@@ -190,3 +193,16 @@ API/
 **Hak akses**: super admin (owner) boleh semuanya. Admin tambahan (tab Tim) tidak bisa menambah admin, menambah/ubah endpoint, atau update kode.
 
 **Endpoint kode** dibuat sebagai `src/api/<kategori>/<slug>.js` (createRoute + handler, struktur sama dengan endpoint bawaan) dan didaftarkan otomatis di `src/api/index.js`.
+
+
+## User-Agent untuk request ke API lain
+
+Semua `fetch()` keluar dari Worker (endpoint bawaan, endpoint proxy buatan admin, dan kode endpoint sendiri) otomatis memakai User-Agent browser
+(`src/utils/upstream.js`), karena banyak API menolak User-Agent bawaan Cloudflare Workers. Header yang kamu isi sendiri selalu menang.
+Untuk mengganti UA bawaan, tambahkan variabel `UPSTREAM_UA` (mis. di `[vars]` pada `wrangler.toml`).
+Catatan: kalau upstream memblokir IP Cloudflare itu sendiri, UA saja tidak cukup.
+
+## Layar pembuka & popup (beranda)
+
+- `public/splash.js` + blok `#splash` di `index.html`: layar pembuka, tampil saat web dibuka/di-refresh (bukan saat pindah dari halaman lain di situs).
+- `public/welcome.js`: popup sambutan, `POPUP_DELAY` ms setelah splash selesai, `POPUP_ONCE = false` = muncul tiap refresh.
