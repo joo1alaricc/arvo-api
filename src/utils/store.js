@@ -413,7 +413,7 @@ export class StoreDO extends DurableObject {
         return { ok: true, id: o.id, plan: o.plan, name: this.plans[o.plan]?.name || o.plan, days: o.days, total: o.total, status: o.status, expires_at: o.expires_at }
     }
     userOrders(id) {
-        return { ok: true, orders: this.q('SELECT id,plan,days,total,status,created_at FROM orders WHERE user_id=? ORDER BY created_at DESC LIMIT 2', id) }
+        return { ok: true, orders: this.q('SELECT id,plan,days,total,status,created_at,expires_at FROM orders WHERE user_id=? ORDER BY created_at DESC LIMIT 2', id).map((o) => ({ ...o, name: this.plans[o.plan]?.name || o.plan })) }
     }
 
     /* ---------- admin ---------- */
