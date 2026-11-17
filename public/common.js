@@ -326,3 +326,141 @@ try { if (!sessionStorage.getItem('pv')) { sessionStorage.setItem('pv', '1'); fe
   new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach(scan))).observe(document.documentElement, { childList: true, subtree: true })
   scan(document.documentElement)
 })()
+
+
+/* ---------- jendela mengambang (dialog) berkaca blur, sama seperti bar atas & drawer ---------- */
+{
+  const st = document.createElement('style'); st.id = 'glass-css'
+  st.textContent = `
+dialog{background:color-mix(in srgb,var(--card) 58%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(24px);backdrop-filter:saturate(1.8) blur(24px);border-color:color-mix(in srgb,var(--tx) 14%,var(--line));box-shadow:0 24px 70px -28px #000c}
+dialog[open]::backdrop{background:#0006;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.sel-m{background:color-mix(in srgb,var(--card) 62%,transparent)!important;-webkit-backdrop-filter:saturate(1.8) blur(24px)!important;backdrop-filter:saturate(1.8) blur(24px)!important}`
+  document.head.append(st)
+}
+
+/* ---------- order belum dikonfirmasi admin: papan kecil menggantung di kanan atas (tali + ayunan) ---------- */
+{
+  const st = document.createElement('style'); st.id = 'hang-css'
+  st.textContent = `
+.hang{position:fixed;top:calc(var(--navh,56px) - 1px);right:14px;z-index:45;width:min(188px,54vw);pointer-events:none;animation:hangDrop .85s cubic-bezier(.34,1.35,.64,1) both}
+.hang.out{animation:hangUp .55s cubic-bezier(.5,0,.75,0) forwards}
+.hang-sw{transform-origin:50% 0;animation:hangSwing 3.4s ease-out .4s both,hangIdle 5.5s ease-in-out 3.8s infinite}
+.hang-rope{display:block;width:100%;height:38px;overflow:visible;color:color-mix(in srgb,var(--tx) 55%,transparent)}
+.hang-rope path{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.hang-rope circle{fill:var(--card);stroke:currentColor;stroke-width:1.6;vector-effect:non-scaling-stroke}
+.hang-tag{pointer-events:auto;display:flex;align-items:center;gap:10px;width:100%;padding:9px 11px;border-radius:15px;border:1px solid color-mix(in srgb,#f5a524 45%,var(--line));background:color-mix(in srgb,var(--card) 60%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(20px);backdrop-filter:saturate(1.8) blur(20px);color:var(--tx);font:inherit;text-align:left;cursor:pointer;box-shadow:0 14px 30px -14px #000a;-webkit-tap-highlight-color:transparent;transition:transform .15s,border-color .3s}
+.hang-tag:active{transform:scale(.96)}
+.hang-ic{width:30px;height:30px;border-radius:10px;flex:none;display:grid;place-items:center;background:color-mix(in srgb,#f5a524 20%,transparent);color:#f5a524}
+.hang-ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.hang:not(.ok) .hang-ic{animation:hangPulse 2.2s ease-in-out infinite}
+.hang-tx{display:grid;min-width:0;line-height:1.25}.hang-tx b{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hang-tx small{font-size:11.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hang.ok .hang-tag{border-color:color-mix(in srgb,var(--ok,#4ade80) 55%,var(--line))}.hang.ok .hang-ic{background:color-mix(in srgb,var(--ok,#4ade80) 20%,transparent);color:var(--ok,#4ade80)}
+.hg-st{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:99px;font-size:12.5px;font-weight:700;color:#f5a524;background:color-mix(in srgb,#f5a524 14%,transparent);border:1px solid color-mix(in srgb,#f5a524 40%,transparent)}
+.hg-st i{width:7px;height:7px;border-radius:50%;background:currentColor;animation:hangPulse 1.6s ease-in-out infinite}
+.hg-st.ok{color:var(--ok,#4ade80);background:color-mix(in srgb,var(--ok,#4ade80) 14%,transparent);border-color:color-mix(in srgb,var(--ok,#4ade80) 40%,transparent)}.hg-st.ok i{animation:none}
+.hg-st.off{color:var(--mut);background:color-mix(in srgb,var(--mut) 12%,transparent);border-color:var(--line)}.hg-st.off i{animation:none}
+@keyframes hangDrop{0%{transform:translate3d(0,-120%,0);opacity:0}60%{opacity:1}100%{transform:none;opacity:1}}
+@keyframes hangUp{to{transform:translate3d(0,-130%,0);opacity:0}}
+@keyframes hangSwing{0%{transform:rotate(12deg)}14%{transform:rotate(-9deg)}28%{transform:rotate(6.5deg)}42%{transform:rotate(-4.2deg)}56%{transform:rotate(2.7deg)}70%{transform:rotate(-1.5deg)}84%{transform:rotate(.7deg)}100%{transform:rotate(0)}}
+@keyframes hangIdle{0%,100%{transform:rotate(1.4deg)}50%{transform:rotate(-1.4deg)}}
+@keyframes hangPulse{0%,100%{opacity:1}50%{opacity:.45}}
+@media(prefers-reduced-motion:reduce){.hang,.hang-sw,.hang-ic,.hg-st i{animation:none!important}}`
+  document.head.append(st)
+
+  const CLOCK = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'
+  const TICK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>'
+  const H = { el: null, order: null, poll: null, dpoll: null, tick: null, dlg: null, exp: 0 }
+  const sub = (o) => `${o.name || o.plan} · ${rp(o.total)}`
+  const fmtLeft = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` }
+
+  const place = () => { const n = $('.nav'); if (n) root.style.setProperty('--navh', n.offsetHeight + 'px') }
+  addEventListener('resize', place)
+
+  const mount = (o) => {
+    place()
+    const el = document.createElement('div'); el.className = 'hang'
+    el.innerHTML = `<div class="hang-sw"><svg class="hang-rope" viewBox="0 0 100 38" preserveAspectRatio="none" aria-hidden="true"><path d="M50 3 L18 38"/><path d="M50 3 L82 38"/><circle cx="50" cy="3" r="3"/></svg>
+      <button class="hang-tag" type="button" aria-label="Lihat status pembelian"><span class="hang-ic">${CLOCK}</span><span class="hang-tx"><b>Menunggu konfirmasi</b><small></small></span></button></div>`
+    el.querySelector('small').textContent = sub(o)
+    el.querySelector('.hang-tag').onclick = () => {
+      const sw = el.querySelector('.hang-sw'); sw.style.animation = 'none'; void sw.offsetWidth; sw.style.animation = ''   /* ketuk = papan berayun lagi */
+      openDlg()
+    }
+    document.body.append(el); H.el = el
+  }
+  const unmount = () => {
+    clearInterval(H.poll); H.poll = null
+    const el = H.el; H.el = null; H.order = null
+    if (!el) return
+    el.classList.add('out'); setTimeout(() => el.remove(), 600)
+  }
+  const success = (o) => {
+    clearInterval(H.poll); H.poll = null
+    if (!H.el) return
+    H.el.classList.add('ok')
+    H.el.querySelector('.hang-ic').innerHTML = TICK
+    H.el.querySelector('b').textContent = 'Pembayaran dikonfirmasi'
+    H.el.querySelector('small').textContent = `${o.name || o.plan} sudah aktif`
+    setTimeout(unmount, 7000)
+  }
+
+  const pull = async () => {
+    let r; try { r = await api('/auth/me/orders') } catch { return }
+    const list = r.orders || [], now = Date.now()
+    const pend = list.find((o) => o.status === 'pending' && (!o.expires_at || o.expires_at > now))
+    if (pend) {
+      H.order = pend; H.exp = pend.expires_at || 0
+      if (!H.el) mount(pend); else H.el.querySelector('small').textContent = sub(pend)
+      if (!H.poll) H.poll = setInterval(pull, 15000)
+      return
+    }
+    if (H.order) {
+      const was = list.find((o) => o.id === H.order.id)
+      if (was && was.status === 'paid') success({ ...H.order, ...was }); else unmount()
+    }
+  }
+
+  /* ---- jendela status pembelian (muncul saat papan diketuk) ---- */
+  const dlgEl = () => {
+    if (H.dlg) return H.dlg
+    const d = document.createElement('dialog'); d.id = 'hangdlg'
+    d.innerHTML = '<div id="hangbody"></div><button class="btn ghost" id="hangclose" type="button">Tutup</button>'
+    document.body.append(d)
+    d.querySelector('#hangclose').onclick = () => d.close()
+    d.addEventListener('close', () => { clearInterval(H.dpoll); clearInterval(H.tick); H.dpoll = H.tick = null })
+    return (H.dlg = d)
+  }
+  const draw = (o) => {
+    const b = $('#hangbody'), pending = o.status === 'pending', paid = o.status === 'paid'
+    const chip = pending ? '<span class="hg-st"><i></i>Menunggu konfirmasi admin</span>' : paid ? '<span class="hg-st ok"><i></i>Pembayaran berhasil</span>' : '<span class="hg-st off"><i></i>Order tidak aktif</span>'
+    b.innerHTML = `<h3 style="margin:0 0 10px">Status pembelian</h3>${chip}
+      <div class="cfm" style="margin-top:12px"><div><span>Paket</span><b>${esc(o.name || o.plan)}</b></div><div><span>Durasi</span><b>${o.days ? esc(o.days) + ' hari' : 'Permanen'}</b></div>
+      ${pending ? '<div><span>Sisa waktu bayar</span><b class="mono" id="hgleft">--:--</b></div>' : ''}<div class="tot"><span>Total bayar</span><b>${rp(o.total)}</b></div></div>
+      ${pending && o.qris ? `<img alt="QRIS" src="${esc(o.qris.image)}" style="margin-top:12px;max-width:240px;display:block;margin-inline:auto">` : ''}
+      <p class="sub" style="margin:10px 0 0;font-size:12.5px">${pending ? 'Sudah bayar? Tunggu admin mengonfirmasi, paket aktif otomatis dan status ini ikut berubah.' : paid ? 'Paketmu sudah aktif di akun.' : 'Silakan buat order baru dari halaman paket.'}</p>
+      <p class="sub" style="margin:6px 0 0;font-size:11.5px">ID order: <span class="mono">${esc(o.id)}</span></p>
+      ${paid ? '<a class="btn" href="/profile.html" style="display:block;text-align:center;margin-top:10px">Buka profil</a>' : ''}`
+    clearInterval(H.tick); H.tick = null
+    if (pending && o.expires_at) {
+      const t = () => { const e = $('#hgleft'); if (e) e.textContent = fmtLeft(o.expires_at - Date.now()) }
+      t(); H.tick = setInterval(t, 1000)
+    }
+  }
+  const dpull = async () => {
+    if (!H.order) return
+    try { const o = await api('/billing/orders/' + H.order.id); draw(o); if (o.status !== 'pending') { clearInterval(H.dpoll); H.dpoll = null; pull() } }
+    catch (e) { $('#hangbody').innerHTML = `<p class="err">${esc(e.message)}</p>` }
+  }
+  const openDlg = async () => {
+    const d = dlgEl()
+    $('#hangbody').innerHTML = '<p class="sub" style="display:flex;gap:8px;align-items:center"><i class="spin"></i> Memuat status…</p>'
+    if (!d.open) d.showModal()
+    clearInterval(H.dpoll); H.dpoll = setInterval(dpull, 5000)
+    dpull()
+  }
+
+  window.hangNotice = { refresh: pull }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && H.el) pull() })
+  if (!location.pathname.startsWith('/login')) ready.then(({ user }) => { if (user) pull() })
+}
