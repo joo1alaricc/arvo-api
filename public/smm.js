@@ -1,4 +1,4 @@
-/* Tools › Layanan SMM: tiap user memakai API key panel SMM miliknya sendiri, jadi saldo & pesanan terpisah per user. */
+/* Tools › Layanan SMM: saldo tiap user dicatat di Arvo; pesanan & deposit lewat panel SMM milik Arvo. */
 const el = $('#app'); el.classList.add('sm')
 { const st = document.createElement('style')
   st.textContent = `.sm{max-width:560px}.sm h1{font-size:19px;margin:0 0 2px}.sm>.sub{font-size:12.5px;line-height:1.45;margin:0 0 12px}
@@ -31,31 +31,15 @@ const I = (n) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${NI[n]}
 const nf = (n) => Number(n || 0).toLocaleString('id-ID')
 const LS = (k, v) => { try { if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null'); v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)) } catch {} return null }
 const note = (e, t, bad) => { if (!e) return; e.textContent = t; e.className = 'msg' + (bad ? ' err' : ''); e.style.cssText = bad || !t ? '' : 'color:var(--g)' }
-const stChip = (s) => { const k = String(s || '').toLowerCase(); const c = /success|complete|selesai|done/.test(k) ? 'ok' : /cancel|fail|error|refund/.test(k) ? 'bad' : /partial/.test(k) ? 'mid' : 'wait'; return `<span class="sm-st ${c}">${esc(s)}</span>` }
-const DEPK = 'arvo_smm_dep', ORDK = 'arvo_smm_orders'
-const S = { bal: null, svcs: [], sel: null, poll: null, masked: '' }
+const stChip = (s) => { const k = String(s || '').toLowerCase(); const c = /success|complete|selesai|done/.test(k) ? 'ok' : /cancel|fail|error|refund|pasti/.test(k) ? 'bad' : /partial/.test(k) ? 'mid' : 'wait'; return `<span class="sm-st ${c}">${esc(s)}</span>` }
+const DEPK = 'arvo_smm_dep'
+const S = { bal: null, svcs: [], sel: null, poll: null }
+const setBal = (n) => { if (n == null) return; S.bal = n; const b = $('#bv'); if (b) b.textContent = rp(n); est() }
 
-/* ---------- belum terhubung ---------- */
-const unlinked = () => {
-  clearInterval(S.poll)
-  el.innerHTML = `<h1>Layanan SMM</h1><p class="sub">Beli followers, likes, views, dan layanan sosmed lainnya. Saldo dan pesanan terpisah untuk tiap akun.</p>
-  <div class="card"><div class="card-h">${I('shield')}<span>Hubungkan akun SMM</span></div><div class="card-b">
-    <p class="hint">Masukkan API key panel SMM milikmu. Key dicek dulu ke panel, disimpan di server, dan tidak ditampilkan lagi. Belum punya? Ambil di <a href="https://smm.barz.web.id" target="_blank" rel="noopener noreferrer">smm.barz.web.id</a>.</p>
-    <form id="fk" style="display:grid;gap:8px"><input id="ky" type="password" placeholder="API key SMM" autocomplete="off" autocapitalize="off" spellcheck="false" required><button class="btn block" id="bk">Hubungkan</button></form>
-    <p class="msg" id="mk"></p></div></div>`
-  $('#fk').onsubmit = async (ev) => {
-    ev.preventDefault(); const b = $('#bk'), m = $('#mk'); b.disabled = true; note(m, 'Memeriksa key…')
-    try { const r = await put('/tools/smm/key', { key: $('#ky').value.trim() }); S.masked = r.masked; S.bal = r.balance; linked() }
-    catch (e) { note(m, e.message, 1); b.disabled = false }
-  }
-}
-
-/* ---------- sudah terhubung ---------- */
-const linked = () => {
-  el.innerHTML = `<h1>Layanan SMM</h1><p class="sub">Pilih layanan, isi link target dan jumlah, lalu pesan. Biaya dipotong dari saldo SMM-mu.</p>
+const view = () => {
+  el.innerHTML = `<h1>Layanan SMM</h1><p class="sub">Beli followers, likes, views, dan layanan sosmed lainnya. Biaya dipotong dari saldo SMM di akunmu; isi saldo lewat deposit QRIS.</p>
   <div class="card"><div class="card-b">
-    <div class="sm-bal"><div><small>Saldo</small><b id="bv">${S.bal === null ? '…' : rp(S.bal)}</b></div><button class="btn sm" id="bdp" type="button">Deposit</button></div>
-    <div class="sm-acc">Akun <span class="mono">${esc(S.masked)}</span><button class="sm-link" id="bch" type="button">Ganti / putuskan</button></div>
+    <div class="sm-bal"><div><small>Saldo SMM</small><b id="bv">…</b></div><button class="btn sm" id="bdp" type="button">Deposit</button></div>
     <p class="msg" id="mb"></p></div></div>
 
   <div class="card" id="cd" hidden><div class="card-h">${I('bolt')}<span>Deposit saldo</span></div><div class="card-b">
@@ -75,14 +59,9 @@ const linked = () => {
       <button class="btn block" id="bo">Pesan</button></form>
     <p class="msg" id="mo"></p></div></div>
 
-  <div class="card"><div class="card-h">${I('list')}<span>Status pesanan</span></div><div class="card-b">
-    <form id="fs" class="sm-row2"><input id="oi" inputmode="numeric" placeholder="ID pesanan" autocomplete="off" required><button class="btn" id="bs">Cek</button></form>
-    <div id="so"></div><div id="hl" style="display:grid;gap:6px"></div></div></div>`
+  <div class="card"><div class="card-h">${I('list')}<span>Pesanan kamu</span></div><div class="card-b">
+    <div id="hl" style="display:grid;gap:6px"><p class="hint">Memuat…</p></div></div></div>`
 
-  $('#bch').onclick = async () => {
-    const b = $('#bch'); if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = 'Yakin putuskan?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = 'Ganti / putuskan' } }, 4000); return }
-    try { await put('/tools/smm/key', {}, 'DELETE'); S.bal = null; S.sel = null; unlinked() } catch (e) { note($('#mb'), e.message, 1) }
-  }
   $('#bdp').onclick = () => openDep()
   $('#dc').onclick = (e) => { const b = e.target.closest('button[data-n]'); if (b) { $('#da').value = b.dataset.n; chipSync() } }
   $('#da').oninput = chipSync
@@ -91,16 +70,13 @@ const linked = () => {
   $('#sl').onclick = (e) => { const b = e.target.closest('.sm-r'); if (b) pick(b.dataset.id) }
   $('#qt').oninput = est
   $('#fo').onsubmit = placeOrder
-  $('#fs').onsubmit = (e) => { e.preventDefault(); const id = $('#oi').value.trim(); checkOrder(id, $('#so'), true) }
-  $('#hl').onclick = (e) => { const b = e.target.closest('button[data-o]'); if (b) checkOrder(b.dataset.o, b.closest('.sm-h').querySelector('.r'), false) }
-  drawHist(); loadBal(); loadSvcs(); resumeDep()
+  $('#hl').onclick = (e) => { const b = e.target.closest('button[data-o]'); if (b) checkOrder(b.dataset.o, b.closest('.sm-h').querySelector('.r')) }
+  loadBal(); loadSvcs(); drawHist(); resumeDep()
 }
 
 const loadBal = async () => {
-  try { const r = await api('/tools/smm/balance'); S.bal = r.balance; note($('#mb'), '') }
-  catch (e) { S.bal = null; note($('#mb'), e.message, 1) }
-  const b = $('#bv'); if (b) b.textContent = S.bal === null ? '—' : rp(S.bal)
-  est()
+  try { const r = await api('/tools/smm/balance'); setBal(r.balance); note($('#mb'), '') }
+  catch (e) { const b = $('#bv'); if (b && S.bal === null) b.textContent = '—'; note($('#mb'), e.message, 1) }
 }
 
 /* ---------- daftar layanan ---------- */
@@ -131,12 +107,12 @@ const pick = (id) => {
   est()
 }
 const qty = () => Math.floor(Number($('#qt').value))
-const cost = () => (S.sel ? Math.ceil((S.sel.rate * qty()) / 1000) : 0)
+const cost = () => (S.sel ? Math.max(1, Math.ceil((S.sel.rate * qty()) / 1000)) : 0)
 function est() {
   const e = $('#es'); if (!e) return
   const q = qty(); if (!S.sel || !(q > 0)) { e.textContent = ''; return }
   const c = cost()
-  e.innerHTML = `Estimasi biaya <b>${rp(c)}</b>` + (S.bal !== null && c > S.bal ? ` · <span class="err">saldo kurang ${rp(c - S.bal)}</span>` : '')
+  e.innerHTML = `Biaya <b>${rp(c)}</b>` + (S.bal !== null && c > S.bal ? ` · <span class="err">saldo kurang ${rp(c - S.bal)}</span>` : '')
 }
 
 /* ---------- pesan ---------- */
@@ -157,24 +133,33 @@ async function placeOrder(ev) {
   delete b.dataset.sure; b.disabled = true; b.textContent = 'Memproses…'; note(m, '')
   try {
     const r = await put('/tools/smm/order', { service: s.id, link: $('#lk').value.trim(), quantity: q }, 'POST')
-    LS(ORDK, [{ id: r.order, name: s.name, q, t: Date.now() }, ...(LS(ORDK) || [])].slice(0, 8)); drawHist()
-    note(m, `Pesanan #${r.order} dibuat.`); $('#qt').value = ''; est(); loadBal()
-  } catch (e) { note(m, e.message, 1) }
+    note(m, `Pesanan #${r.order} dibuat. Saldo terpotong ${rp(r.cost)}.`); $('#qt').value = ''; setBal(r.balance); drawHist()
+  } catch (e) {
+    note(m, e.message, 1)
+    if (e.status === 402) { loadBal(); openDep() }
+    else if (e.status === 504) drawHist()
+  }
   b.disabled = false; b.textContent = 'Pesan'
 }
 
-/* ---------- status pesanan ---------- */
-const drawHist = () => {
-  const h = LS(ORDK) || [], box = $('#hl'); if (!box) return
-  box.innerHTML = h.map((o) => `<div class="sm-h"><div class="t"><b>${esc(o.name)}</b><button class="btn ghost sm" data-o="${esc(o.id)}" type="button">Cek</button></div><div class="d"><span>#${esc(o.id)} · ${nf(o.q)}</span><span class="r"></span></div></div>`).join('')
+/* ---------- daftar & status pesanan ---------- */
+const fmtT = (t) => new Date(t).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+const drawHist = async () => {
+  const box = $('#hl'); if (!box) return
+  try {
+    const { orders } = await api('/tools/smm/orders')
+    box.innerHTML = orders.length ? orders.map((o) => `<div class="sm-h"><div class="t"><b>${esc(o.name)}</b>${String(o.order_id).startsWith('unk_') ? '' : `<button class="btn ghost sm" data-o="${esc(o.order_id)}" type="button">Cek</button>`}</div>
+      <div class="d"><span>${String(o.order_id).startsWith('unk_') ? 'Tidak ada ID' : '#' + esc(o.order_id)} · ${nf(o.qty)} · ${rp(o.cost)} · ${esc(fmtT(o.created_at))}</span></div><div class="d"><span class="r">${stChip(o.status)}${o.refunded ? ' <span>dikembalikan ke saldo</span>' : ''}</span></div></div>`).join('')
+      : '<p class="hint">Belum ada pesanan.</p>'
+  } catch (e) { box.innerHTML = `<p class="msg err">${esc(e.message)}</p>` }
 }
-async function checkOrder(id, target, bigBox) {
-  if (!/^\d{1,20}$/.test(id)) return (target.innerHTML = '<p class="msg err">ID pesanan tidak valid.</p>')
+async function checkOrder(id, target) {
   target.innerHTML = '<span class="hint">Memeriksa…</span>'
   try {
     const r = await api('/tools/smm/status?order=' + encodeURIComponent(id))
-    const parts = [r.remains != null && `sisa ${nf(r.remains)}`, r.start_count != null && `awal ${nf(r.start_count)}`, r.charge != null && `biaya ${rp(r.charge)}`].filter(Boolean).join(' · ')
-    target.innerHTML = bigBox ? `<div class="sm-h"><div class="t"><b>Pesanan #${esc(id)}</b>${stChip(r.status)}</div><div class="d">${esc(parts)}</div></div>` : `${stChip(r.status)} <span>${esc(parts)}</span>`
+    const parts = [r.remains != null && `sisa ${nf(r.remains)}`, r.start_count != null && `awal ${nf(r.start_count)}`, r.refunded > 0 && `${rp(r.refunded)} dikembalikan ke saldo`].filter(Boolean).join(' · ')
+    target.innerHTML = `${stChip(r.status)} <span>${esc(parts)}</span>`
+    if (r.refunded > 0) setBal(r.balance)
   } catch (e) { target.innerHTML = `<span class="msg err">${esc(e.message)}</span>` }
 }
 
@@ -214,12 +199,15 @@ async function pollDep(manual) {
   try {
     const r = await api('/tools/smm/deposit-status?deposit=' + encodeURIComponent(d.id))
     if (r.status === 'success') {
-      clearInterval(S.poll); LS(DEPK, null); showDep()
-      note($('#md'), `Deposit ${rp(r.amount)}${r.bonus ? ` (+bonus ${rp(r.bonus)})` : ''} berhasil. Saldo sudah bertambah.`); loadBal()
+      clearInterval(S.poll); LS(DEPK, null); showDep(); setBal(r.balance)
+      note($('#md'), `Deposit ${rp(r.amount)}${r.bonus ? ` (+bonus ${rp(r.bonus)})` : ''} berhasil. Saldo sudah bertambah.`)
     } else if (/expire|fail|cancel|reject/.test(r.status)) {
       clearInterval(S.poll); LS(DEPK, null); showDep(); note($('#md'), 'Deposit kedaluwarsa atau dibatalkan. Buat deposit baru.', 1)
     } else st.innerHTML = stChip('Menunggu pembayaran')
-  } catch (e) { if (manual) st.innerHTML = `<span class="err">${esc(e.message)}</span>` }
+  } catch (e) {
+    if (e.status === 404) { clearInterval(S.poll); LS(DEPK, null); showDep() }
+    else if (manual) st.innerHTML = `<span class="err">${esc(e.message)}</span>`
+  }
 }
 function startPoll() { clearInterval(S.poll); S.poll = setInterval(() => { if (!document.hidden) pollDep(false) }, 6000) }
 function resumeDep() {
@@ -229,8 +217,4 @@ function resumeDep() {
 }
 
 /* ---------- mulai ---------- */
-ready.then(async ({ user }) => {
-  if (!user) return (location.href = '/login.html?next=/smm')
-  try { const k = await api('/tools/smm/key'); if (k.linked) { S.masked = k.masked; linked() } else unlinked() }
-  catch (e) { el.innerHTML = `<h1>Layanan SMM</h1><p class="msg err">${esc(e.message)}</p>` }
-})
+ready.then(({ user }) => { if (!user) return (location.href = '/login.html?next=/smm'); view() })
