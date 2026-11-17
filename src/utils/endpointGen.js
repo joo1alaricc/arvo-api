@@ -13,23 +13,47 @@ export const exportNames = (category, slug) => {
     return { route: base + 'Route', handler: base + 'Handler', file: `${category}/${slug}.js`, path: `src/api/${category}/${slug}.js` }
 }
 
-export const EXAMPLE = `// Contoh isi "Kode handler" (cukup bagian dalam fungsi):
-const { url } = input                 // input = gabungan query + body
-if (!url.startsWith('https://')) return c.json({ error: 'url harus https' }, 400)
+export const EXAMPLE = `import { createRoute, z } from '@hono/zod-openapi'
 
-const res = await fetch('https://api.example.com/info?u=' + encodeURIComponent(url))
-const data = await res.json()
-return { status: 'ok', result: data, ip }   // object biasa otomatis dibungkus c.json()`
+/* Tempel kode lengkap seperti src/api/downloader/tiktok.js. path, nama, akses & kategori
+   di-set otomatis dari form dashboard, jadi nilainya di sini tidak harus sama. */
+export const contohRoute = createRoute({
+    method: 'get',
+    path: '/api/contoh/halo',
+    request: { query: z.object({ nama: z.string().openapi({ example: 'Arvo' }) }) },
+    responses: { 200: { content: { 'application/json': { schema: z.any() } }, description: 'OK' } },
+})
+
+export const contohHandler = async (c) => {
+    const { nama } = c.req.valid('query')
+    return c.json({ status: true, result: 'Halo ' + nama })
+}`
 
 export const STRUCTURE_HELP = [
-    'File dibuat di src/api/<kategori>/<slug>.js dan diekspor sebagai <nama>Route (createRoute) + <nama>Handler.',
-    'Variabel yang tersedia di handler: c (context Hono), input (query+body), query, body, ip, env, serta tiap nama input (mis. url).',
-    'Boleh return object/array/string (otomatis jadi JSON) atau return c.json(...) / new Response(...).',
-    'Workers tidak punya require(), fs, atau eval. Pakai fetch() untuk memanggil API lain. Secret lewat env.NAMA.',
+    'Tempel kode seperti src/api/downloader/tiktok.js: export const <nama>Route = createRoute({...}) dan export const <nama>Handler = async (c) => {...}.',
+    'Method & parameter (query/body) dibaca dari createRoute di kodemu. Path, nama, akses, dan kategori diambil dari form.',
+    'Import relatif (mis. ../../utils/upstream.js) boleh dipakai. Workers tidak punya require(), fs, atau eval; pakai fetch(). Secret lewat c.env.NAMA.',
+    'Cukup handler saja (tanpa createRoute) juga bisa; sistem membungkusnya otomatis.',
 ]
 
+/* Set / sisipkan properti di objek createRoute({...}) */
+const setProp = (code, key, literal) => {
+    const k = key.replace(/-/g, '\\-')
+    const re = new RegExp(`(['"]?)${k}\\1\\s*:\\s*(?:'[^']*'|"[^"]*"|\`[^\`]*\`|\\[[^\\]]*\\]|true|false)`)
+    const q = /^[A-Za-z_$][\w$]*$/.test(key) ? key : `'${key}'`
+    if (re.test(code)) return code.replace(re, () => `${q}: ${literal}`)
+    return code.replace(/(\n([ \t]*)path:[^\n]*\n)/, (m, line, ind) => `${line}${ind}${q}: ${literal},\n`)
+}
+export const slugFrom = (path, category) => {
+    const segs = String(path || '').trim().replace(/^https?:\/\/[^/]+/, '').split(/[?#]/)[0].split('/').filter(Boolean).map((x) => x.toLowerCase())
+    if (segs[0] === 'api') segs.shift()
+    const slug = segs[segs.length - 1] || ''
+    const cat = String(category || '').trim().toLowerCase() || (segs.length > 1 ? segs[segs.length - 2] : '')
+    return { category: cat, slug }
+}
+
 /* Normalisasi kode admin -> { imports, body, mode, notes[], issues[] } */
-export const analyze = (raw, { category, slug }) => {
+export const analyze = (raw, { category, slug, name, access, status, description }) => {
     const notes = [], issues = []
     let code = String(raw || '').replace(/\r\n/g, '\n').trim()
     const fence = code.match(/^```(?:js|javascript|ts)?\n([\s\S]*?)\n```$/i)
@@ -44,7 +68,13 @@ export const analyze = (raw, { category, slug }) => {
         if (!h) issues.push('Handler belum diekspor. Tambahkan "export const <nama>Handler = (c) => c.json({...})".')
         const want = `/api/${category}/${slug}`
         const pm = code.match(/path:\s*['"`]([^'"`]+)['"`]/)
-        if (pm && pm[1] !== want) { code = code.replace(pm[0], `path: '${want}'`); notes.push(`path di kode (${pm[1]}) disesuaikan menjadi ${want}.`) }
+        if (pm && pm[1] !== want) notes.push(`path di kode (${pm[1]}) diganti menjadi ${want}.`)
+        const cut = code.search(/createRoute\s*\(/), P = (k, v) => { code = code.slice(0, cut) + setProp(code.slice(cut), k, v) }
+        P('path', JSON.stringify(want).replace(/^"|"$/g, "'"))
+        P('tags', `['${category}']`)
+        if (access) { P('x-access', `'${access}'`); P('x-premium', access === 'free' ? 'false' : 'true') }
+        if (status) P('x-status', status === 'offline' ? "'OFFLINE'" : "'ONLINE'")
+        if (name) P('summary', JSON.stringify(name))
         if (!/from\s+['"]@hono\/zod-openapi['"]/.test(code)) { code = `import { createRoute, z } from '@hono/zod-openapi'\n` + code; notes.push('Import createRoute/z ditambahkan.') }
         lint(code, issues, notes)
         return { mode: 'full', full: code, routeName: r?.[1], handlerName: h?.[1], notes, issues, imports: [], body: '' }
@@ -66,7 +96,10 @@ export const analyze = (raw, { category, slug }) => {
     }
     if (mode === 'body' && !/\breturn\b/.test(body)) { body = `return (${body.replace(/;$/, '')})`; notes.push('Tidak ada "return": ekspresi dijadikan nilai balik.') }
     lint(body, issues, notes)
-    return { mode, body, imports, notes, issues }
+    const inferred = []
+    const ds = body.match(/const\s*\{([^}]+)\}\s*=\s*(?:input|query|body|c\.req\.query\(\))/)
+    if (ds) for (const n of ds[1].split(',').map((x) => x.split(/[:=]/)[0].trim())) if (/^[A-Za-z_]\w*$/.test(n) && !inferred.some((x) => x.name === n)) inferred.push({ name: n, in: 'query', required: true, example: '' })
+    return { mode, body, imports, notes, issues, inferred, post: /c\.req\.json\(|\bbody\.\w/.test(body) }
 }
 
 function lint(code, issues, notes) {
@@ -79,15 +112,20 @@ function lint(code, issues, notes) {
 
 /* Validasi form + susun file */
 export const build = (b, analysis, existingInputs = []) => {
+    const full = analysis.mode === 'full'
     const e = { category: String(b.category || '').trim().toLowerCase(), slug: String(b.slug || '').trim().toLowerCase(), name: String(b.name || '').trim(),
-        description: String(b.description || '').trim().slice(0, 300), method: String(b.method || 'GET').toUpperCase(), access: b.access || 'free', status: b.status === 'offline' ? 'offline' : 'online' }
+        description: String(b.description || '').trim().slice(0, 300), method: String(b.method || (analysis.post ? 'POST' : 'GET')).toUpperCase(), access: b.access || 'free', status: b.status === 'offline' ? 'offline' : 'online' }
     const issues = [...(analysis.issues || [])]
-    if (!ID.test(e.category) || !ID.test(e.slug)) issues.push('Kategori & slug 1-30 karakter: huruf kecil, angka, _ atau -.')
-    if (RESERVED_CAT.includes(e.category) || e.slug === 'routes') issues.push('Kategori/slug itu dicadangkan.')
+    if (!ID.test(e.category) || !ID.test(e.slug)) issues.push('Kategori & path 1-30 karakter: huruf kecil, angka, _ atau -.')
+    if (RESERVED_CAT.includes(e.category) || e.slug === 'routes') issues.push('Kategori/path itu dicadangkan.')
+    if (!e.name) issues.push('Nama endpoint wajib diisi.')
     if (!['GET', 'POST'].includes(e.method)) issues.push('Method harus GET atau POST.')
     if (!['free', 'premium', 'vip', 'owner'].includes(e.access)) issues.push('Akses tidak valid.')
     let inputs = []
-    try { inputs = typeof b.inputs === 'string' ? JSON.parse(b.inputs || '[]') : b.inputs || [] } catch { issues.push('Input bukan JSON valid.') }
+    if (!full) {
+        try { inputs = typeof b.inputs === 'string' ? JSON.parse(b.inputs || '[]') : b.inputs || [] } catch { issues.push('Input bukan JSON valid.') }
+        if (!inputs.length && analysis.inferred) inputs = analysis.inferred
+    }
     if (!Array.isArray(inputs) || inputs.length > 20) { issues.push('Input maksimal 20 field.'); inputs = [] }
     const clean = []
     for (const i of inputs) {
@@ -157,11 +195,18 @@ export const readBack = (src) => {
         code: m ? m[1].split('\n').map((l) => l.replace(/^ {8}/, '')).join('\n') : (info?.mode === 'full' || !info ? src : '') }
 }
 
-/* ---- penambahan / penghapusan baris di src/api/index.js ---- */
-export const patchIndex = (src, { file, route, handler }, remove = false) => {
-    const imp = `import { ${route}, ${handler} } from './${file}'`
+/* ---- penambahan / penghapusan baris di src/api/index.js ----
+ * Nama diimpor dengan alias unik (<kategori><Slug>Route/Handler) supaya dua file dengan nama ekspor sama (mis. exampleRoute) tidak bentrok. */
+export const patchIndex = (src, { file, route, handler, routeAs = route, handlerAs = handler }, remove = false) => {
+    const alias = (a, b) => (a === b ? a : `${a} as ${b}`)
+    const imp = `import { ${alias(route, routeAs)}, ${alias(handler, handlerAs)} } from './${file}'`
     if (remove) {
-        const out = src.split('\n').filter((l) => !l.includes(`from './${file}'`) && !new RegExp(`^\\s*\\[\\s*${route}\\s*,\\s*${handler}\\s*\\],?\\s*(//.*)?$`).test(l)).join('\n')
+        /* pakai nama LOKAL sesuai baris import file ini, supaya tidak ikut menghapus entri file lain yang namanya kebetulan sama */
+        const line = src.split('\n').find((l) => l.includes(`from './${file}'`)) || ''
+        const loc = [...line.matchAll(/(?:(\w+)\s+as\s+)?(\w+)\s*(?:,|\})/g)].map((x) => x[2])
+        const [nr, nh] = loc.length >= 2 ? loc : [routeAs, handlerAs]
+        const re = new RegExp(`^\\s*\\[\\s*${nr}\\s*,\\s*${nh}\\s*\\],?\\s*(//.*)?$`)
+        const out = src.split('\n').filter((l) => !l.includes(`from './${file}'`) && !re.test(l)).join('\n')
         return { ok: true, src: out, changed: out !== src }
     }
     if (src.includes(`from './${file}'`)) return { ok: true, src, changed: false }
@@ -171,8 +216,8 @@ export const patchIndex = (src, { file, route, handler }, remove = false) => {
     lines.splice(last + 1, 0, imp)
     let out = lines.join('\n')
     const m = out.match(/(const BUILTIN = \[[\s\S]*?)(\s*\n\])/)
-    if (!m) return { ok: false, message: 'Tidak menemukan "const BUILTIN = [ ... ]" di src/api/index.js. Tambahkan manual: [' + route + ', ' + handler + '],' }
+    if (!m) return { ok: false, message: 'Tidak menemukan "const BUILTIN = [ ... ]" di src/api/index.js. Tambahkan manual: [' + routeAs + ', ' + handlerAs + '],' }
     const head = m[1].replace(/\s+$/, '').replace(/([^,\[])$/, '$1,')
-    out = out.replace(m[0], `${head}\n    [${route}, ${handler}],${m[2]}`)
+    out = out.replace(m[0], () => `${head}\n    [${routeAs}, ${handlerAs}],${m[2]}`)
     return { ok: true, src: out, changed: true }
 }
