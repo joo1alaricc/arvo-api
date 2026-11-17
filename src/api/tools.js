@@ -66,12 +66,11 @@ tools.post('/am/verify', async (c) => {
 })
 
 /* ================= Layanan SMM =================
- * Tiap user memakai API key panel SMM miliknya sendiri (disimpan di server), jadi saldo, pesanan, dan deposit terpisah per user.
- * Semua panggilan ke panel lewat server ini; key tidak pernah dikirim balik ke browser (hanya versi tersamar). */
+ * Satu API key panel SMM milik Arvo (secret SMM_API_KEY). Saldo tiap user dicatat sendiri di database Arvo (dompet per user):
+ *  - deposit dibuat lewat panel, lalu ID deposit dicatat milik user yang membuatnya; saldo user bertambah setelah deposit lunas (sekali saja)
+ *  - pesanan: saldo user dipotong dulu, baru dipesan ke panel; gagal = dikembalikan */
 const SMM = 'https://smm.barz.web.id/api/v2'
-const KEY_RE = /^[\w.\-]{6,128}$/
-const mask = (k) => (k.length > 9 ? k.slice(0, 4) + '\u2022'.repeat(6) + k.slice(-3) : '\u2022'.repeat(k.length))
-const https = (u) => { try { return new URL(u).protocol === 'https:' ? String(u) : null } catch { return null } }
+const DONE_BAD = /cancel|fail|error|refund/i
 
 const smmCall = async (key, params) => {
     let r
@@ -89,41 +88,58 @@ const smmCall = async (key, params) => {
     if (!r.ok) return { status: 502, error: 'upstream_error', message: 'Panel SMM sedang bermasalah.' }
     return { j }
 }
-/* ambil key user lalu panggil panel; mengembalikan {j} atau {res: Response error} */
-const smm = async (c, params) => {
-    const key = await store(c).smmKeyGet(c.get('user').id)
-    if (!key) return { res: out(c, 400, 'no_key', 'Hubungkan API key SMM dulu.') }
+const noKey = (c) => out(c, 503, 'not_configured', 'Layanan SMM belum dikonfigurasi (SMM_API_KEY belum diisi).')
+/* panggil panel dengan key Arvo; mengembalikan {j} atau {res: Response error, r: hasil mentah} */
+const master = async (c, params) => {
+    const key = c.env.SMM_API_KEY; if (!key) return { res: noKey(c) }
     const r = await smmCall(key, params)
-    return r.j === undefined ? { res: out(c, r.status, r.error, r.message) } : { j: r.j }
+    return r.j === undefined ? { res: out(c, r.status, r.error, r.message), r } : { j: r.j }
+}
+const https = (u) => { try { return new URL(u).protocol === 'https:' ? String(u) : null } catch { return null } }
+const uidOf = (c) => c.get('user').id
+
+/* daftar layanan di-cache di memori Worker 5 menit (dipakai untuk menghitung harga di server, bukan dari kiriman browser) */
+let SVC = { t: 0, list: null }
+const getServices = async (c) => {
+    if (SVC.list && Date.now() - SVC.t < 300000) return { list: SVC.list }
+    const { j, res } = await master(c, { action: 'services' }); if (res) return { res }
+    if (!Array.isArray(j)) return { res: out(c, 502, 'upstream_bad_response', 'Daftar layanan tidak valid.') }
+    SVC = { t: Date.now(), list: j.map((s) => ({ id: String(s.service), name: String(s.name || ''), category: String(s.category || 'Lainnya'), rate: Number(s.rate) || 0, min: Number(s.min) || 1, max: Number(s.max) || 0, refill: !!s.refill })) }
+    return { list: SVC.list }
 }
 
-tools.get('/smm/key', async (c) => {
-    const k = await store(c).smmKeyGet(c.get('user').id)
-    return c.json({ ok: true, linked: !!k, masked: k ? mask(k) : null })
-})
-tools.put('/smm/key', async (c) => {
-    const key = String((await body(c)).key || '').trim()
-    if (!KEY_RE.test(key)) return out(c, 400, 'bad_key', 'Format API key tidak valid.')
-    const r = await smmCall(key, { action: 'balance' })   /* key diuji dulu; hanya key yang valid yang disimpan */
-    if (r.j === undefined) return out(c, r.status === 400 ? 400 : r.status, r.error, r.status === 400 ? 'API key ditolak panel SMM: ' + r.message : r.message)
-    await store(c).smmKeySet(c.get('user').id, key)
-    return c.json({ ok: true, linked: true, masked: mask(key), balance: Number(r.j.balance) || 0, currency: r.j.currency || 'IDR' })
-})
-tools.delete('/smm/key', async (c) => { await store(c).smmKeySet(c.get('user').id, null); return c.json({ ok: true, linked: false }) })
+/* cocokkan satu deposit dengan panel; kalau lunas, saldo user dikreditkan (sekali) */
+const settleDeposit = async (c, id) => {
+    const st = store(c), d = await st.smmDepGet(id); if (!d) return null
+    if (d.credited) return { status: 'success', amount: d.amount, bonus: 0, balance: await st.smmBal(d.user_id) }
+    const { j, res } = await master(c, { action: 'deposit_status', deposit: id }); if (res) return { err: res }
+    const status = String(j.status || 'pending').toLowerCase(), bonus = Math.max(0, Math.floor(Number(j.bonus) || 0))
+    if (status === 'success') {
+        const r = await st.smmDepCredit(id, d.amount + bonus)
+        return { status, amount: d.amount, bonus, credited: r.credited, balance: r.balance }
+    }
+    if (/expire|fail|cancel|reject/.test(status)) await st.smmDepStatus(id, 'expired')
+    return { status, amount: d.amount, bonus: 0, balance: await st.smmBal(d.user_id) }
+}
 
 tools.get('/smm/balance', async (c) => {
-    const { j, res } = await smm(c, { action: 'balance' }); if (res) return res
+    const st = store(c), uid = uidOf(c)
+    if (c.env.SMM_API_KEY) {   /* deposit yang sudah dibayar tapi halaman keburu ditutup tetap ikut dikreditkan di sini */
+        try { for (const d of await st.smmDepPending(uid, Date.now())) await settleDeposit(c, d.id) } catch (e) { console.error('[smm] rekonsiliasi deposit', e.message || e) }
+    }
     c.header('Cache-Control', 'no-store')
-    return c.json({ ok: true, balance: Number(j.balance) || 0, currency: j.currency || 'IDR' })
+    return c.json({ ok: true, balance: await st.smmBal(uid), currency: 'IDR' })
 })
 
 tools.get('/smm/services', async (c) => {
-    const { j, res } = await smm(c, { action: 'services' }); if (res) return res
-    if (!Array.isArray(j)) return out(c, 502, 'upstream_bad_response', 'Daftar layanan tidak valid.')
-    /* diringkas supaya payload ke browser kecil */
-    const list = j.map((s) => ({ id: String(s.service), name: String(s.name || ''), category: String(s.category || 'Lainnya'), rate: Number(s.rate) || 0, min: Number(s.min) || 1, max: Number(s.max) || 0, refill: !!s.refill }))
+    const { list, res } = await getServices(c); if (res) return res
     c.header('Cache-Control', 'private, max-age=300')
     return c.json({ ok: true, services: list })
+})
+
+tools.get('/smm/orders', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    return c.json({ ok: true, orders: await store(c).smmOrders(uidOf(c)) })
 })
 
 tools.post('/smm/order', async (c) => {
@@ -131,33 +147,64 @@ tools.post('/smm/order', async (c) => {
     if (!/^\d{1,10}$/.test(service)) return out(c, 400, 'bad_service', 'Layanan tidak valid.')
     let u; try { u = new URL(link) } catch {}
     if (!u || !/^https?:$/.test(u.protocol) || link.length > 500) return out(c, 400, 'bad_link', 'Link target tidak valid (harus diawali http:// atau https://).')
-    if (!Number.isInteger(q) || q < 1 || q > 2147483647) return out(c, 400, 'bad_qty', 'Jumlah tidak valid.')
-    const { j, res } = await smm(c, { action: 'add', service, link, quantity: String(q) }); if (res) return res
-    if (!j.order) return out(c, 502, 'upstream_bad_response', 'Panel tidak mengembalikan ID pesanan.')
-    return c.json({ ok: true, order: String(j.order) })
+    if (!Number.isInteger(q) || q < 1) return out(c, 400, 'bad_qty', 'Jumlah tidak valid.')
+    const key = c.env.SMM_API_KEY; if (!key) return noKey(c)
+    const { list, res } = await getServices(c); if (res) return res
+    const s = list.find((x) => x.id === service)
+    if (!s) return out(c, 400, 'bad_service', 'Layanan tidak ditemukan.')
+    if (q < s.min || q > s.max) return out(c, 400, 'bad_qty', `Jumlah harus ${s.min}-${s.max}.`)
+    const cost = Math.max(1, Math.ceil((s.rate * q) / 1000)), st = store(c), uid = uidOf(c)
+
+    const rv = await st.smmReserve(uid, cost)   /* saldo dipotong dulu (atomik) */
+    if (rv.ok === false) return c.json({ ok: false, error: rv.error, message: rv.message, balance: rv.balance ?? 0, need: cost, status: rv.status }, rv.status)
+
+    const r = await smmCall(key, { action: 'add', service, link, quantity: String(q) })
+    if (r.j === undefined || !r.j.order) {
+        if (r.status === 504) {   /* hasil tidak pasti: pesanan mungkin sudah masuk, jadi biaya ditahan & dicatat untuk dicek admin */
+            await st.smmOrderAdd({ order_id: 'unk_' + crypto.randomUUID().slice(0, 8), uid, service, name: s.name, link, qty: q, cost, status: 'Tidak pasti', now: Date.now() })
+            return out(c, 504, 'uncertain', 'Panel tidak merespons, status pesanan tidak pasti. Saldo ditahan, jangan kirim ulang dan hubungi admin.')
+        }
+        await st.smmAdd(uid, cost)   /* gagal pasti: kembalikan saldo */
+        const m = r.message || 'Panel tidak mengembalikan ID pesanan.'
+        return out(c, r.status === 400 ? 400 : 502, r.error || 'upstream_bad_response', /saldo|balance|fund/i.test(m) ? 'Layanan sedang tidak bisa memproses pesanan. Hubungi admin.' : m)
+    }
+    await st.smmOrderAdd({ order_id: String(r.j.order), uid, service, name: s.name, link, qty: q, cost, status: 'Pending', now: Date.now() })
+    return c.json({ ok: true, order: String(r.j.order), cost, balance: await st.smmBal(uid) })
 })
 
 tools.get('/smm/status', async (c) => {
     const order = String(c.req.query('order') || '').trim()
-    if (!/^\d{1,20}$/.test(order)) return out(c, 400, 'bad_order', 'ID pesanan tidak valid.')
-    const { j, res } = await smm(c, { action: 'status', order }); if (res) return res
+    if (!/^[\w]{1,20}$/.test(order)) return out(c, 400, 'bad_order', 'ID pesanan tidak valid.')
+    const st = store(c), uid = uidOf(c), o = await st.smmOrderGet(order, uid)
+    if (!o) return out(c, 404, 'not_found', 'Pesanan tidak ditemukan di akunmu.')
     c.header('Cache-Control', 'no-store')
-    return c.json({ ok: true, order, status: String(j.status || '-'), charge: j.charge ?? null, start_count: j.start_count ?? null, remains: j.remains ?? null, currency: j.currency || 'IDR' })
+    if (order.startsWith('unk_')) return c.json({ ok: true, order, status: o.status, cost: o.cost, refunded: 0, balance: await st.smmBal(uid) })
+    const { j, res } = await master(c, { action: 'status', order }); if (res) return res
+    const status = String(j.status || '-'), remains = Math.max(0, Number(j.remains) || 0)
+    const refund = DONE_BAD.test(status) ? o.cost : /partial/i.test(status) && o.qty > 0 ? Math.floor((o.cost * Math.min(remains, o.qty)) / o.qty) : 0
+    const r = await st.smmOrderSettle(order, uid, status, refund)
+    return c.json({ ok: true, order, status, start_count: j.start_count ?? null, remains: j.remains ?? null, cost: o.cost, refunded: r.refunded || 0, balance: r.balance })
 })
 
 tools.post('/smm/deposit', async (c) => {
     const amount = Number((await body(c)).amount)
-    if (!Number.isInteger(amount) || amount < 1 || amount > 50000000) return out(c, 400, 'bad_amount', 'Nominal deposit tidak valid.')
-    const { j, res } = await smm(c, { action: 'deposit', amount: String(amount) }); if (res) return res
+    if (!Number.isInteger(amount) || amount < 1000 || amount > 50000000) return out(c, 400, 'bad_amount', 'Nominal deposit minimal Rp1.000 dan maksimal Rp50.000.000.')
+    const st = store(c), uid = uidOf(c)
+    if ((await st.smmDepPending(uid, Date.now())).length >= 3) return out(c, 429, 'too_many', 'Masih ada 3 deposit yang belum dibayar. Selesaikan atau tunggu kedaluwarsa dulu.')
+    const { j, res } = await master(c, { action: 'deposit', amount: String(amount) }); if (res) return res
     if (!j.deposit) return out(c, 502, 'upstream_bad_response', 'Panel tidak mengembalikan ID deposit.')
-    return c.json({ ok: true, deposit: String(j.deposit), amount: Number(j.amount) || amount, total_amount: Number(j.total_amount) || amount,
-        qr_url: https(j.qr_url), payment_url: https(j.payment_url), expired_at: j.expired_at || null, currency: j.currency || 'IDR' })
+    const nominal = Number(j.amount) || amount, total = Number(j.total_amount) || nominal
+    await st.smmDepNew(String(j.deposit), uid, nominal, total, Date.now())   /* ID deposit ini sekarang tercatat milik user ini */
+    return c.json({ ok: true, deposit: String(j.deposit), amount: nominal, total_amount: total, qr_url: https(j.qr_url), payment_url: https(j.payment_url), expired_at: j.expired_at || null, currency: j.currency || 'IDR' })
 })
 
 tools.get('/smm/deposit-status', async (c) => {
-    const deposit = String(c.req.query('deposit') || '').trim()
-    if (!/^[\w\-]{3,80}$/.test(deposit)) return out(c, 400, 'bad_deposit', 'ID deposit tidak valid.')
-    const { j, res } = await smm(c, { action: 'deposit_status', deposit }); if (res) return res
+    const id = String(c.req.query('deposit') || '').trim()
+    if (!/^[\w\-]{3,80}$/.test(id)) return out(c, 400, 'bad_deposit', 'ID deposit tidak valid.')
+    const d = await store(c).smmDepGet(id)
+    if (!d || d.user_id !== uidOf(c)) return out(c, 404, 'not_found', 'Deposit tidak ditemukan di akunmu.')
+    const r = await settleDeposit(c, id)
+    if (r.err) return r.err
     c.header('Cache-Control', 'no-store')
-    return c.json({ ok: true, deposit, amount: Number(j.amount) || 0, bonus: Number(j.bonus) || 0, status: String(j.status || 'pending').toLowerCase(), credited_at: j.credited_at || null })
+    return c.json({ ok: true, deposit: id, ...r })
 })
