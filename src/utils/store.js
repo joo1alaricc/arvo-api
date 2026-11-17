@@ -41,7 +41,13 @@ export class StoreDO extends DurableObject {
             CREATE TABLE IF NOT EXISTS usage_log(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, at INTEGER, path TEXT, ip TEXT);
             CREATE INDEX IF NOT EXISTS usage_log_u ON usage_log(user_id,id);
             CREATE TABLE IF NOT EXISTS violations(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, ip TEXT, path TEXT, kind TEXT, at INTEGER);
-            CREATE TABLE IF NOT EXISTS builtin_overrides(path TEXT PRIMARY KEY, name TEXT, description TEXT, access TEXT, status TEXT);`)
+            CREATE TABLE IF NOT EXISTS builtin_overrides(path TEXT PRIMARY KEY, name TEXT, description TEXT, access TEXT, status TEXT);
+            CREATE TABLE IF NOT EXISTS smm_wallet(user_id INTEGER PRIMARY KEY, balance INTEGER DEFAULT 0);
+            CREATE TABLE IF NOT EXISTS smm_deposits(id TEXT PRIMARY KEY, user_id INTEGER, amount INTEGER, total INTEGER, status TEXT DEFAULT 'pending', credited INTEGER DEFAULT 0, created_at INTEGER);
+            CREATE TABLE IF NOT EXISTS smm_orders(id INTEGER PRIMARY KEY AUTOINCREMENT, order_id TEXT UNIQUE, user_id INTEGER, service TEXT, name TEXT, link TEXT,
+                qty INTEGER, cost INTEGER, status TEXT, refunded INTEGER DEFAULT 0, created_at INTEGER);
+            CREATE INDEX IF NOT EXISTS smm_orders_u ON smm_orders(user_id,id);
+            CREATE INDEX IF NOT EXISTS smm_dep_u ON smm_deposits(user_id,status);`)
         /* DB lama bisa punya tabel orders dengan skema berbeda (CREATE IF NOT EXISTS tidak mengubahnya): lengkapi kolom yang kurang */
         this.ensureCols('orders', { user_id: 'INTEGER', plan: 'TEXT', days: 'INTEGER', amount: 'INTEGER', code: 'INTEGER', total: 'INTEGER', status: 'TEXT', ip: 'TEXT',
             created_at: 'INTEGER', expires_at: 'INTEGER', paid_at: 'INTEGER' },
@@ -51,8 +57,6 @@ export class StoreDO extends DurableObject {
         try { this.sql.exec('ALTER TABLE users ADD COLUMN access_key TEXT') } catch {}
         /* email yang sudah diverifikasi Google. Dipakai untuk status admin lewat email; kolom email biasa bisa diubah user sendiri sehingga tidak dipercaya. */
         try { this.sql.exec('ALTER TABLE users ADD COLUMN verified_email TEXT') } catch {}
-        /* API key panel SMM milik user (Tools > Layanan SMM). Tidak pernah ikut dikirim di pub()/profil. */
-        try { this.sql.exec('ALTER TABLE users ADD COLUMN smm_key TEXT') } catch {}
         if (!this.q('SELECT 1 FROM plans LIMIT 1').length) {
             DEFAULT_PLANS.forEach((p, i) => this.sql.exec('INSERT INTO plans VALUES(?,?,?,?,?,?,?,?,?,1,?)', p.id, p.tier, p.name, p.daily, p.maxIps, p.customKey ? 1 : 0, p.baseDays, p.basePrice, p.permanentPrice, i))
         }
@@ -468,8 +472,46 @@ export class StoreDO extends DurableObject {
         if (!permanent && !(d >= 1 && d <= 3650)) return fail(400, 'bad_request', 'Durasi 1-3650 hari.')
         return this.applyPlan(u, plan, permanent ? null : d, now)
     }
-    smmKeyGet(id) { const [u] = this.q('SELECT smm_key FROM users WHERE id=?', id); return u && u.smm_key ? u.smm_key : null }
-    smmKeySet(id, key) { this.sql.exec('UPDATE users SET smm_key=? WHERE id=?', key || null, id); return { ok: true } }
+    /* ---- Layanan SMM: dompet saldo per user (rupiah bulat). Semua method sinkron, jadi atomik di dalam Durable Object. ---- */
+    smmBal(uid) { const [w] = this.q('SELECT balance FROM smm_wallet WHERE user_id=?', uid); return w ? w.balance : 0 }
+    smmAdd(uid, n) {
+        this.sql.exec('INSERT INTO smm_wallet(user_id,balance) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET balance=balance+excluded.balance', uid, n)
+        return this.smmBal(uid)
+    }
+    /* potong saldo di muka; kalau pesanan gagal, kembalikan dengan smmAdd */
+    smmReserve(uid, cost) {
+        if (!(cost > 0)) return fail(400, 'bad_cost', 'Biaya tidak valid.')
+        const b = this.smmBal(uid)
+        if (b < cost) return { ...fail(402, 'no_balance', 'Saldo tidak cukup.'), balance: b }
+        this.sql.exec('UPDATE smm_wallet SET balance=balance-? WHERE user_id=?', cost, uid)
+        return { ok: true, balance: b - cost }
+    }
+    smmDepNew(id, uid, amount, total, now) { this.sql.exec('INSERT OR IGNORE INTO smm_deposits(id,user_id,amount,total,status,credited,created_at) VALUES(?,?,?,?,?,0,?)', id, uid, amount, total, 'pending', now); return { ok: true } }
+    smmDepGet(id) { const [d] = this.q('SELECT * FROM smm_deposits WHERE id=?', id); return d || null }
+    smmDepPending(uid, now) { return this.q("SELECT id FROM smm_deposits WHERE user_id=? AND status='pending' AND created_at>? ORDER BY created_at DESC LIMIT 3", uid, now - DAY) }
+    smmDepStatus(id, status) { this.sql.exec('UPDATE smm_deposits SET status=? WHERE id=? AND credited=0', status, id); return { ok: true } }
+    /* kredit saldo SEKALI saja per deposit (aman dipanggil berulang / bersamaan) */
+    smmDepCredit(id, amount) {
+        const d = this.smmDepGet(id); if (!d) return fail(404, 'not_found', 'Deposit tidak ditemukan.')
+        if (d.credited) return { ok: true, credited: false, balance: this.smmBal(d.user_id) }
+        this.sql.exec("UPDATE smm_deposits SET credited=1,status='success' WHERE id=?", id)
+        return { ok: true, credited: true, balance: this.smmAdd(d.user_id, amount) }
+    }
+    smmOrderAdd(o) {
+        this.sql.exec('INSERT INTO smm_orders(order_id,user_id,service,name,link,qty,cost,status,refunded,created_at) VALUES(?,?,?,?,?,?,?,?,0,?)',
+            o.order_id, o.uid, o.service, String(o.name).slice(0, 200), String(o.link).slice(0, 500), o.qty, o.cost, o.status, o.now)
+        return { ok: true }
+    }
+    smmOrderGet(orderId, uid) { const [o] = this.q('SELECT * FROM smm_orders WHERE order_id=? AND user_id=?', orderId, uid); return o || null }
+    smmOrders(uid) { return this.q('SELECT order_id,name,qty,cost,status,refunded,created_at FROM smm_orders WHERE user_id=? ORDER BY id DESC LIMIT 20', uid) }
+    /* simpan status terbaru; refund (sekali) kalau pesanan batal/gagal/partial */
+    smmOrderSettle(orderId, uid, status, refund) {
+        const o = this.smmOrderGet(orderId, uid); if (!o) return fail(404, 'not_found', 'Pesanan tidak ditemukan.')
+        let r = 0
+        if (!o.refunded && refund > 0) { r = Math.min(Math.floor(refund), o.cost); this.sql.exec('UPDATE smm_orders SET refunded=1 WHERE order_id=?', orderId); this.smmAdd(uid, r) }
+        this.sql.exec('UPDATE smm_orders SET status=? WHERE order_id=?', status, orderId)
+        return { ok: true, refunded: r, balance: this.smmBal(uid) }
+    }
     adminRevoke(id) { this.sql.exec('UPDATE users SET plan=NULL,stack=NULL,expires_at=NULL,ips=? WHERE id=?', '[]', id); return { ok: true } }
     adminCreateCode({ code, plan, days, permanent, max_uses }, now) {
         if (!this.plans[plan]) return fail(400, 'bad_request', 'Paket tidak dikenal.')
