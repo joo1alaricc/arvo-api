@@ -14,6 +14,7 @@ import { githubRoute as downloaderGithubRoute, githubHandler as downloaderGithub
 import { gdriveRoute as downloaderGdriveRoute, gdriveHandler as downloaderGdriveHandler } from './downloader/gdrive.js'
 import { mediafireRoute as downloaderMediafireRoute, mediafireHandler as downloaderMediafireHandler } from './downloader/mediafire.js'
 import { pinterestRoute as downloaderPinterestRoute, pinterestHandler as downloaderPinterestHandler } from './downloader/pinterest.js'
+import { spotifyRoute as downloaderSpotifyRoute, spotifyHandler as downloaderSpotifyHandler } from './downloader/spotify.js'
 
 /* Tambah endpoint bawaan baru cukup di sini: otomatis terdaftar, masuk /docs, dan tampil di dashboard admin. */
 const BUILTIN = [
@@ -31,6 +32,7 @@ const BUILTIN = [
     [downloaderGdriveRoute, downloaderGdriveHandler],
     [downloaderMediafireRoute, downloaderMediafireHandler],
     [downloaderPinterestRoute, downloaderPinterestHandler],
+    [downloaderSpotifyRoute, downloaderSpotifyHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
