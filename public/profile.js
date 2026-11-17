@@ -73,7 +73,14 @@ const panelEvents = () => `<div class="sec">Claim Trial</div><div id="trial"><di
   <div class="iprow"><input id="rc" placeholder="Contoh: ARVO2026" autocapitalize="characters" autocomplete="off"></div>
   <button class="btn go" id="rcb">${ico('check')} Submit</button><p class="msg" id="rcm"></p>`
 
-const panelSettings = () => `<div class="sec">Whitelist IP</div>
+/* Access Key: hanya tampil untuk pengelola. Dipakai sebagai x-api-key untuk endpoint khusus owner / panel admin (tanpa batas). */
+const panelAccessKey = () => !(who.is_admin || who.is_owner) ? '' : `<div class="sec">Access Key Pengelola</div>
+  <p class="hint">Isi sebagai <code>x-api-key</code> untuk memanggil endpoint khusus owner. Berlaku tanpa batas, jangan dibagikan.</p>
+  <div class="iprow"><input id="akv" readonly placeholder="Belum dibuat" autocomplete="off" spellcheck="false"><button class="ib" id="akshow" type="button" aria-label="Tampilkan/sembunyikan" title="Tampilkan/sembunyikan">${ico('eye')}</button><button class="ib" id="akcopy" type="button" aria-label="Salin" title="Salin" hidden>${ico('copy')}</button></div>
+  <button class="btn go" id="akgen">${ico('plus')} Generate</button><p class="msg" id="akm"></p>
+  <div style="height:14px"></div>`
+
+const panelSettings = () => `${panelAccessKey()}<div class="sec">Whitelist IP</div>
   <p class="hint">IP kamu saat ini: <span class="cur">${esc(who.ip)}</span></p>
   <p class="hint">Semua request dengan API key hanya diterima dari IP yang ada di daftar ini. Daftar kosong = semua request ditolak.</p>
   <div class="hint" style="margin-bottom:0">IP Address (maksimal ${me.max_ips} IP${me.active ? '' : ', akun gratis'})</div>
@@ -238,6 +245,22 @@ function wireTabs() {
     const b = e.currentTarget; b.disabled = true
     try { const r = await put('/auth/me/redeem', { code: rc.value }, 'POST'); toast(`Kode berhasil: ${r.name} ${r.days ? r.days + ' hari' : 'permanen'}`); await render() }
     catch (err) { say($('#rcm'), err.message, 1); b.disabled = false }
+  }
+  if ($('#akgen')) {
+    let key = ''
+    const paint = (show) => { const v = $('#akv'); v.value = key ? (show ? key : maskKey(key)) : ''; v.type = 'text'; $('#akcopy').hidden = !key; $('#akgen').lastChild.textContent = key ? ' Generate ulang' : ' Generate' }
+    let shown = false
+    const apply = (k, show) => { key = k || ''; shown = !!show; paint(shown) }
+    api('/auth/me/accesskey').then((r) => apply(r.access_key, false)).catch((e) => say($('#akm'), e.message, 1))
+    $('#akshow').onclick = () => { shown = !shown; paint(shown) }
+    $('#akcopy').onclick = () => navigator.clipboard.writeText(key).then(() => toast('Access key disalin'))
+    $('#akgen').onclick = async (e) => {
+      if (key && !confirm('Generate ulang? Access key lama langsung tidak berlaku.')) return
+      const b = e.currentTarget; b.disabled = true
+      try { const r = await put('/auth/me/accesskey/reset', {}, 'POST'); apply(r.access_key, true); say($('#akm'), 'Access key baru dibuat. Simpan sekarang.') }
+      catch (err) { say($('#akm'), err.message, 1) }
+      b.disabled = false
+    }
   }
   if ($('#myip')) {
     $('#myip').onclick = () => ($('#nip').value = who.ip)
