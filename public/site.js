@@ -105,7 +105,7 @@ const view = (o) => {
   closeBtn.textContent = 'Tutup'
   if (o.status === 'paid') {
     body.innerHTML = `<h3>Pembayaran berhasil</h3><p class="sub">${esc(o.name)} sudah aktif di akunmu.</p><a class="btn" href="/profile.html">Buka profil</a>`
-    stop(); return
+    stop(); window.hangNotice && hangNotice.refresh(); return
   }
   if (o.status !== 'pending') { body.innerHTML = '<h3>Order tidak aktif</h3><p class="sub">Silakan buat order baru.</p>'; stop(); return }
   body.innerHTML = `<h3>${esc(label(o.name, o.days))}</h3>
@@ -129,7 +129,7 @@ async function pay(plan, days, permanent) {
   body.innerHTML = '<p class="sub" style="display:flex;gap:8px;align-items:center"><i class="spin"></i> Membuat QR pembayaran…</p>'
   try {
     const o = await put('/billing/orders', { plan, days, permanent }, 'POST')
-    view(o); stop()
+    view(o); stop(); window.hangNotice && hangNotice.refresh()
     poll = setInterval(async () => { try { view(await api('/billing/orders/' + o.id)) } catch {} }, 4000)
   } catch (e) { closeBtn.textContent = 'Tutup'; body.innerHTML = `<p class="err">${esc(e.message)}</p>` }
 }
