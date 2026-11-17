@@ -108,19 +108,18 @@ const drawSite = (d) => {
     return `<div class="ctb-i"><div class="ctb-a">${av}</div><div>${nm}<small>${esc(x.role)}</small></div></div>`
   }).join('')}</div>`))
   if (d.thanks.length) parts.push(card('Thanks To', `<ul class="sk-l">${d.thanks.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`))
-  const L = (i) => String.fromCharCode(65 + (i % 26))
-  const CV = '<svg class="tnc-cv" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>'
+    const CV = '<svg class="tnc-cv" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>'
   const wrap = (inner) => `<div class="tnc-c"><div class="tnc-ci">${inner}</div></div>`
-  const point = (p, k) => {
-    const head = `<span>${L(k)}.</span>`
+  const point = (p, k, i) => {
+    const head = `<span>${i + 1}.${k + 1}</span>`
     if (!p.desc) return `<div class="tnc-p">${head}<div><b>${esc(p.title)}</b></div></div>`
     return `<div class="tnc-p tnc-x">${head}<div class="tnc-pw"><button type="button" class="tnc-tg tnc-pt" aria-expanded="false"><b>${esc(p.title)}</b>${CV}</button>${wrap(`<p class="tnc-d">${esc(p.desc)}</p>`)}</div></div>`
   }
   const term = (t, i) => {
-    const num = `<span>${String(i + 1).padStart(2, '0')}.</span> ${esc(t.title)}`
+    const num = `<span>${i + 1}.</span> ${esc(t.title)}`
     const pts = t.points || []
     if (!t.desc && !pts.length) return `<div class="tnc-i"><div class="tnc-t">${num}</div></div>`
-    const inner = `${t.desc ? `<p class="tnc-d">${esc(t.desc)}</p>` : ''}${pts.map(point).join('')}`
+    const inner = `${t.desc ? `<p class="tnc-d">${esc(t.desc)}</p>` : ''}${pts.map((p, k) => point(p, k, i)).join('')}`
     return `<div class="tnc-i tnc-x"><button type="button" class="tnc-tg tnc-t" aria-expanded="false"><span class="tnc-tt">${num}</span>${CV}</button>${wrap(inner)}</div>`
   }
   if (d.terms.length) parts.push(card('Syarat dan Ketentuan', `<div class="tnc">${d.terms.map(term).join('')}</div>`))
