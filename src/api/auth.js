@@ -113,6 +113,7 @@ const uid = (c) => c.get('user').id
 
 auth.get('/me', (c) => c.json(c.get('user')))
 auth.get('/me/usage', async (c) => send(c, await store(c).usage(uid(c), Date.now())))
+auth.get('/me/usage/day', async (c) => send(c, await store(c).usageDay(uid(c), c.req.query('day'))))
 auth.get('/me/accesskey', async (c) => send(c, await store(c).accessKeyOf(uid(c))))
 auth.post('/me/accesskey/reset', async (c) => send(c, await store(c).accessKeyOf(uid(c), true)))
 auth.get('/me/orders', async (c) => send(c, await store(c).userOrders(uid(c))))
