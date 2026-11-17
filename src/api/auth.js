@@ -25,7 +25,7 @@ auth.post('/register', async (c) => {
 })
 
 /* Login: kolom username boleh berisi username ATAU email (email terverifikasi Google / email akun).
- * as:'admin' = "Login sebagai Pengelola": akun harus pengelola (email di ADMIN_EMAILS atau admin dari tab Tim), kalau bukan ditolak. */
+ * Pengelola masuk lewat POST /admin-login (email + access key, tanpa password). */
 auth.post('/login', async (c) => {
     const b = await body(c), ident = String(b.username || b.email || '').trim(), pw = String(b.password || '')
     const bad = fail(401, 'invalid_login', 'Username/email atau password salah.')
@@ -37,13 +37,18 @@ auth.post('/login', async (c) => {
         if (sameHash(hash, info.hash)) { hit = info; break }
     }
     if (!hit) return send(c, bad)
-    if (b.as === 'admin') {
-        const level = await store(c).adminLevel(hit.id)
-        if (!level) return send(c, fail(403, 'not_admin', 'Akun ini bukan pengelola.'))
-    }
     await store(c).loginOk(hit.id, c.get('ip'), Date.now())
     await startSession(c, hit.id)
     return c.json({ ok: true })
+})
+
+/* Login sebagai Pengelola: email + Access Key, tanpa password. Sesinya sama seperti user biasa; panel admin hanya bisa dibuka dengan sesi ini. */
+auth.post('/admin-login', async (c) => {
+    const b = await body(c)
+    const r = await store(c).adminKeyLogin(b.email, b.access_key, c.get('ip'), Date.now())
+    if (r.ok === false) return send(c, r)
+    await startSession(c, r.id)
+    return c.json({ ok: true, level: r.level })
 })
 
 /* Login Google (Google Identity Services).
