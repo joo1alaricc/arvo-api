@@ -31,7 +31,7 @@ const I = (n) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${NI[n]}
 const nf = (n) => Number(n || 0).toLocaleString('id-ID')
 const LS = (k, v) => { try { if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null'); v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)) } catch {} return null }
 const note = (e, t, bad) => { if (!e) return; e.textContent = t; e.className = 'msg' + (bad ? ' err' : ''); e.style.cssText = bad || !t ? '' : 'color:var(--g)' }
-const stChip = (s) => { const k = String(s || '').toLowerCase(); const c = /success|complete|selesai|done/.test(k) ? 'ok' : /cancel|fail|error|refund|pasti/.test(k) ? 'bad' : /partial/.test(k) ? 'mid' : 'wait'; return `<span class="sm-st ${c}">${esc(s)}</span>` }
+const stChip = (s) => { const k = String(s || '').toLowerCase(); const c = /success|complete|selesai|done/.test(k) ? 'ok' : /cancel|fail|error|refund|pasti|kedaluwarsa/.test(k) ? 'bad' : /partial/.test(k) ? 'mid' : 'wait'; return `<span class="sm-st ${c}">${esc(s)}</span>` }
 const DEPK = 'arvo_smm_dep'
 const S = { bal: null, svcs: [], sel: null, poll: null }
 const setBal = (n) => { if (n == null) return; S.bal = n; const b = $('#bv'); if (b) b.textContent = rp(n); est() }
@@ -183,14 +183,35 @@ async function mkDeposit(ev) {
   } catch (e) { note(m, e.message, 1) }
   b.disabled = false
 }
+const depExp = (d) => { const t = Date.parse(String(d.exp || '').replace(' ', 'T')); return Number.isFinite(t) && t < Date.now() }
 function showDep() {
   const d = LS(DEPK), v = $('#dv'); if (!v) return
   if (!d) { v.innerHTML = ''; return }
   $('#cd').hidden = false
-  v.innerHTML = `<div class="sm-qr">${d.qr ? `<img alt="QR pembayaran" src="${esc(d.qr)}">` : ''}
-    <div class="sm-rows"><div><span>Nominal</span><b>${rp(d.amount)}</b></div><div><span>Total bayar</span><b>${rp(d.total)}</b></div>${d.exp ? `<div><span>Berlaku s/d</span><b>${esc(fmtExp(d.exp))}</b></div>` : ''}<div><span>Status</span><b id="dst">${stChip('Menunggu pembayaran')}</b></div></div>
-    <div class="sm-row2" style="width:100%">${d.pay ? `<a class="btn go" style="flex:1" href="${esc(d.pay)}" target="_blank" rel="noopener noreferrer">Buka halaman bayar</a>` : ''}<button class="btn ghost" id="bdc" type="button" style="flex:1">Cek status</button></div></div>`
+  const ex = depExp(d)
+  v.innerHTML = `<div class="sm-qr">${ex ? '<p class="msg err" style="text-align:center">QR kedaluwarsa. Tutup lalu buat deposit baru.</p>' : d.qr ? `<img alt="QR pembayaran" src="${esc(d.qr)}">` : ''}
+    <div class="sm-rows"><div><span>Nominal</span><b>${rp(d.amount)}</b></div><div><span>Total bayar</span><b>${rp(d.total)}</b></div>${d.exp ? `<div><span>Berlaku s/d</span><b>${esc(fmtExp(d.exp))}</b></div>` : ''}<div><span>Status</span><b id="dst">${stChip(ex ? 'Kedaluwarsa' : 'Menunggu pembayaran')}</b></div></div>
+    <div class="sm-row2" style="width:100%">${!ex && d.pay ? `<a class="btn go" style="flex:1" href="${esc(d.pay)}" target="_blank" rel="noopener noreferrer">Buka halaman bayar</a>` : ''}<button class="btn ghost" id="bdc" type="button" style="flex:1">Cek status</button></div>
+    <button class="btn ghost block" id="bdx" type="button" style="width:100%">${ex ? 'Tutup' : 'Batalkan deposit'}</button></div>`
   $('#bdc').onclick = () => pollDep(true)
+  $('#bdx').onclick = () => closeDep(ex)
+}
+async function closeDep(expired) {
+  const d = LS(DEPK), b = $('#bdx'), m = $('#md'); if (!d) return
+  if (!expired && b.dataset.sure !== '1') {   /* ketuk dua kali: kalau sudah terlanjur bayar, jangan dibatalkan tanpa sengaja */
+    b.dataset.sure = '1'; b.textContent = 'Ketuk lagi untuk batalkan'
+    setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = 'Batalkan deposit' } }, 4000); return
+  }
+  b.disabled = true
+  try {
+    const r = await put('/tools/smm/deposit-cancel', { deposit: d.id }, 'POST')
+    clearInterval(S.poll); LS(DEPK, null); showDep()
+    if (r.paid) { setBal(r.balance); note(m, `Deposit ${rp(r.amount)} ternyata sudah dibayar, saldo sudah bertambah.`) }
+    else note(m, expired ? '' : 'Deposit dibatalkan.')
+  } catch (e) {
+    if (expired || e.status === 404) { clearInterval(S.poll); LS(DEPK, null); showDep(); note(m, '') }   /* QR kedaluwarsa selalu boleh ditutup di browser ini */
+    else { note(m, e.message, 1); b.disabled = false }
+  }
 }
 async function pollDep(manual) {
   const d = LS(DEPK); if (!d) return clearInterval(S.poll)
@@ -203,7 +224,8 @@ async function pollDep(manual) {
       note($('#md'), `Deposit ${rp(r.amount)}${r.bonus ? ` (+bonus ${rp(r.bonus)})` : ''} berhasil. Saldo sudah bertambah.`)
     } else if (/expire|fail|cancel|reject/.test(r.status)) {
       clearInterval(S.poll); LS(DEPK, null); showDep(); note($('#md'), 'Deposit kedaluwarsa atau dibatalkan. Buat deposit baru.', 1)
-    } else st.innerHTML = stChip('Menunggu pembayaran')
+    } else if (depExp(d)) showDep()
+    else st.innerHTML = stChip('Menunggu pembayaran')
   } catch (e) {
     if (e.status === 404) { clearInterval(S.poll); LS(DEPK, null); showDep() }
     else if (manual) st.innerHTML = `<span class="err">${esc(e.message)}</span>`
