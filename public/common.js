@@ -127,10 +127,10 @@ addEventListener('resize', () => { if (innerWidth > 760) drawer(false) })
 .dr,.dr-bd{display:none}
 @media(max-width:760px){
 html.dr-lock{overflow:hidden}
-.dr-bd{display:block;position:fixed;left:0;right:0;bottom:0;top:var(--navh,53px);z-index:49;background:rgba(0,0,0,.38);opacity:0;visibility:hidden;transition:opacity .45s var(--ease,ease),visibility 0s .45s}
-.dr-bd.open{opacity:1;visibility:visible;transition:opacity .45s var(--ease,ease),visibility 0s}
-.dr{display:flex;flex-direction:column;position:fixed;left:0;top:var(--navh,53px);bottom:0;width:min(68vw,268px);z-index:50;background:color-mix(in srgb,var(--bg,#0d1016) 52%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(24px);backdrop-filter:saturate(1.8) blur(24px);color:var(--tx,#e8ecf3);border-right:1px solid var(--line,#242b38);border-radius:0 20px 20px 0;overscroll-behavior:contain;transform:translate3d(-102%,0,0);visibility:hidden;transition:transform .55s cubic-bezier(.32,.72,0,1),visibility 0s .55s,box-shadow .55s}
-.dr.open{transform:none;visibility:visible;box-shadow:18px 0 50px -26px #000c;transition:transform .55s cubic-bezier(.32,.72,0,1),visibility 0s,box-shadow .55s}
+.dr-bd{display:block;position:fixed;left:0;right:0;bottom:0;top:var(--navh,53px);z-index:49;background:rgba(0,0,0,.38);opacity:0;visibility:hidden;transition:opacity .6s var(--ease,ease),visibility 0s .6s}
+.dr-bd.open{opacity:1;visibility:visible;transition:opacity .6s var(--ease,ease),visibility 0s}
+.dr{display:flex;flex-direction:column;position:fixed;left:0;top:var(--navh,53px);bottom:0;width:min(68vw,268px);z-index:50;background:color-mix(in srgb,var(--bg,#0d1016) 52%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(24px);backdrop-filter:saturate(1.8) blur(24px);color:var(--tx,#e8ecf3);border-right:1px solid var(--line,#242b38);border-radius:0 20px 20px 0;overscroll-behavior:contain;transform:translate3d(-102%,0,0);visibility:hidden;transition:transform .75s cubic-bezier(.22,.8,.24,1),visibility 0s .75s,box-shadow .75s}
+.dr.open{transform:none;visibility:visible;box-shadow:18px 0 50px -26px #000c;transition:transform .75s cubic-bezier(.22,.8,.24,1),visibility 0s,box-shadow .75s}
 .dr-nav{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:8px 8px 4px}
 .dr-g,.dr-loose>*{opacity:0;transform:translate3d(-14px,0,0);transition:transform .5s var(--ease,ease),opacity .35s}
 .dr.open .dr-g,.dr.open .dr-loose>*{opacity:1;transform:none;transition-delay:calc(var(--i,0)*45ms + 90ms),calc(var(--i,0)*45ms + 90ms)}
@@ -338,88 +338,116 @@ dialog[open]::backdrop{background:#0006;-webkit-backdrop-filter:blur(8px);backdr
   document.head.append(st)
 }
 
-/* ---------- order belum dikonfirmasi admin: ikon jam kecil menggantung di kanan atas (tali + ayunan); diketuk -> melebar jadi kartu status ---------- */
+/* ---------- order belum dikonfirmasi admin: tombol melayang ala AssistiveTouch iOS (bisa digeser, menempel ke tepi layar); diketuk -> kartu status mengembang ---------- */
 {
   const st = document.createElement('style'); st.id = 'hang-css'
-  /* PENTING: animasi di wrapper hanya transform (tanpa opacity). Animasi opacity membuat "backdrop root" sehingga blur kartu tidak melihat halaman di belakangnya. */
+  /* Wrapper .hang TIDAK boleh beranimasi opacity/filter: itu membuat "backdrop root" dan memutus blur anak-anaknya. Opacity hanya dipasang di elemen yang punya blur itu sendiri. */
   st.textContent = `
-.hang{position:fixed;top:calc(var(--navh,56px) - 1px);right:14px;z-index:45;width:46px;pointer-events:none;transition:width .55s cubic-bezier(.32,.72,0,1);animation:hangDrop .85s cubic-bezier(.34,1.35,.64,1) both}
-.hang.open{width:min(284px,calc(100vw - 28px))}
-.hang.out{animation:hangUp .55s cubic-bezier(.5,0,.75,0) forwards}
-.hang-sw{transform-origin:50% 0;animation:hangSwing 3.4s ease-out .4s both,hangIdle 5.5s ease-in-out 3.8s infinite}
-.hang.open .hang-sw{animation:none}
-.hang-rope{display:block;width:100%;height:34px;overflow:visible;color:color-mix(in srgb,var(--tx) 55%,transparent)}
-.hang-rope path{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;vector-effect:non-scaling-stroke}
-.hang-rope circle{fill:var(--card);stroke:currentColor;stroke-width:1.6;vector-effect:non-scaling-stroke}
-.hang-card{pointer-events:auto;border-radius:16px;border:1px solid color-mix(in srgb,#f5a524 45%,var(--line));background:color-mix(in srgb,var(--card) 68%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(22px);backdrop-filter:saturate(1.8) blur(22px);color:var(--tx);overflow:hidden;box-shadow:0 14px 30px -14px #000a;transition:border-color .3s}
-.hang-hd{display:flex;align-items:center;width:100%;padding:7px;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.hang:not(.open) .hang-hd:active{transform:scale(.92)}
-.hang-ic{width:32px;height:32px;border-radius:11px;flex:none;display:grid;place-items:center;background:color-mix(in srgb,#f5a524 20%,transparent);color:#f5a524}
-.hang-ic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-.hang:not(.ok) .hang-ic{animation:hangPulse 2.2s ease-in-out infinite}
-.hang-tx{display:grid;min-width:0;line-height:1.25;max-width:0;opacity:0;margin-left:0;overflow:hidden;white-space:nowrap;transition:max-width .5s cubic-bezier(.32,.72,0,1),opacity .3s,margin .5s}
-.hang.open .hang-tx{max-width:220px;opacity:1;margin-left:10px;transition-delay:0s,.12s,0s}
-.hang-tx b{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis}
-.hang-tx small{font-size:11.5px;color:var(--mut);overflow:hidden;text-overflow:ellipsis}
-.hang-bd{display:grid;grid-template-rows:0fr;transition:grid-template-rows .5s cubic-bezier(.32,.72,0,1)}
-.hang.open .hang-bd{grid-template-rows:1fr}
-.hang-bi{overflow:hidden;min-height:0}
-.hg-p{padding:2px 12px 12px;opacity:0;transform:translate3d(0,-6px,0);transition:opacity .3s,transform .45s cubic-bezier(.32,.72,0,1)}
-.hang.open .hg-p{opacity:1;transform:none;transition-delay:.15s}
-.hang.ok .hang-card{border-color:color-mix(in srgb,var(--ok,#4ade80) 55%,var(--line))}.hang.ok .hang-ic{background:color-mix(in srgb,var(--ok,#4ade80) 20%,transparent);color:var(--ok,#4ade80)}
+.hang{--S:48px;position:fixed;left:0;top:0;z-index:45;width:var(--S);height:var(--S);pointer-events:none;transform:translate3d(var(--hx,0px),var(--hy,0px),0)}
+.hang.snap{transition:transform .75s var(--ease-soft,cubic-bezier(.22,.8,.24,1))}
+.hang-bt{pointer-events:auto;position:relative;display:grid;place-items:center;width:var(--S);height:var(--S);padding:0;border-radius:50%;border:1px solid color-mix(in srgb,var(--tx) 16%,var(--line));background:color-mix(in srgb,var(--card) 62%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(20px);backdrop-filter:saturate(1.8) blur(20px);box-shadow:0 10px 26px -12px #000b;color:var(--tx);cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;animation:hangIn .9s var(--spring) both;transition:opacity .7s var(--ease-soft,ease),transform .6s var(--spring),box-shadow .5s}
+.hang.idle:not(.open):not(.drag) .hang-bt{opacity:.5}
+.hang-bt:active{transform:scale(.94);transition-duration:.7s,.15s,.5s}
+.hang.drag .hang-bt{transform:scale(1.1);cursor:grabbing;box-shadow:0 18px 34px -12px #000c;transition-duration:.7s,.25s,.4s}
+.hang-ic{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,#f5a524 24%,transparent);color:#f5a524;transition:background-color .5s,color .5s}
+.hang-ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.hang:not(.ok):not(.open) .hang-bt::after{content:"";position:absolute;inset:-1px;border-radius:50%;border:1.5px solid #f5a524;opacity:0;animation:hangPing 3.2s var(--ease-soft,ease-out) 1.2s infinite;pointer-events:none}
+.hang.ok .hang-ic{background:color-mix(in srgb,var(--ok,#4ade80) 24%,transparent);color:var(--ok,#4ade80)}
+.hang.out .hang-bt{animation:hangOut .55s var(--ease-soft,ease) forwards}.hang.out .hang-pn{opacity:0!important;transition-duration:.3s!important}
+.hang-pn{position:absolute;width:min(284px,calc(100vw - 24px));overflow:auto;overscroll-behavior:contain;border-radius:20px;border:1px solid color-mix(in srgb,var(--tx) 16%,var(--line));background:color-mix(in srgb,var(--card) 66%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(24px);backdrop-filter:saturate(1.8) blur(24px);color:var(--tx);box-shadow:0 22px 50px -20px #000d;scrollbar-width:none;
+  opacity:0;visibility:hidden;pointer-events:none;transform:scale(.3);transition:transform .75s var(--ease-soft,cubic-bezier(.22,.8,.24,1)),opacity .4s var(--ease-soft,ease),visibility 0s linear .75s}
+.hang-pn::-webkit-scrollbar{display:none}
+.hang.open .hang-pn{opacity:1;visibility:visible;pointer-events:auto;transform:none;transition-delay:0s}
+.hang[data-x=r] .hang-pn{right:0}.hang[data-x=l] .hang-pn{left:0}
+.hang[data-y=b] .hang-pn{top:calc(100% + 10px)}.hang[data-y=t] .hang-pn{bottom:calc(100% + 10px)}
+.hang[data-x=r][data-y=b] .hang-pn{transform-origin:calc(100% - 24px) -34px}.hang[data-x=l][data-y=b] .hang-pn{transform-origin:24px -34px}
+.hang[data-x=r][data-y=t] .hang-pn{transform-origin:calc(100% - 24px) calc(100% + 34px)}.hang[data-x=l][data-y=t] .hang-pn{transform-origin:24px calc(100% + 34px)}
+.hg-p{padding:14px 14px 14px}
+.hg-p>*{opacity:0;transform:translate3d(0,6px,0);transition:opacity .45s var(--ease-soft,ease),transform .7s var(--ease-soft,ease)}
+.hang.open .hg-p>*{opacity:1;transform:none}
+.hang.open .hg-p>:nth-child(1){transition-delay:.12s}.hang.open .hg-p>:nth-child(2){transition-delay:.17s}.hang.open .hg-p>:nth-child(3){transition-delay:.22s}.hang.open .hg-p>:nth-child(n+4){transition-delay:.27s}
 .hg-st{display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border-radius:99px;font-size:12px;font-weight:700;color:#f5a524;background:color-mix(in srgb,#f5a524 14%,transparent);border:1px solid color-mix(in srgb,#f5a524 40%,transparent)}
-.hg-st i{width:7px;height:7px;border-radius:50%;background:currentColor;animation:hangPulse 1.6s ease-in-out infinite}
+.hg-st i{width:7px;height:7px;border-radius:50%;background:currentColor;animation:hangPulse 1.8s ease-in-out infinite}
 .hg-st.ok{color:var(--ok,#4ade80);background:color-mix(in srgb,var(--ok,#4ade80) 14%,transparent);border-color:color-mix(in srgb,var(--ok,#4ade80) 40%,transparent)}.hg-st.ok i{animation:none}
 .hg-p .cfm{margin-top:10px}.hg-p .cfm>div{padding:7px 10px;font-size:12.5px}.hg-p .cfm .tot b{font-size:15px}
-.hg-qr{margin-top:10px}.hg-qr img{display:block;width:100%;max-width:210px;margin:0 auto;background:#fff;border-radius:10px;padding:6px}
+.hg-qr{display:grid;grid-template-rows:0fr;transition:grid-template-rows .8s var(--ease-soft,cubic-bezier(.22,.8,.24,1))}
+.hg-qr.on{grid-template-rows:1fr}
+.hg-qi{overflow:hidden;min-height:0}
+.hg-qi>*{display:block;margin:0 auto;opacity:0;transform:scale(.94) translate3d(0,-6px,0);transition:opacity .5s var(--ease-soft,ease),transform .8s var(--ease-soft,ease)}
+.hg-qr.on .hg-qi>*{opacity:1;transform:none;transition-delay:.12s}
+.hg-qi img{width:100%;max-width:200px;background:#fff;border-radius:12px;padding:6px;margin-top:10px}
+.hg-qi .hg-n{padding-top:10px;text-align:center}
 .hg-n{margin:8px 0 0;font-size:11.5px;color:var(--mut);line-height:1.4}
 .hg-act{display:flex;gap:8px;margin-top:10px}.hg-act .btn{flex:1;padding:8px 10px;font-size:12.5px;margin:0;width:auto}
-.hg-act .hg-cancel.sure{border-color:#ef4444;color:#ef4444}
-@keyframes hangDrop{0%{transform:translate3d(0,-130%,0)}100%{transform:none}}
-@keyframes hangUp{to{transform:translate3d(0,-140%,0)}}
-@keyframes hangSwing{0%{transform:rotate(12deg)}14%{transform:rotate(-9deg)}28%{transform:rotate(6.5deg)}42%{transform:rotate(-4.2deg)}56%{transform:rotate(2.7deg)}70%{transform:rotate(-1.5deg)}84%{transform:rotate(.7deg)}100%{transform:rotate(0)}}
-@keyframes hangIdle{0%,100%{transform:rotate(1.6deg)}50%{transform:rotate(-1.6deg)}}
+.hg-act .hg-cancel{transition:color .35s,border-color .35s,background-color .35s,transform .6s var(--spring)}
+.hg-act .hg-cancel.sure{border-color:#ef4444;color:#ef4444;background:color-mix(in srgb,#ef4444 10%,transparent)}
+@keyframes hangIn{from{opacity:0;transform:scale(.3)}to{opacity:1;transform:none}}
+@keyframes hangOut{to{opacity:0;transform:scale(.3)}}
+@keyframes hangPing{0%{opacity:.55;transform:scale(1)}60%,100%{opacity:0;transform:scale(1.7)}}
 @keyframes hangPulse{0%,100%{opacity:1}50%{opacity:.45}}
-@media(prefers-reduced-motion:reduce){.hang,.hang-sw,.hang-ic,.hg-st i{animation:none!important}.hang,.hang-bd,.hang-tx,.hg-p{transition-duration:.01s!important}}`
+@media(prefers-reduced-motion:reduce){.hang-bt,.hang-bt::after,.hg-st i{animation:none!important}.hang.snap,.hang-pn,.hg-p>*,.hg-qr,.hg-qi>*{transition-duration:.01s!important;transition-delay:0s!important}}`
   document.head.append(st)
 
   const CLOCK = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'
   const TICK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>'
-  const H = { el: null, order: null, poll: null, tick: null, open: false, qr: {}, done: null }
+  const S = 48, M = 10, KEY = 'arvo_hang'
+  const H = { el: null, order: null, poll: null, tick: null, idle: null, open: false, qr: {}, done: null }
+  const navh = () => ($('.nav') ? $('.nav').offsetHeight : 56)
+  const clampX = (x) => Math.min(Math.max(x, M), innerWidth - S - M)
+  const clampY = (y) => Math.min(Math.max(y, navh() + 8), innerHeight - S - 14)
+  let P = { side: 'r', fy: null }
+  try { const v = JSON.parse(localStorage.getItem(KEY) || 'null'); if (v && (v.side === 'l' || v.side === 'r') && Number.isFinite(v.fy)) P = v } catch {}
+  const home = () => ({ x: P.side === 'r' ? innerWidth - S - M : M, y: clampY((P.fy ?? (navh() + 16) / innerHeight) * innerHeight) })
+  const apply = (x, y) => { H.el.style.setProperty('--hx', x + 'px'); H.el.style.setProperty('--hy', y + 'px') }
+  const geo = () => {   /* arah kartu mengembang: ke sisi layar yang lega */
+    if (!H.el) return
+    const r = H.el.getBoundingClientRect(), below = r.top + S / 2 < innerHeight * 0.5
+    H.el.dataset.x = P.side; H.el.dataset.y = below ? 'b' : 't'
+    H.el.querySelector('.hang-pn').style.maxHeight = Math.max(170, (below ? innerHeight - r.bottom : r.top - navh()) - 24) + 'px'
+  }
+  const wake = () => { if (!H.el) return; H.el.classList.remove('idle'); clearTimeout(H.idle); H.idle = setTimeout(() => { if (H.el && !H.open) H.el.classList.add('idle') }, 3500) }
+  addEventListener('resize', () => { if (!H.el) return; const h = home(); H.el.classList.remove('snap'); apply(h.x, h.y); geo() })
+
   const sub = (o) => `${o.name || o.plan} · ${rp(o.total)}`
   const fmtLeft = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` }
-  const place = () => { const n = $('.nav'); if (n) root.style.setProperty('--navh', n.offsetHeight + 'px') }
-  addEventListener('resize', place)
-
   const startPoll = () => { clearInterval(H.poll); H.poll = setInterval(pull, H.open ? 5000 : 15000) }
-  const stopTimers = () => { clearInterval(H.poll); clearInterval(H.tick); H.poll = H.tick = null }
+  const stopTimers = () => { clearInterval(H.poll); clearInterval(H.tick); clearTimeout(H.idle); H.poll = H.tick = null }
 
   const render = () => {            /* isi kartu (dipanggil saat dibuka / order berganti / lunas) */
-    const o = H.done || H.order, bi = H.el && H.el.querySelector('.hang-bi'); if (!o || !bi) return
+    const o = H.done || H.order, pn = H.el && H.el.querySelector('.hang-pn'); if (!o || !pn) return
     const paid = !!H.done, qr = H.qr[o.id]
-    bi.innerHTML = `<div class="hg-p">${paid ? '<span class="hg-st ok"><i></i>Pembayaran berhasil</span>' : '<span class="hg-st"><i></i>Menunggu konfirmasi admin</span>'}
+    pn.innerHTML = `<div class="hg-p"><div><span class="hg-st${paid ? ' ok' : ''}"><i></i>${paid ? 'Pembayaran berhasil' : 'Menunggu konfirmasi admin'}</span></div>
       <div class="cfm"><div><span>Paket</span><b>${esc(o.name || o.plan)}</b></div><div><span>Durasi</span><b>${o.days ? esc(o.days) + ' hari' : 'Permanen'}</b></div>
       ${paid ? '' : '<div><span>Sisa waktu bayar</span><b class="mono" id="hgleft">--:--</b></div>'}<div class="tot"><span>Total bayar</span><b>${rp(o.total)}</b></div></div>
-      ${paid ? '' : `<div class="hg-qr" hidden>${qr ? `<img alt="QRIS" src="${esc(qr)}">` : '<p class="hg-n">Memuat QR…</p>'}</div>`}
-      <p class="hg-n">${paid ? 'Paketmu sudah aktif di akun.' : 'Sudah bayar? Tunggu admin mengonfirmasi. Status ini berubah otomatis.'}</p>
-      <p class="hg-n" id="hgerr" style="color:#ef4444" hidden></p>
-      <div class="hg-act">${paid ? '<a class="btn" href="/profile.html" style="text-align:center">Buka profil</a>' : '<button class="btn ghost" type="button" data-a="qr">Lihat QR</button><button class="btn ghost hg-cancel" type="button" data-a="cancel">Batalkan</button>'}</div>
-      <p class="hg-n" style="font-size:10.5px">ID order: <span class="mono">${esc(o.id)}</span></p></div>`
+      ${paid ? '' : `<div class="hg-qr" inert><div class="hg-qi">${qr ? `<img alt="QRIS" src="${esc(qr)}">` : '<p class="hg-n">Memuat QR…</p>'}</div></div>`}
+      <div><p class="hg-n">${paid ? 'Paketmu sudah aktif di akun.' : 'Sudah bayar? Tunggu admin mengonfirmasi. Status ini berubah otomatis.'}</p>
+      <p class="hg-n" id="hgerr" style="color:#ef4444" hidden></p></div>
+      <div class="hg-act">${paid ? '<a class="btn" href="/profile.html" style="text-align:center">Buka profil</a>' : '<button class="btn ghost" type="button" data-a="qr">Tampilkan QR</button><button class="btn ghost hg-cancel" type="button" data-a="cancel">Batalkan</button>'}</div>
+      <div><p class="hg-n" style="font-size:10.5px">ID order: <span class="mono">${esc(o.id)}</span></p></div></div>`
     clearInterval(H.tick); H.tick = null
     if (!paid && o.expires_at) { const t = () => { const e = $('#hgleft'); if (e) e.textContent = fmtLeft(o.expires_at - Date.now()) }; t(); H.tick = setInterval(t, 1000) }
   }
   const loadQr = async () => {
     const o = H.order; if (!o || H.qr[o.id]) return
-    try { const r = await api('/billing/orders/' + o.id); if (r.qris) { H.qr[o.id] = r.qris.image; if (H.open && H.order && H.order.id === o.id) { const box = $('.hg-qr', H.el), was = box && !box.hidden; if (box) { box.innerHTML = `<img alt="QRIS" src="${esc(r.qris.image)}">`; box.hidden = !was } } } } catch {}
+    try {
+      const r = await api('/billing/orders/' + o.id)
+      if (r.qris) { H.qr[o.id] = r.qris.image; if (H.el && H.order && H.order.id === o.id) { const qi = $('.hg-qi', H.el); if (qi) qi.innerHTML = `<img alt="QRIS" src="${esc(r.qris.image)}">` } }
+    } catch {}
   }
   const setOpen = (v) => {
     if (!H.el || v === H.open) return
-    H.open = v; H.el.classList.toggle('open', v); H.el.querySelector('.hang-hd').setAttribute('aria-expanded', v)
-    if (v) { render(); loadQr(); startPoll() } else { clearInterval(H.tick); H.tick = null; if (H.poll) startPoll() }
+    H.open = v
+    if (v) { geo(); render(); loadQr(); H.el.classList.add('open'); clearTimeout(H.idle); H.el.classList.remove('idle') }
+    else { H.el.classList.remove('open'); clearInterval(H.tick); H.tick = null; wake() }
+    H.el.querySelector('.hang-bt').setAttribute('aria-expanded', v)
+    if (H.poll) startPoll()
   }
   const act = async (e) => {
     const b = e.target.closest('button[data-a]'); if (!b) return
-    if (b.dataset.a === 'qr') { const box = $('.hg-qr', H.el); box.hidden = !box.hidden; b.textContent = box.hidden ? 'Lihat QR' : 'Sembunyikan QR'; return }
+    if (b.dataset.a === 'qr') {
+      const box = $('.hg-qr', H.el), on = box.classList.toggle('on'); box.inert = !on
+      b.textContent = on ? 'Sembunyikan QR' : 'Tampilkan QR'; return
+    }
     if (!b.classList.contains('sure')) {   /* batalkan: ketuk dua kali */
       b.classList.add('sure'); b.textContent = 'Yakin batalkan?'
       setTimeout(() => { if (b.isConnected) { b.classList.remove('sure'); b.textContent = 'Batalkan' } }, 4000); return
@@ -430,32 +458,50 @@ dialog[open]::backdrop{background:#0006;-webkit-backdrop-filter:blur(8px);backdr
   }
 
   const mount = (o) => {
-    place()
     const el = document.createElement('div'); el.className = 'hang'
-    el.innerHTML = `<div class="hang-sw"><svg class="hang-rope" viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true"><path d="M50 3 L16 34"/><path d="M50 3 L84 34"/><circle cx="50" cy="3" r="3"/></svg>
-      <div class="hang-card"><button class="hang-hd" type="button" aria-label="Status pembelian" aria-expanded="false"><span class="hang-ic">${CLOCK}</span><span class="hang-tx"><b>Menunggu konfirmasi</b><small></small></span></button>
-      <div class="hang-bd"><div class="hang-bi"></div></div></div></div>`
-    el.querySelector('small').textContent = sub(o)
-    el.querySelector('.hang-hd').onclick = () => {
-      if (!H.open) { const sw = el.querySelector('.hang-sw'); sw.style.animation = 'none'; void sw.offsetWidth; sw.style.animation = '' }   /* ketuk ikon = berayun lagi */
-      setOpen(!H.open)
-    }
-    el.querySelector('.hang-bi').addEventListener('click', act)
+    el.innerHTML = `<button class="hang-bt" type="button" aria-label="Status pembelian: menunggu konfirmasi" aria-expanded="false"><span class="hang-ic">${CLOCK}</span></button><div class="hang-pn" role="dialog" aria-label="Status pembelian"></div>`
     document.body.append(el); H.el = el
+    const h = home(); apply(h.x, h.y); geo(); wake()
+    el.querySelector('.hang-pn').addEventListener('click', act)
+    /* geser dengan jari/kursor; lepas -> menempel ke tepi kiri/kanan dengan pegas. Ketuk tanpa geser -> buka/tutup kartu. */
+    const bt = el.querySelector('.hang-bt'); let g = null
+    bt.addEventListener('pointerdown', (e) => {
+      if (e.button > 0) return
+      const p = home(); g = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: p.x, oy: p.y, x: p.x, y: p.y, drag: false, moved: false }
+      try { bt.setPointerCapture(e.pointerId) } catch {}; wake()
+    })
+    bt.addEventListener('pointermove', (e) => {
+      if (!g || e.pointerId !== g.id) return
+      const dx = e.clientX - g.sx, dy = e.clientY - g.sy
+      if (!g.drag) { if (Math.hypot(dx, dy) < 7) return; g.moved = true; if (H.open) return; g.drag = true; el.classList.remove('snap'); el.classList.add('drag') }
+      g.x = clampX(g.ox + dx); g.y = clampY(g.oy + dy); apply(g.x, g.y)
+    })
+    const end = (e, cancel) => {
+      if (!g || e.pointerId !== g.id) return
+      const s = g; g = null; el.classList.remove('drag')
+      if (s.drag) {
+        P = { side: s.x + S / 2 < innerWidth / 2 ? 'l' : 'r', fy: s.y / innerHeight }
+        try { localStorage.setItem(KEY, JSON.stringify(P)) } catch {}
+        el.classList.add('snap'); const p = home(); apply(p.x, p.y); geo()
+      } else if (!cancel && !s.moved) setOpen(!H.open)
+      wake()
+    }
+    bt.addEventListener('pointerup', (e) => end(e, false)); bt.addEventListener('pointercancel', (e) => end(e, true))
+    bt.addEventListener('mouseenter', wake)
   }
   const unmount = () => {
     stopTimers()
     const el = H.el; H.el = null; H.order = null; H.done = null; H.open = false
     if (!el) return
-    el.classList.add('out'); setTimeout(() => el.remove(), 600)
+    el.classList.add('out'); setTimeout(() => el.remove(), 650)
   }
   const success = (o) => {
     clearInterval(H.poll); H.poll = null; H.done = o
     if (!H.el) return
     H.el.classList.add('ok'); H.el.querySelector('.hang-ic').innerHTML = TICK
-    H.el.querySelector('b').textContent = 'Pembayaran dikonfirmasi'; H.el.querySelector('small').textContent = `${o.name || o.plan} sudah aktif`
-    if (H.open) render()
-    setTimeout(unmount, 12000)
+    H.el.querySelector('.hang-bt').setAttribute('aria-label', 'Pembayaran dikonfirmasi')
+    wake(); if (H.open) render()
+    setTimeout(unmount, 14000)
   }
 
   const pull = async () => {
@@ -465,7 +511,7 @@ dialog[open]::backdrop{background:#0006;-webkit-backdrop-filter:blur(8px);backdr
     if (pend) {
       const changed = !H.order || H.order.id !== pend.id
       H.order = pend
-      if (!H.el) mount(pend); else H.el.querySelector('small').textContent = sub(pend)
+      if (!H.el) mount(pend)
       if (changed && H.open) { render(); loadQr() }
       if (!H.poll) startPoll()
       return
@@ -481,3 +527,6 @@ dialog[open]::backdrop{background:#0006;-webkit-backdrop-filter:blur(8px);backdr
   document.addEventListener('visibilitychange', () => { if (!document.hidden && H.el) pull() })
   if (!location.pathname.startsWith('/login')) ready.then(({ user }) => { if (user) pull() })
 }
+
+/* membuat efek :active (tekan) langsung terasa di layar sentuh iOS */
+document.addEventListener('touchstart', () => {}, { passive: true })
