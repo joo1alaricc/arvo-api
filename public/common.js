@@ -202,10 +202,10 @@ const ready = Promise.all([
   api('/auth/me').catch(() => null),
   api('/billing/whoami').catch(() => ({ ip: '-', is_owner: false })),
 ]).then(([user, who]) => {
-  $('#navr').innerHTML = (who.is_admin || who.is_owner ? `<a class="nb adm" href="/admin.html" title="Admin" aria-label="Admin">${ni('shield')}</a>` : '') +
+  $('#navr').innerHTML = (who.is_admin ? `<a class="nb adm" href="/admin.html" title="Admin" aria-label="Admin">${ni('shield')}</a>` : '') +
     (user ? `<a class="nb" href="/profile.html" title="${esc(user.username)}" aria-label="Profil ${esc(user.username)}">${ni('user')}</a>` : '<a class="btn" href="/login.html">Masuk</a>')
   const loose = (h, t, ic, i) => `<a class="dr-it" href="${h}" style="--i:${i}"><span class="dr-ic">${ni(ic)}</span><span>${t}</span>${ni('check')}</a>`
-  $('#drme').innerHTML = (who.is_admin || who.is_owner ? loose('/admin.html', 'Admin', 'shield', 6) : '') +
+  $('#drme').innerHTML = (who.is_admin ? loose('/admin.html', 'Admin', 'shield', 6) : '') +
     (user ? loose('/profile.html', 'Profil', 'user', 7) : loose('/login.html', 'Masuk', 'login', 7))
   drActive()
   return { user, who }
