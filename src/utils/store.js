@@ -256,6 +256,15 @@ export class StoreDO extends DurableObject {
     adminViolations() {
         return { ok: true, items: this.q(`SELECT v.id,v.ip,v.path,v.kind,v.at,v.user_id,u.username,(SELECT COUNT(*) FROM violations w WHERE w.ip=v.ip) hits FROM violations v LEFT JOIN users u ON u.id=v.user_id ORDER BY v.id DESC LIMIT 200`) }
     }
+    /* Rincian satu hari (WIB): jumlah per endpoint + log waktu/IP yang masih tersimpan (100 request terakhir per user) */
+    usageDay(id, day) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(day))) return { ok: false, status: 400, error: 'bad_day', message: 'Tanggal tidak valid.' }
+        const t0 = Date.parse(`${day}T00:00:00+07:00`)
+        if (!Number.isFinite(t0)) return { ok: false, status: 400, error: 'bad_day', message: 'Tanggal tidak valid.' }
+        const paths = this.q('SELECT path,SUM(count) n FROM usage WHERE user_id=? AND day=? GROUP BY path ORDER BY n DESC', id, day)
+        return { ok: true, day, total: paths.reduce((a, r) => a + r.n, 0), paths,
+            log: this.q('SELECT at,path,ip FROM usage_log WHERE user_id=? AND at>=? AND at<? ORDER BY id DESC LIMIT 100', id, t0, t0 + 864e5) }
+    }
     usage(id, now) {
         const from = jakartaDay(now - 13 * DAY)
         return { ok: true,
