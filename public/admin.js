@@ -25,7 +25,7 @@ const roleBadge = (r) => `<span class="badge ${r}">${r}</span>`
 const V = {
   async ringkasan() {
     const s = await api('/admin/stats')
-    out().innerHTML = `<h1>Ringkasan</h1><div class="kv panel">
+    out().innerHTML = `<h1>Ringkasan</h1><div class="akv panel">
       <div><b>${s.users}</b><span>Total user</span></div><div><b>${s.premium}</b><span>Premium aktif</span></div><div><b>${s.vip}</b><span>VIP aktif</span></div>
       <div><b>${s.requests_today.toLocaleString('id-ID')}</b><span>Request hari ini (key)</span></div>
       <div><b>${rp(s.revenue)}</b><span>Pendapatan (${s.paid_orders} order)</span></div><div><b>${s.pending_orders}</b><span>Order pending</span></div></div>
