@@ -303,9 +303,29 @@ function loadSide() {
     /* selalu 14 hari penuh (hari kosong = 0) supaya grafik terbaca, bukan satu balok */
     const key = (off) => new Date(Date.now() + 7 * 3600e3 - off * 864e5).toISOString().slice(0, 10), by = Object.fromEntries(days.map((d) => [d.day, d.n]))
     const series = Array.from({ length: 14 }, (_, i) => { const k = key(13 - i); return { day: k, n: by[k] || 0 } }), max = Math.max(1, ...series.map((d) => d.n))
-    $('#use').innerHTML = `<div class="sec">Pemakaian 14 hari</div><div class="chart">${series.map((d, i) => `<div class="cb ${i === 13 ? 'today' : ''}" title="${esc(d.day)}: ${d.n} request"><span class="cv">${d.n || ''}</span><div class="bw"><i style="height:${d.n ? Math.max(8, (d.n / max) * 100) : 2}%"></i></div><em>${d.day.slice(8)}</em></div>`).join('')}</div>
-      <div class="tw"><table><tr><th>Endpoint</th><th>Request</th></tr>${paths.map((p) => `<tr><td class="mono">${esc(p.path)}</td><td>${p.n.toLocaleString('id-ID')}</td></tr>`).join('')}</table></div>
-      ${recent && recent.length ? `<div class="sec" style="margin-top:14px">Riwayat terbaru</div><div class="tw"><table><tr><th>Waktu</th><th>Endpoint</th><th>IP</th></tr>${recent.slice(0, 2).map((r) => `<tr><td>${fmtDT(r.at)}</td><td class="mono">${esc(r.path)}</td><td class="mono">${esc(r.ip || '-')}</td></tr>`).join('')}</table></div>` : ''}`
+    $('#use').innerHTML = `<div class="sec">Pemakaian 14 hari</div><div class="chart pick">${series.map((d, i) => `<div class="cb ${i === 13 ? 'today' : ''}" role="button" tabindex="0" data-day="${esc(d.day)}" aria-label="Lihat riwayat ${esc(d.day)}: ${d.n} request" title="${esc(d.day)}: ${d.n} request"><span class="cv">${d.n || ''}</span><div class="bw"><i style="height:${d.n ? Math.max(8, (d.n / max) * 100) : 2}%"></i></div><em>${d.day.slice(8)}</em></div>`).join('')}</div>
+      <p class="sub pick-h" id="dh" style="font-size:12px;margin:-4px 0 8px">Ketuk batang grafik untuk melihat riwayat hari itu.</p>
+      <div id="dd" class="dd" hidden></div>
+      <div class="sec" style="margin-top:14px">Total per endpoint (14 hari)</div>
+      <div class="tw"><table><tr><th>Endpoint</th><th>Request</th></tr>${paths.map((p) => `<tr><td class="mono">${esc(p.path)}</td><td>${p.n.toLocaleString('id-ID')}</td></tr>`).join('')}</table></div>`
+    /* ketuk batang -> rincian hari itu (jumlah per endpoint + waktu & IP). Ketuk lagi untuk menutup. */
+    const cache = {}, dd = $('#dd'), fmtDay = (k) => new Date(k + 'T00:00:00+07:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' })
+    const tm = (t) => new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta' })
+    const draw = (r) => {
+      dd.innerHTML = `<div class="dd-h"><b>${esc(fmtDay(r.day))}</b><span class="badge">${r.total.toLocaleString('id-ID')} request</span></div>` + (!r.total ? '<p class="empty">Tidak ada request pada hari ini.</p>' :
+        `<div class="tw"><table><tr><th>Endpoint</th><th>Request</th></tr>${r.paths.map((p) => `<tr><td class="mono">${esc(p.path)}</td><td>${p.n.toLocaleString('id-ID')}</td></tr>`).join('')}</table></div>` +
+        (r.log && r.log.length ? `<div class="sec" style="margin-top:12px">Riwayat (waktu &amp; IP)</div><div class="tw"><table><tr><th>Jam</th><th>Endpoint</th><th>IP</th></tr>${r.log.map((x) => `<tr><td class="mono">${esc(tm(x.at))}</td><td class="mono">${esc(x.path)}</td><td class="mono">${esc(x.ip || '-')}</td></tr>`).join('')}</table></div>` : '<p class="sub" style="font-size:12px;margin-top:8px">Rincian jam &amp; IP hanya disimpan untuk 100 request terakhir.</p>'))
+    }
+    const pick = async (bar) => {
+      const day = bar.dataset.day, was = bar.classList.contains('sel')
+      document.querySelectorAll('#use .cb.sel').forEach((x) => x.classList.remove('sel'))
+      if (was) { dd.hidden = true; $('#dh').hidden = false; return }
+      bar.classList.add('sel'); $('#dh').hidden = true; dd.hidden = false
+      dd.innerHTML = '<p class="sub" style="display:flex;gap:8px;align-items:center"><i class="spin"></i> Memuat riwayat…</p>'
+      try { draw(cache[day] ||= await api('/auth/me/usage/day?day=' + day)) } catch (e) { dd.innerHTML = `<p class="err">${esc(e.message)}</p>` }
+      if (bar.classList.contains('sel')) dd.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+    document.querySelectorAll('#use .cb[data-day]').forEach((b) => { b.onclick = () => pick(b); b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(b) } } })
   }).catch(() => {})
 }
 
