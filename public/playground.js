@@ -37,7 +37,9 @@ function card(path, method, d, tag) {
   const chips = [`<span class="chip">x-api-key</span>`, ...params.map((p) => `<span class="chip ${p.required ? '' : 'opt'}">${esc(p.name)}</span>`), ...bodyKeys.map((k) => `<span class="chip ${bodyReq.includes(k) ? '' : 'opt'}">${esc(k)}</span>`)]
   const m = method.toLowerCase()
   el._txt = `${path} ${d.summary || ''} ${d.description || ''} ${tag}`.toLowerCase()
-  const field = (name, label, extra, ph, req, kind) => `<div><div class="lbl"><span>${esc(label)}${req ? ' <em>*</em>' : ''}</span><span>${esc(extra)}</span></div><input data-k="${esc(name)}" data-in="${kind}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false"></div>`
+  /* contoh nilai asli (bukan sekadar nama/tipe) dipakai untuk menampilkan Full URL & contoh kode saat kolom masih kosong */
+  const realEx = (ph, name) => (ph && ph !== name && !['string', 'number', 'integer', 'boolean', 'object', 'array'].includes(String(ph)) ? String(ph) : '')
+  const field = (name, label, extra, ph, req, kind) => `<div><div class="lbl"><span>${esc(label)}${req ? ' <em>*</em>' : ''}</span><span>${esc(extra)}</span></div><input data-k="${esc(name)}" data-in="${kind}" data-ex="${esc(realEx(ph, name))}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false"></div>`
   el.innerHTML = `<button class="hd" data-hd><span class="mt ${m}">${esc(method.toUpperCase())}</span><span class="p">${esc(path)}</span>${access === 'vip' ? '<span class="tag2">vip</span>' : access === 'premium' ? '<span class="tag2">premium</span>' : access === 'owner' ? '<span class="tag2">owner</span>' : ''}${offline ? '<span class="tag2" style="color:var(--bad);border-color:var(--bad)">offline</span>' : ''}<span class="chev">${ico('chev')}</span></button>
   <div class="pg-b"><div class="in">
     ${d.summary || d.description ? `<p class="desc">${esc(d.summary || '')}${d.summary && d.description ? ' · ' : ''}${esc(d.description || '')}</p>` : ''}
@@ -63,10 +65,10 @@ function card(path, method, d, tag) {
   q('[data-mine]').onclick = () => { keyEl.value = acct(); setKey(acct(), keyEl) }
   q('[data-mine]').hidden = !acct() || savedKey === acct()
   /* query (apikey di depan, mirip betabotz) dan body dipisah */
-  const build = () => {
+  const build = (show = false) => {
     let p = path; const qs = new URLSearchParams(), bd = {}
     el.querySelectorAll('[data-k]').forEach((i) => {
-      const v = i.value.trim(); if (!v) return
+      const v = i.value.trim() || (show && i.dataset.in !== 'header' ? i.dataset.ex || '' : ''); if (!v) return
       if (i.dataset.in === 'header') return
       if (i.dataset.in === 'path') p = p.replace(`{${i.dataset.k}}`, encodeURIComponent(v))
       else if (i.dataset.in === 'body') bd[i.dataset.k] = v
@@ -78,10 +80,10 @@ function card(path, method, d, tag) {
   }
   const showCode = () => {
     const l = q('[data-lang]').value, box = q('[data-code]'); box.hidden = !l; q('[data-cc]').hidden = !l
-    if (l) { const { url, body, key } = build(); box.querySelector('pre').textContent = snippets(method.toUpperCase(), url, body, key)[l] }
+    if (l) { const { url, body, key } = build(true); box.querySelector('pre').textContent = snippets(method.toUpperCase(), url, body, key)[l] }
   }
   el._r = () => {
-    const { rel, url, key } = build(); q('[data-ru]').textContent = rel; q('[data-fu]').textContent = url
+    const { rel, url, key } = build(true); q('[data-ru]').textContent = rel; q('[data-fu]').textContent = url
     q('[data-warn]').hidden = !!key; showCode()
   }
   el.addEventListener('input', el._r); el._r()
@@ -89,7 +91,7 @@ function card(path, method, d, tag) {
   el.addEventListener('click', async (e) => {
     const b = e.target.closest('button'); if (!b) return
     if ('hd' in b.dataset) el.classList.toggle('open')
-    else if ('cu' in b.dataset) navigator.clipboard.writeText(build().url).then(() => flash(b))
+    else if ('cu' in b.dataset) navigator.clipboard.writeText(build(true).url).then(() => flash(b))
     else if ('cc' in b.dataset) navigator.clipboard.writeText(q('[data-code] pre').textContent).then(() => flash(b))
     else if ('cr' in b.dataset) { if (last) navigator.clipboard.writeText(last).then(() => flash(b, 'Tersalin')) }
     else if ('run' in b.dataset) {
