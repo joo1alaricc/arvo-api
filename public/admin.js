@@ -22,14 +22,36 @@ function modal(html, cls = '') {
 const accessBadge = (a) => `<span class="badge ${a === 'vip' || a === 'owner' ? 'vip' : a === 'premium' ? 'premium' : ''}">${{ free: 'Gratis', premium: 'Premium', vip: 'VIP', owner: 'Owner' }[a] || a}</span>`
 const roleBadge = (r) => `<span class="badge ${r}">${r}</span>`
 
+/* tombol admin di daftar pengguna (hanya super admin): jadikan admin = langsung dibuatkan access key */
+const adminBtn = (u) => LEVEL !== 'super' ? '' : u.admin === 'super' ? '<span class="badge vip">Super admin</span>'
+  : u.admin ? `<button class="btn ghost red" data-xa="${u.id}" data-name="${esc(u.username)}">Cabut admin</button>` : `<button class="btn" data-ma="${u.id}" data-name="${esc(u.username)}">Jadikan admin</button>`
+
 const V = {
   async ringkasan() {
-    const s = await api('/admin/stats')
-    out().innerHTML = `<h1>Ringkasan</h1><div class="akv panel">
+    const [s, ak] = await Promise.all([api('/admin/stats'), api('/auth/me/accesskey').catch(() => ({ access_key: null }))])
+    out().innerHTML = `<h1>Ringkasan</h1><div class="panel" id="me"><h3>Status pengelola</h3>
+      <div class="kv"><span>Status</span><b><span class="badge ${LEVEL === 'super' ? 'vip' : 'premium'}">${LEVEL === 'super' ? 'Super admin' : 'Admin'}</span></b></div>
+      <div class="kv"><span>Akun</span><b>${esc(ME.username)}</b></div>
+      <div class="kv"><span>Email</span><b>${esc(ME.email || '–')}</b></div>
+      <div class="kv"><span>Access Key</span><b><code id="akv"></code></b></div>
+      <div class="row" style="margin-top:10px;gap:8px"><button class="btn sm" id="aksh" type="button">${ico('eye')} Tampilkan</button><button class="btn ghost sm" id="akcp" type="button">${ico('copy')} Salin</button><button class="btn ghost sm" id="akgn" type="button">${ico('plus')} Generate</button></div><p class="msg" id="akm"></p></div>
+      <div class="akv panel">
       <div><b>${s.users}</b><span>Total user</span></div><div><b>${s.premium}</b><span>Premium aktif</span></div><div><b>${s.vip}</b><span>VIP aktif</span></div>
       <div><b>${s.requests_today.toLocaleString('id-ID')}</b><span>Request hari ini (key)</span></div>
       <div><b>${rp(s.revenue)}</b><span>Pendapatan (${s.paid_orders} order)</span></div><div><b>${s.pending_orders}</b><span>Order pending</span></div></div>
       <div class="panel"><h3>Endpoint teratas hari ini</h3><div class="tw"><table>${s.top_paths.map((p) => `<tr><td class="mono">${esc(p.path)}</td><td>${p.n}</td></tr>`).join('') || '<tr><td class="sub">Belum ada data</td></tr>'}</table></div></div>`
+
+    let key = ak.access_key || '', shown = false
+    const paint = () => { $('#akv').textContent = key ? (shown ? key : key.slice(0, 6) + '•'.repeat(10)) : 'Belum dibuat'; $('#aksh').lastChild.textContent = shown ? ' Sembunyikan' : ' Tampilkan'; $('#akgn').lastChild.textContent = key ? ' Generate ulang' : ' Generate' }
+    paint()
+    $('#aksh').onclick = () => { shown = !shown; paint() }
+    $('#akcp').onclick = () => { if (key) navigator.clipboard.writeText(key).then(() => toast('Access key disalin')) }
+    $('#akgn').onclick = async (e) => {
+      if (key && !confirm('Generate ulang? Access key lama langsung tidak berlaku.')) return
+      e.currentTarget.disabled = true
+      try { const r = await put('/auth/me/accesskey/reset', {}, 'POST'); key = r.access_key; shown = true; paint(); say($('#akm'), 'Access key baru dibuat.') } catch (er) { say($('#akm'), er.message, 1) }
+      e.currentTarget.disabled = false
+    }
   },
 
   /* ---------- pengguna (dengan IP) ---------- */
@@ -44,7 +66,7 @@ const V = {
         <td class="sub" style="font-size:11.5px;white-space:nowrap">${u.last_seen ? fmtDT(u.last_seen) : '–'}</td>
         <td><div class="acts"><select data-p="${u.id}">${plans.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select>
           <input data-d="${u.id}" type="number" value="30" min="0" style="width:62px" title="hari (0 = permanen)"><button class="btn" data-g="${u.id}">Beri</button>
-          <button class="btn ghost" data-r="${u.id}">Cabut</button><button class="btn ghost" data-ip="${u.id}" data-name="${esc(u.username)}">IP</button></div></td></tr>`).join('') || '<tr><td colspan="6" class="sub">Tidak ada user.</td></tr>'}</table></div>`
+          <button class="btn ghost" data-r="${u.id}">Cabut</button><button class="btn ghost" data-ip="${u.id}" data-name="${esc(u.username)}">IP</button>${adminBtn(u)}</div></td></tr>`).join('') || '<tr><td colspan="6" class="sub">Tidak ada user.</td></tr>'}</table></div>`
     $('#qs').onclick = () => load(() => V.pengguna($('#q').value))
     $('#q').onkeydown = (e) => { if (e.key === 'Enter') $('#qs').click() }
     out().querySelectorAll('[data-g]').forEach((b) => (b.onclick = async () => {
@@ -52,6 +74,11 @@ const V = {
       try { await put(`/admin/users/${id}/grant`, { plan: $(`[data-p="${id}"]`).value, days: d, permanent: d === 0 }, 'POST'); toast('Paket diberikan'); V.pengguna(q) } catch (e) { toast(e.message) }
     }))
     out().querySelectorAll('[data-r]').forEach((b) => (b.onclick = async () => { if (confirm('Cabut paket user ini?')) { await put(`/admin/users/${b.dataset.r}/revoke`, {}, 'POST'); V.pengguna(q) } }))
+    out().querySelectorAll('[data-ma]').forEach((b) => (b.onclick = async () => {
+      if (!confirm(`Jadikan ${b.dataset.name} admin? Access key langsung dibuat.`)) return
+      try { const r = await put('/admin/admins/user/' + b.dataset.ma, {}, 'POST'); modal(`<h3>${esc(r.username)} sekarang admin</h3><p class="sub">Access key (bagikan ke yang bersangkutan, hanya admin itu yang boleh memakainya):</p><div class="ubox"><code>${esc(r.access_key)}</code></div><div class="row" style="margin-top:12px"><button class="btn" onclick="this.closest('dialog').close()">Tutup</button></div>`); V.pengguna(q) } catch (e) { toast(e.message) }
+    }))
+    out().querySelectorAll('[data-xa]').forEach((b) => (b.onclick = async () => { if (confirm(`Cabut admin ${b.dataset.name}? Access key-nya ikut dihapus.`)) { try { await api('/admin/admins/' + b.dataset.xa, { method: 'DELETE' }); toast('Admin dicabut'); V.pengguna(q) } catch (e) { toast(e.message) } } }))
     out().querySelectorAll('[data-ip]').forEach((b) => (b.onclick = () => userIps(b.dataset.ip, b.dataset.name, () => V.pengguna(q))))
   },
 
@@ -287,9 +314,13 @@ function epTest(e) {
 
 const draw = () => { document.querySelectorAll('.side>nav a').forEach((a) => a.classList.toggle('on', a.hash.slice(1) === view())); loading(); load(V[view()]) }
 
-ready.then(({ who }) => {
-  LEVEL = who.admin_level || (who.is_owner ? 'super' : 'admin')
-  if (!who.is_admin && !who.is_owner) { $('#app').innerHTML = `<div class="panel" style="grid-column:1/-1"><h3>Akses ditolak</h3><p class="sub">IP kamu (${esc(who.ip)}) bukan owner dan akunmu belum jadi admin. Login dulu bila kamu admin tambahan.</p></div>`; return }
+let ME = null
+ready.then(({ user, who }) => {
+  /* Dashboard admin hanya bisa dibuka setelah login sebagai pengelola (IP tidak lagi memberi akses). */
+  if (!user) { location.href = '/login.html?as=admin&next=/admin.html'; return }
+  ME = user
+  LEVEL = who.admin_level || 'admin'
+  if (!who.is_admin) { $('#app').innerHTML = `<div class="panel" style="grid-column:1/-1"><h3>Akses ditolak</h3><p class="sub">Akun <b>${esc(user.username)}</b> bukan pengelola. <a href="/login.html?as=admin&next=/admin.html" style="color:var(--blue)">Login sebagai Pengelola</a> dengan email dan Access Key.</p></div>`; return }
   $('#app').innerHTML = `<nav>${Object.entries(MENU).filter(([k]) => allowed(k)).map(([k, [v, i]]) => `<a href="#${k}">${ico(i)}${v}</a>`).join('')}</nav><div id="v"></div>`
   window.onhashchange = draw; draw()
 })
