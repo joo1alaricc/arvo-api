@@ -3,7 +3,7 @@ import { createRoute, z } from '@hono/zod-openapi'
 import { upstreamFetch } from '../../utils/upstream.js'
 
 const AUTHOR = 'Arvo - Endpoint'
-const UPSTREAM = 'https://api.nexray.eu.cc/downloader/ytmp3'
+const UPSTREAM = 'https://api.azbry.com/api/download/ytmp3'
 
 const Ytmp3QuerySchema = z.object({
     url: z.string().url().openapi({
@@ -62,6 +62,7 @@ const fail = (c, message, extra = {}) => c.json({
 
 export const ytmp3Handler = async (c) => {
     const { url } = c.req.valid('query')
+    const startTime = Date.now()
 
     try {
         const response = await upstreamFetch(
@@ -80,17 +81,23 @@ export const ytmp3Handler = async (c) => {
             })
         }
 
-        if (!data.status || !data.result) {
+        if (!data.status || !data.result?.download) {
             return fail(c, 'Gagal mendapatkan audio MP3 YouTube.')
         }
 
-        /* Hasil upstream dikembalikan apa adanya; hanya author tingkat atas yang diganti. */
-        const { author: _upstreamAuthor, ...rest } = data
+        const result = {
+            title: data.result.title,
+            duration: data.result.duration,
+            filesize: data.result.filesize ?? 0,
+            url: data.result.download,
+        }
 
         return c.json({
-            status: rest.status,
+            status: true,
             author: AUTHOR,
-            ...rest,
+            result,
+            timestamp: new Date().toISOString(),
+            response_time: `${Date.now() - startTime}ms`,
         }, 200)
 
     } catch (error) {
