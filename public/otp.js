@@ -15,8 +15,8 @@ const el = $('#app'); el.classList.add('ot')
 .ot-pop{display:grid;grid-template-columns:1fr 1fr;gap:6px}.ot-pop button{border:1px solid var(--line);background:none;color:var(--tx);border-radius:11px;padding:8px 10px;text-align:left;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ot-list{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:11px;overscroll-behavior:contain;background:color-mix(in srgb,var(--bg) 60%,var(--card))}
 .ot-r{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;color:var(--tx);font:inherit;padding:9px 10px;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.ot-r:last-child{border-bottom:0}.ot-r:active{background:color-mix(in srgb,var(--mut) 14%,transparent)}.ot-r.on{background:color-mix(in srgb,var(--ac) 14%,transparent)}
-.ot-r .em{font-size:20px;line-height:1}.ot-r .m{flex:1;min-width:0}.ot-r .m b{display:block;font-size:13px;font-weight:600;overflow-wrap:anywhere}.ot-r .m span{display:block;font-size:11.5px;color:var(--mut);margin-top:1px}.ot-r .p{font-weight:700;font-size:13px;white-space:nowrap}
+.ot-r:last-child{border-bottom:0}.ot-r:active{background:color-mix(in srgb,var(--mut) 14%,transparent)}.ot-r.on{background:color-mix(in srgb,var(--ac) 20%,transparent);box-shadow:inset 3px 0 0 var(--ac)}.ot-r.on .ot-m b,.ot-r.on .ot-p{color:var(--ac)}.ot-r.on .ot-p::after{content:' ✓'}
+.ot-r .ot-em{font-size:20px;line-height:1}.ot-r .ot-m{flex:1;min-width:0}.ot-r .ot-m b{display:block;font-size:13px;font-weight:600;overflow-wrap:anywhere}.ot-r .ot-m span{display:block;font-size:11.5px;color:var(--mut);margin-top:1px}.ot-r .ot-p{font-weight:700;font-size:13px;white-space:nowrap}
 .ot-empty{padding:14px 10px;font-size:12.5px;color:var(--mut);text-align:center}
 .ot-ctx{display:flex;align-items:center;gap:8px;font-size:13px}.ot-ctx b{flex:1;min-width:0;overflow-wrap:anywhere}.ot-ctx span{color:var(--mut)}
 .ot-rows{display:grid;gap:7px;font-size:13px;border:1px solid var(--line);border-radius:11px;padding:10px}.ot-rows div{display:flex;justify-content:space-between;gap:10px}.ot-rows span{color:var(--mut)}.ot-rows b{text-align:right}
@@ -26,7 +26,7 @@ const el = $('#app'); el.classList.add('ot')
 .ot-st{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11.5px;font-weight:700;border:1px solid;white-space:nowrap}
 .ot-st.ok{color:var(--g,#4ade80);background:color-mix(in srgb,var(--g,#4ade80) 13%,transparent)}.ot-st.wait{color:#f5a524;background:color-mix(in srgb,#f5a524 13%,transparent)}.ot-st.bad{color:var(--bad,#ef4444);background:color-mix(in srgb,#ef4444 13%,transparent)}
 .ot-o{border:1px solid var(--line);border-radius:12px;padding:11px;display:grid;gap:9px}.ot-o.live{border-color:color-mix(in srgb,var(--ac) 45%,var(--line))}
-.ot-o .t{display:flex;align-items:center;gap:8px}.ot-o .t b{flex:1;min-width:0;font-size:13px;overflow-wrap:anywhere}.ot-o .d{font-size:11.5px;color:var(--mut)}
+.ot-o .ot-t{display:flex;align-items:center;gap:8px}.ot-o .ot-t b{flex:1;min-width:0;font-size:13px;overflow-wrap:anywhere}.ot-o .ot-d{font-size:11.5px;color:var(--mut)}
 .ot-ph{text-align:center;font:600 22px/1.2 'JetBrains Mono',monospace;letter-spacing:.02em;overflow-wrap:anywhere}
 .ot-wait{text-align:center;display:grid;gap:4px;padding:6px 0}.ot-wait b{font-size:14px}.ot-wait span{font-size:12px;color:var(--mut)}
 .ot-code{text-align:center;display:grid;gap:6px;padding:8px;border-radius:11px;background:color-mix(in srgb,var(--g,#4ade80) 10%,transparent)}.ot-code small{font-size:11.5px;color:var(--mut)}
@@ -75,7 +75,7 @@ const draw = () => {
     w.innerHTML = `<div class="ot-ctx"><b>${esc(c.emoji)} <span>Negara:</span> ${esc(c.name)}</b><button class="btn ghost sm" data-a="to1" type="button">Ubah</button></div><div class="ot-pop" id="pp"></div><input id="sq" placeholder="Cari layanan…" autocomplete="off"><div class="ot-list" id="sl"><p class="ot-empty">Memuat layanan…</p></div>`
     drawList()
   } else if (S.step === 3) {
-    w.innerHTML = `<div class="ot-ctx"><b>${esc(c.emoji)} ${esc(c.name)}, ${esc(sv.name)}</b><button class="btn ghost sm" data-a="to2" type="button">Ubah</button></div><div class="hint">Pilih server (Server 1 = termurah):</div><div class="ot-list" id="sl"><p class="ot-empty">Memuat server…</p></div>
+    w.innerHTML = `<div class="ot-ctx"><b>${esc(c.emoji)} ${esc(c.name)}, ${esc(sv.name)}</b><button class="btn ghost sm" data-a="to2" type="button">Ubah</button></div><div class="hint">Pilih server (Server 1 = termurah):</div><div class="ot-list" id="sl"><p class="ot-empty">Memuat server…</p></div><p class="hint" id="sel"></p>
       <div class="ot-row2"><button class="btn ghost" data-a="to2" type="button">Kembali</button><button class="btn" data-a="to4" type="button" id="nx" disabled>Review Order</button></div>`
     drawList()
   } else {
@@ -96,16 +96,17 @@ const drawList = () => {
     const pc = $('#pc'); if (pc) pc.innerHTML = POP_C.map((k) => S.countries.find((x) => x.code === k)).filter(Boolean).map((x) => `<button type="button" data-a="pc" data-id="${x.id}">${esc(x.emoji)} ${esc(x.name)}</button>`).join('')
     if (!S.countries.length) return
     const all = S.countries.filter((x) => !q || (x.name + ' ' + x.dial + ' ' + x.code).toLowerCase().includes(q))
-    l.innerHTML = all.length ? all.slice(0, MAX).map((x) => `<button type="button" class="ot-r" data-a="pc" data-id="${x.id}"><span class="em">${esc(x.emoji)}</span><span class="m"><b>${esc(x.name)}</b><span>Kode dial ${esc(x.dial)}</span></span></button>`).join('') + (all.length > MAX ? `<p class="ot-empty">Menampilkan ${MAX} dari ${nf(all.length)}. Gunakan pencarian.</p>` : '') : '<p class="ot-empty">Negara tidak ditemukan.</p>'
+    l.innerHTML = all.length ? all.slice(0, MAX).map((x) => `<button type="button" class="ot-r" data-a="pc" data-id="${x.id}"><span class="ot-em">${esc(x.emoji)}</span><span class="ot-m"><b>${esc(x.name)}</b><span>Kode dial ${esc(x.dial)}</span></span></button>`).join('') + (all.length > MAX ? `<p class="ot-empty">Menampilkan ${MAX} dari ${nf(all.length)}. Gunakan pencarian.</p>` : '') : '<p class="ot-empty">Negara tidak ditemukan.</p>'
   } else if (S.step === 2) {
     if (!S.services.length) return
     const pp = $('#pp'); if (pp) pp.innerHTML = POP_S.map(([n, re]) => [n, S.services.find((x) => re.test(x.name))]).filter(([, x]) => x).map(([n, x]) => `<button type="button" data-a="ps" data-id="${x.id}">${esc(n)}</button>`).join('')
     const all = S.services.filter((x) => !q || (x.name + ' ' + x.code).toLowerCase().includes(q))
-    l.innerHTML = all.length ? all.slice(0, MAX).map((x) => `<button type="button" class="ot-r" data-a="ps" data-id="${x.id}"><span class="m"><b>${esc(x.name)}</b><span>Nomor virtual di ${esc(S.country.name)}</span></span></button>`).join('') + (all.length > MAX ? `<p class="ot-empty">Menampilkan ${MAX} dari ${nf(all.length)}. Gunakan pencarian.</p>` : '') : '<p class="ot-empty">Layanan tidak ditemukan.</p>'
+    l.innerHTML = all.length ? all.slice(0, MAX).map((x) => `<button type="button" class="ot-r" data-a="ps" data-id="${x.id}"><span class="ot-m"><b>${esc(x.name)}</b><span>Nomor virtual di ${esc(S.country.name)}</span></span></button>`).join('') + (all.length > MAX ? `<p class="ot-empty">Menampilkan ${MAX} dari ${nf(all.length)}. Gunakan pencarian.</p>` : '') : '<p class="ot-empty">Layanan tidak ditemukan.</p>'
   } else if (S.step === 3) {
     if (!S.servers.length) return
-    l.innerHTML = S.servers.map((x) => `<button type="button" class="ot-r${S.server && S.server.id === x.id ? ' on' : ''}" data-a="pv" data-id="${x.id}"><span class="m"><b>Server ${x.server}</b><span>${nf(x.available)} SIM tersedia</span></span><span class="p">${rp(x.price)}</span></button>`).join('')
+    l.innerHTML = S.servers.map((x) => `<button type="button" class="ot-r${S.server && S.server.id === x.id ? ' on' : ''}" data-a="pv" data-id="${x.id}"><span class="ot-m"><b>Server ${x.server}</b><span>${nf(x.available)} SIM tersedia</span></span><span class="ot-p">${rp(x.price)}</span></button>`).join('')
     const nx = $('#nx'); if (nx) nx.disabled = !S.server
+    const sl = $('#sel'); if (sl) sl.innerHTML = S.server ? `Dipilih: <b>Server ${S.server.server}</b> · ${rp(S.server.price)}` : 'Pilih salah satu server.'
   }
 }
 const go = (n) => { S.step = n; note($('#mw'), ''); draw() }
@@ -160,21 +161,21 @@ const loadOrders = async () => {
 }
 const fmtT = (t) => new Date(t).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const card = (o) => {
-  const live = LIVE.has(o.status), head = `<div class="t"><b>${esc(o.service)} · ${esc(o.country)}</b>${chip(o.status)}</div>`
+  const live = LIVE.has(o.status), head = `<div class="ot-t"><b>${esc(o.service)} · ${esc(o.country)}</b>${chip(o.status)}</div>`
   if (!live) {
-    return `<div class="ot-o" data-o="${esc(o.order_id)}">${head}<div class="d">${esc(o.phone)} · Server ${o.server_no} · ${rp(o.cost)} · ${esc(fmtT(o.created_at))}</div>
+    return `<div class="ot-o" data-o="${esc(o.order_id)}">${head}<div class="ot-d">${esc(o.phone)} · Server ${o.server_no} · ${rp(o.cost)} · ${esc(fmtT(o.created_at))}</div>
       ${o.otp_code ? `<div class="ot-code"><small>Kode OTP</small><b>${esc(o.otp_code)}</b></div>` : o.otp_message ? `<div class="ot-code"><p>${esc(o.otp_message)}</p></div>` : ''}
-      ${o.refunded ? '<div class="d">Biaya sudah dikembalikan ke saldo.</div>' : ''}
+      ${o.refunded ? '<div class="ot-d">Biaya sudah dikembalikan ke saldo.</div>' : ''}
       ${o.status === 'COMPLETED' ? `<div class="ot-row2"><button class="btn ghost sm" data-act="react" type="button">Aktifkan ulang nomor</button></div>` : ''}</div>`
   }
   const ca = o.status === 'ACTIVE' && o.cancel_available_at && o.cancel_available_at > Date.now()
-  return `<div class="ot-o live" data-o="${esc(o.order_id)}">${head}<div class="d">Server ${o.server_no} · ${rp(o.cost)} · ${esc(fmtT(o.created_at))}</div>
-    <div class="d" style="text-align:center">Nomor telepon virtual</div><div class="ot-ph">${esc(o.phone)}</div>
+  return `<div class="ot-o live" data-o="${esc(o.order_id)}">${head}<div class="ot-d">Server ${o.server_no} · ${rp(o.cost)} · ${esc(fmtT(o.created_at))}</div>
+    <div class="ot-d" style="text-align:center">Nomor telepon virtual</div><div class="ot-ph">${esc(o.phone)}</div>
     <div class="ot-row2"><button class="btn ghost sm" data-act="cp" data-v="${esc(o.phone)}" type="button">Salin nomor</button><button class="btn ghost sm" data-act="cp" data-v="${esc(noDial(o))}" type="button">Salin tanpa ${esc(o.dial)}</button></div>
     ${o.otp_code ? `<div class="ot-code"><small>Kode OTP</small><b>${esc(o.otp_code)}</b><button class="btn sm" data-act="cp" data-v="${esc(o.otp_code)}" type="button">Salin kode</button>${o.otp_message ? `<p>${esc(o.otp_message)}</p>` : ''}</div>`
       : o.otp_message ? `<div class="ot-code"><small>Pesan masuk</small><p>${esc(o.otp_message)}</p></div>`
       : `<div class="ot-wait"><b>Menunggu SMS masuk…</b><span>Kirim SMS verifikasi dari aplikasi target (${esc(o.service)}), kode akan otomatis muncul di sini.</span></div>`}
-    ${o.expires_at ? `<div class="ot-cd">Masa aktif nomor: <b class="cd" data-t="${o.expires_at}">${mmss(o.expires_at)}</b></div>` : ''}
+    ${o.expires_at ? `<div class="ot-cd">Masa aktif nomor: <b class="ot-cdv" data-t="${o.expires_at}">${mmss(o.expires_at)}</b></div>` : ''}
     <div class="ot-row2"><button class="btn ghost sm" data-act="chk" type="button">Cek status</button><button class="btn ghost sm" data-act="rs" type="button" ${o.can_resend ? '' : 'disabled'}>Resend OTP</button></div>
     <div class="ot-row2">${o.can_finish ? '<button class="btn sm" data-act="fin" type="button">Selesai</button>' : ''}<button class="btn ghost sm" data-act="cx" type="button" ${o.can_cancel && !ca ? '' : 'disabled'} ${o.cancel_available_at ? `data-ca="${o.cancel_available_at}"` : ''}>${ca ? 'Batal tersedia ' + mmss(o.cancel_available_at) : 'Batalkan & refund'}</button></div>
     <p class="msg" data-m></p></div>`
@@ -186,7 +187,7 @@ const drawOrders = () => {
   for (const [id, [t, cl, st]] of Object.entries(keep)) { const m = l.querySelector(`.ot-o[data-o="${id}"] [data-m]`); if (m) { m.textContent = t; m.className = cl; m.style.cssText = st } }
 }
 const tick = () => {
-  document.querySelectorAll('.cd[data-t]').forEach((n) => { n.textContent = mmss(+n.dataset.t) })
+  document.querySelectorAll('.ot-cdv[data-t]').forEach((n) => { n.textContent = mmss(+n.dataset.t) })
   document.querySelectorAll('button[data-ca]').forEach((b) => {
     const t = +b.dataset.ca
     if (t > Date.now()) b.textContent = 'Batal tersedia ' + mmss(t)
