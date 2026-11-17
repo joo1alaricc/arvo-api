@@ -230,7 +230,7 @@ svg.i.gi{stroke:none}
 .tnc-t{font-weight:700;font-size:15px}.tnc-t span{color:var(--mut);font-weight:600;margin-right:4px}
 .tnc-d{margin:5px 0 0;font-size:13.5px;color:var(--mut);line-height:1.55;white-space:pre-line}
 .tnc-p{display:flex;gap:10px;margin:10px 0 0 4px;font-size:14px}
-.tnc-p>span{color:var(--mut);font-weight:600;flex:none;min-width:16px}
+.tnc-p>span{color:var(--mut);font-weight:600;flex:none;min-width:30px}
 .tnc-p .tnc-d{margin-top:2px}
 .tnc-a{border:1px solid var(--line);border-radius:11px;padding:10px;margin-bottom:10px}
 .tnc-a textarea{width:100%;margin-top:6px}
