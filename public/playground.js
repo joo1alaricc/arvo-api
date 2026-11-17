@@ -91,7 +91,11 @@ function card(path, method, d, tag) {
   let last = ''
   el.addEventListener('click', async (e) => {
     const b = e.target.closest('button'); if (!b) return
-    if ('hd' in b.dataset) el.classList.toggle('open')
+    if ('hd' in b.dataset) {
+      const o = !el.classList.contains('open')
+      if (o) document.querySelectorAll('.pg-ep.open').forEach((x) => x !== el && x.classList.remove('open'))   /* hanya satu endpoint terbuka */
+      el.classList.toggle('open', o); if (o) settle(b)
+    }
     else if ('cu' in b.dataset) navigator.clipboard.writeText(build(true).full).then(() => flash(b))
     else if ('cc' in b.dataset) navigator.clipboard.writeText(q('[data-code] pre').textContent).then(() => flash(b))
     else if ('cr' in b.dataset) { if (last) navigator.clipboard.writeText(last).then(() => flash(b, 'Tersalin')) }
@@ -114,6 +118,8 @@ function card(path, method, d, tag) {
 }
 
 const groups = []
+/* setelah yang lain menutup, posisi header bisa bergeser: geser halus supaya header yang dibuka tetap terlihat */
+const settle = (h) => setTimeout(() => { const r = h.getBoundingClientRect(); if (r.top < 70 || r.bottom > innerHeight) h.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 420)
 function applyFilter() {
   const s = $('#sq').value.toLowerCase().trim().slice(0, 60)
   let any = false
@@ -139,7 +145,11 @@ Promise.all([ready.catch(() => ({})), fetch('/api/catalog', { cache: 'no-store',
     const g = document.createElement('section'); g.className = 'grp' + (i === 0 ? ' open' : ''); g.style.animationDelay = i * 0.05 + 's'
     g.innerHTML = `<button class="grp-h">${tile('folder')}<span>${esc(tag)}</span><span class="cnt"></span><span class="chev">${ico('chev')}</span></button><div class="grp-b"><div class="in"></div></div>`
     const els = eps.map(([p, m, d]) => card(p, m, d, tag)); g.querySelector('.in').append(...els)
-    g.querySelector('.grp-h').onclick = () => g.classList.toggle('open')
+    g.querySelector('.grp-h').onclick = (ev) => {
+      const o = !g.classList.contains('open')
+      if (o) groups.forEach((x) => x.el !== g && x.el.classList.remove('open'))   /* hanya satu folder terbuka */
+      g.classList.toggle('open', o); if (o) settle(ev.currentTarget)
+    }
     list.insertBefore(g, $('#none')); groups.push({ el: g, eps: els, cnt: g.querySelector('.cnt') })
   })
   if (spec.warnings) list.insertAdjacentHTML('beforeend', `<p class="sub" style="font-size:12px">Catatan untuk admin: ${esc(spec.warnings.join(' · '))}</p>`)
