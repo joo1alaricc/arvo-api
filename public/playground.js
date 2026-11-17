@@ -34,7 +34,7 @@ function card(path, method, d, tag) {
   const params = (d.parameters || []).filter((p) => p.name !== 'apikey'), bodyProps = d.requestBody?.content?.['application/json']?.schema
   const access = d['x-access'] || (d['x-premium'] ? 'premium' : 'free'), paid = access !== 'free', offline = d['x-status'] === 'OFFLINE'
   const bodyKeys = Object.keys(bodyProps?.properties || {}), bodyReq = bodyProps?.required || []
-  const chips = [`<span class="chip ${paid ? '' : 'opt'}">x-api-key</span>`, ...params.map((p) => `<span class="chip ${p.required ? '' : 'opt'}">${esc(p.name)}</span>`), ...bodyKeys.map((k) => `<span class="chip ${bodyReq.includes(k) ? '' : 'opt'}">${esc(k)}</span>`)]
+  const chips = [`<span class="chip">x-api-key</span>`, ...params.map((p) => `<span class="chip ${p.required ? '' : 'opt'}">${esc(p.name)}</span>`), ...bodyKeys.map((k) => `<span class="chip ${bodyReq.includes(k) ? '' : 'opt'}">${esc(k)}</span>`)]
   const m = method.toLowerCase()
   el._txt = `${path} ${d.summary || ''} ${d.description || ''} ${tag}`.toLowerCase()
   const field = (name, label, extra, ph, req, kind) => `<div><div class="lbl"><span>${esc(label)}${req ? ' <em>*</em>' : ''}</span><span>${esc(extra)}</span></div><input data-k="${esc(name)}" data-in="${kind}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false"></div>`
@@ -42,8 +42,8 @@ function card(path, method, d, tag) {
   <div class="pg-b"><div class="in">
     ${d.summary || d.description ? `<p class="desc">${esc(d.summary || '')}${d.summary && d.description ? ' · ' : ''}${esc(d.description || '')}</p>` : ''}
     <div class="need"><span>Data yang diperlukan dari server:</span>${chips.join('')}</div>
-    <div><div class="lbl"><span>x-api-key <span style="opacity:.6">(header)</span>${paid ? ' <em>*</em>' : ''}</span><button class="ib" data-mine hidden title="Kembalikan ke key akunku" aria-label="Kembalikan ke key akunku" style="width:26px;height:26px">${ico('refresh')}</button></div>
-      <input data-k="apikey" data-in="header" placeholder="${paid ? 'arvo_xxxxxxxx (wajib)' : 'arvo_xxxxxxxx (opsional)'}" autocomplete="off" spellcheck="false" value="${esc(savedKey)}"></div>
+    <div><div class="lbl"><span>x-api-key <span style="opacity:.6">(header)</span> <em>*</em></span><button class="ib" data-mine hidden title="Kembalikan ke key akunku" aria-label="Kembalikan ke key akunku" style="width:26px;height:26px">${ico('refresh')}</button></div>
+      <input data-k="apikey" data-in="header" placeholder="arvo_xxxxxxxx (wajib)" autocomplete="off" spellcheck="false" value="${esc(savedKey)}"></div>
     ${params.map((p) => field(p.name, p.name, p.in, p.example ?? p.schema?.default ?? p.schema?.type ?? p.name, p.required, p.in)).join('')}
     ${bodyKeys.map((k) => field(k, k, 'body', bodyProps.properties[k].example ?? k, bodyReq.includes(k), 'body')).join('')}
     ${d.requestBody && !bodyKeys.length ? `<div><div class="lbl"><span>Body</span><span>JSON</span></div><textarea data-body rows="4" placeholder='{ "key": "value" }' spellcheck="false"></textarea></div>` : ''}
@@ -52,7 +52,7 @@ function card(path, method, d, tag) {
       <div class="cbox" data-code style="margin-top:8px" hidden><pre></pre></div></div>
     <div><div class="lbl"><span>Request URL (Try it)</span></div><div class="ubox"><code data-ru></code></div></div>
     <button class="btn go block" data-run>${ico('play')} Try it out</button>
-    <p class="warn" data-warn hidden>Endpoint ${access === 'vip' ? 'VIP' : access === 'owner' ? 'owner' : 'premium'}: isi x-api-key dari paket yang sesuai.</p>
+    <p class="warn" data-warn hidden>${access === 'owner' ? 'Endpoint owner: isi x-api-key dengan Access Key pengelola.' : access === 'free' ? 'Isi x-api-key milikmu.' : `Endpoint ${access === 'vip' ? 'VIP' : 'premium'}: isi x-api-key dari paket yang sesuai.`}</p>
     <div><div class="lbl"><span>Full URL</span></div><div class="ubox"><code data-fu></code><button class="ib" data-cu aria-label="Salin URL">${ico('copy')}</button></div></div>
     <div><div class="rh"><span class="l">Response</span><button class="btn ghost sm" data-cr>${ico('copy')} Copy Result</button></div>
       <div class="cbox" data-out><p class="empty">Belum ada response. Klik Try it out.</p></div><p class="rmeta" data-meta></p></div>
@@ -82,7 +82,7 @@ function card(path, method, d, tag) {
   }
   el._r = () => {
     const { rel, url, key } = build(); q('[data-ru]').textContent = rel; q('[data-fu]').textContent = url
-    q('[data-warn]').hidden = !(paid && !key); showCode()
+    q('[data-warn]').hidden = !!key; showCode()
   }
   el.addEventListener('input', el._r); el._r()
   let last = ''
