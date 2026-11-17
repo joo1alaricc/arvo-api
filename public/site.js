@@ -25,9 +25,24 @@ api('/auth/config').then(({ hero_video, hero_poster }) => {
   document.addEventListener('visibilitychange', () => (document.hidden ? v.pause() : box.classList.contains('on') && v.play().catch(() => {})))
 }).catch(() => {})
 
+/* teks berjalan: kategori endpoint (AI • DOWNLOADER • STATS), bergerak kiri ke kanan tanpa putus */
+const marquee = (paths) => {
+  const cats = [...new Set(Object.values(paths).flatMap((ms) => Object.values(ms).map((d) => String(d.tags?.[0] || '').trim().toUpperCase()).filter(Boolean)))]
+  const box = $('#mq'), tr = $('#mqt'); if (!cats.length) return
+  const unit = cats.map((c) => `<span>${esc(c)}</span><i aria-hidden="true"></i>`).join('')
+  tr.innerHTML = `<div class="mq-g">${unit}</div>`
+  const g = tr.firstChild; box.hidden = false
+  /* ulangi isi sampai satu grup lebih lebar dari layar, lalu gandakan grup supaya putarannya mulus */
+  const w = g.getBoundingClientRect().width || 1, n = Math.max(1, Math.ceil((innerWidth * 1.1) / w))
+  g.innerHTML = unit.repeat(n)
+  tr.append(g.cloneNode(true)); tr.lastChild.setAttribute('aria-hidden', 'true')
+  tr.style.setProperty('--mq-d', Math.max(18, Math.round(g.getBoundingClientRect().width / 55)) + 's')
+}
 fetch('/api/catalog').then(async (r) => {
-  $('#s-ep').textContent = Object.keys((await r.json()).paths || {}).length
+  const spec = await r.json()
+  $('#s-ep').textContent = Object.keys(spec.paths || {}).length
   $('#dot').className = 'dot up'; $('#status').textContent = 'Semua sistem berjalan'
+  try { marquee(spec.paths || {}) } catch {}
 }).catch(() => { $('#dot').className = 'dot down'; $('#status').textContent = 'Server tidak dapat dijangkau' })
 let session = {}
 ready.then((s) => {
