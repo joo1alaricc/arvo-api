@@ -3,7 +3,7 @@ import { createRoute, z } from '@hono/zod-openapi'
 import { upstreamFetch } from '../../utils/upstream.js'
 
 const AUTHOR = 'Arvo - Endpoint'
-const UPSTREAM = 'https://api.azbry.com/api/download/ytmp3'
+const UPSTREAM = 'https://api.izzxd.my.id/api/downloader/ytmp3'
 
 const Ytmp3QuerySchema = z.object({
     url: z.string().url().openapi({
@@ -65,16 +65,20 @@ export const ytmp3Handler = async (c) => {
     const startTime = Date.now()
 
     try {
+        const apiKey = "izzxd-6bb3smh"
+
+        if (!apiKey) {
+            return fail(c, 'API key scraper belum dikonfigurasi.')
+        }
+
         const response = await upstreamFetch(
-            `${UPSTREAM}?url=${encodeURIComponent(url)}`,
+            `${UPSTREAM}?url=${encodeURIComponent(url)}&apikey=${encodeURIComponent(apiKey)}`,
             {
                 method: 'GET',
                 headers: {
                     accept: 'application/json',
-                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-                    referer: 'https://api.azbry.com/',
                 },
-                signal: AbortSignal.timeout(25000),
+                signal: AbortSignal.timeout(40000),
             }
         )
 
@@ -87,7 +91,7 @@ export const ytmp3Handler = async (c) => {
         } catch {
             console.error('[ARVO YTMP3] INVALID JSON:', {
                 status: response.status,
-                body: raw.slice(0, 2000),
+                body: raw.slice(0, 1500),
             })
 
             return fail(c, 'Respons scraper bukan JSON valid.', {
@@ -106,21 +110,30 @@ export const ytmp3Handler = async (c) => {
             })
         }
 
-        if (!data?.status || !data?.result?.download) {
+        if (
+            !data?.status ||
+            !data?.result?.download_url
+        ) {
             console.error('[ARVO YTMP3] INVALID RESULT:', data)
 
             return fail(c, 'Gagal mendapatkan audio MP3 YouTube.')
         }
 
+        const result = {
+            title: data.result.title,
+            duration: Number(data.result.duration_seconds) || 0,
+            filesize: Number(data.result.size_bytes) || 0,
+            url: data.result.download_url,
+        }
+
+        if (!result.title || !result.url.startsWith('https://')) {
+            return fail(c, 'Data audio dari scraper tidak valid.')
+        }
+
         return c.json({
             status: true,
             author: AUTHOR,
-            result: {
-                title: data.result.title,
-                duration: data.result.duration,
-                filesize: data.result.filesize ?? 0,
-                url: data.result.download,
-            },
+            result,
             timestamp: new Date().toISOString(),
             response_time: `${Date.now() - startTime}ms`,
         }, 200)
