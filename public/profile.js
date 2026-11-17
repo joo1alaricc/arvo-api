@@ -305,9 +305,7 @@ function loadSide() {
     const series = Array.from({ length: 14 }, (_, i) => { const k = key(13 - i); return { day: k, n: by[k] || 0 } }), max = Math.max(1, ...series.map((d) => d.n))
     $('#use').innerHTML = `<div class="sec">Pemakaian 14 hari</div><div class="chart pick">${series.map((d, i) => `<div class="cb ${i === 13 ? 'today' : ''}" role="button" tabindex="0" data-day="${esc(d.day)}" aria-label="Lihat riwayat ${esc(d.day)}: ${d.n} request" title="${esc(d.day)}: ${d.n} request"><span class="cv">${d.n || ''}</span><div class="bw"><i style="height:${d.n ? Math.max(8, (d.n / max) * 100) : 2}%"></i></div><em>${d.day.slice(8)}</em></div>`).join('')}</div>
       <p class="sub pick-h" id="dh" style="font-size:12px;margin:-4px 0 8px">Ketuk batang grafik untuk melihat riwayat hari itu.</p>
-      <div id="dd" class="dd" hidden></div>
-      <div class="sec" style="margin-top:14px">Total per endpoint (14 hari)</div>
-      <div class="tw"><table><tr><th>Endpoint</th><th>Request</th></tr>${paths.map((p) => `<tr><td class="mono">${esc(p.path)}</td><td>${p.n.toLocaleString('id-ID')}</td></tr>`).join('')}</table></div>`
+      <div id="dd" class="dd" hidden></div>`
     /* ketuk batang -> rincian hari itu (jumlah per endpoint + waktu & IP). Ketuk lagi untuk menutup. */
     const cache = {}, dd = $('#dd'), fmtDay = (k) => new Date(k + 'T00:00:00+07:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' })
     const tm = (t) => new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta' })
