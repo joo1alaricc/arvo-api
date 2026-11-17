@@ -47,7 +47,10 @@ export class StoreDO extends DurableObject {
             CREATE TABLE IF NOT EXISTS smm_orders(id INTEGER PRIMARY KEY AUTOINCREMENT, order_id TEXT UNIQUE, user_id INTEGER, service TEXT, name TEXT, link TEXT,
                 qty INTEGER, cost INTEGER, status TEXT, refunded INTEGER DEFAULT 0, created_at INTEGER);
             CREATE INDEX IF NOT EXISTS smm_orders_u ON smm_orders(user_id,id);
-            CREATE INDEX IF NOT EXISTS smm_dep_u ON smm_deposits(user_id,status);`)
+            CREATE INDEX IF NOT EXISTS smm_dep_u ON smm_deposits(user_id,status);
+            CREATE TABLE IF NOT EXISTS otp_orders(id INTEGER PRIMARY KEY AUTOINCREMENT, order_id TEXT UNIQUE, user_id INTEGER, country TEXT, dial TEXT, service TEXT, svc_code TEXT,
+                server_no INTEGER, product_id INTEGER, phone TEXT, cost INTEGER, status TEXT, otp_code TEXT, otp_message TEXT, refunded INTEGER DEFAULT 0, expires_at INTEGER, created_at INTEGER);
+            CREATE INDEX IF NOT EXISTS otp_orders_u ON otp_orders(user_id,id);`)
         /* DB lama bisa punya tabel orders dengan skema berbeda (CREATE IF NOT EXISTS tidak mengubahnya): lengkapi kolom yang kurang */
         this.ensureCols('orders', { user_id: 'INTEGER', plan: 'TEXT', days: 'INTEGER', amount: 'INTEGER', code: 'INTEGER', total: 'INTEGER', status: 'TEXT', ip: 'TEXT',
             created_at: 'INTEGER', expires_at: 'INTEGER', paid_at: 'INTEGER' },
@@ -510,6 +513,28 @@ export class StoreDO extends DurableObject {
         let r = 0
         if (!o.refunded && refund > 0) { r = Math.min(Math.floor(refund), o.cost); this.sql.exec('UPDATE smm_orders SET refunded=1 WHERE order_id=?', orderId); this.smmAdd(uid, r) }
         this.sql.exec('UPDATE smm_orders SET status=? WHERE order_id=?', status, orderId)
+        return { ok: true, refunded: r, balance: this.smmBal(uid) }
+    }
+    /* ---- Layanan OTP: memakai dompet yang sama dengan SMM (smm_wallet). Refund dijamin sekali per pesanan lewat kolom refunded. ---- */
+    otpAdd(o) {
+        this.sql.exec('INSERT OR IGNORE INTO otp_orders(order_id,user_id,country,dial,service,svc_code,server_no,product_id,phone,cost,status,otp_code,otp_message,refunded,expires_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)',
+            o.order_id, o.uid, String(o.country).slice(0, 80), String(o.dial || '').slice(0, 10), String(o.service).slice(0, 80), String(o.svc_code || '').slice(0, 40), o.server_no | 0, o.product_id | 0,
+            String(o.phone || '').slice(0, 30), o.cost, o.status, o.otp_code || null, o.otp_message ? String(o.otp_message).slice(0, 500) : null, o.expires_at || null, o.now)
+        return { ok: true }
+    }
+    otpGet(orderId, uid) { const [o] = this.q('SELECT * FROM otp_orders WHERE order_id=? AND user_id=?', String(orderId), uid); return o || null }
+    otpList(uid) { return this.q('SELECT order_id,country,dial,service,svc_code,server_no,phone,cost,status,otp_code,otp_message,refunded,expires_at,created_at FROM otp_orders WHERE user_id=? ORDER BY id DESC LIMIT 30', uid) }
+    otpSave(orderId, uid, f) {
+        this.sql.exec('UPDATE otp_orders SET status=?, otp_code=?, otp_message=?, expires_at=COALESCE(?,expires_at) WHERE order_id=? AND user_id=?',
+            f.status, f.otp_code || null, f.otp_message ? String(f.otp_message).slice(0, 500) : null, f.expires_at || null, String(orderId), uid)
+        return { ok: true }
+    }
+    /* kembalikan biaya SEKALI saja (aman dipanggil berulang / bersamaan, karena method sinkron di dalam DO) */
+    otpRefund(orderId, uid, status) {
+        const o = this.otpGet(orderId, uid); if (!o) return fail(404, 'not_found', 'Pesanan tidak ditemukan.')
+        let r = 0
+        if (!o.refunded && o.cost > 0) { this.sql.exec('UPDATE otp_orders SET refunded=1 WHERE order_id=? AND user_id=?', String(orderId), uid); this.smmAdd(uid, o.cost); r = o.cost }
+        if (status) this.sql.exec('UPDATE otp_orders SET status=? WHERE order_id=? AND user_id=?', status, String(orderId), uid)
         return { ok: true, refunded: r, balance: this.smmBal(uid) }
     }
     adminRevoke(id) { this.sql.exec('UPDATE users SET plan=NULL,stack=NULL,expires_at=NULL,ips=? WHERE id=?', '[]', id); return { ok: true } }
