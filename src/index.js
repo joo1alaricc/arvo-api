@@ -86,7 +86,7 @@ const createApp = () => {
         c.header('Cache-Control', 'public, max-age=20')
         return c.json({
             requests: s.requests, users: s.users, page_views: s.page_views, blocked: s.blocked,
-            endpoints: list.filter((e) => e.status !== 'offline' && e.access !== 'owner').length,
+            endpoints: list.length,   /* semua endpoint dihitung: owner, offline, dan online */
             uptime_ms: Math.max(0, now - since), days: s.days,
         })
     })
