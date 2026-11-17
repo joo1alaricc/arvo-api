@@ -68,34 +68,59 @@ export const ytmp3Handler = async (c) => {
         const response = await upstreamFetch(
             `${UPSTREAM}?url=${encodeURIComponent(url)}`,
             {
-                headers: { accept: 'application/json' },
+                method: 'GET',
+                headers: {
+                    accept: 'application/json',
+                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                    referer: 'https://api.azbry.com/',
+                },
                 signal: AbortSignal.timeout(25000),
             }
         )
 
-        const data = await response.json().catch(() => null)
+        const raw = await response.text()
 
-        if (!response.ok || !data) {
+        let data
+
+        try {
+            data = JSON.parse(raw)
+        } catch {
+            console.error('[ARVO YTMP3] INVALID JSON:', {
+                status: response.status,
+                body: raw.slice(0, 2000),
+            })
+
+            return fail(c, 'Respons scraper bukan JSON valid.', {
+                upstream_status: response.status,
+            })
+        }
+
+        if (!response.ok) {
+            console.error('[ARVO YTMP3] UPSTREAM ERROR:', {
+                status: response.status,
+                body: data,
+            })
+
             return fail(c, 'Scraper API sedang bermasalah.', {
                 upstream_status: response.status,
             })
         }
 
-        if (!data.status || !data.result?.download) {
-            return fail(c, 'Gagal mendapatkan audio MP3 YouTube.')
-        }
+        if (!data?.status || !data?.result?.download) {
+            console.error('[ARVO YTMP3] INVALID RESULT:', data)
 
-        const result = {
-            title: data.result.title,
-            duration: data.result.duration,
-            filesize: data.result.filesize ?? 0,
-            url: data.result.download,
+            return fail(c, 'Gagal mendapatkan audio MP3 YouTube.')
         }
 
         return c.json({
             status: true,
             author: AUTHOR,
-            result,
+            result: {
+                title: data.result.title,
+                duration: data.result.duration,
+                filesize: data.result.filesize ?? 0,
+                url: data.result.download,
+            },
             timestamp: new Date().toISOString(),
             response_time: `${Date.now() - startTime}ms`,
         }, 200)
