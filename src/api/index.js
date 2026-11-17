@@ -8,6 +8,7 @@ import { ytmp3Route as downloaderYtmp3Route, ytmp3Handler as downloaderYtmp3Hand
 import { ytmp4Route as downloaderYtmp4Route, ytmp4Handler as downloaderYtmp4Handler } from './downloader/ytmp4.js'
 import { aioRoute as downloaderAioRoute, aioHandler as downloaderAioHandler } from './downloader/aio.js'
 import { appleMusicRoute as downloaderApplemusicRoute, appleMusicHandler as downloaderApplemusicHandler } from './downloader/applemusic.js'
+import { capcutRoute as downloaderCapcutRoute, capcutHandler as downloaderCapcutHandler } from './downloader/capcut.js'
 
 /* Tambah endpoint bawaan baru cukup di sini: otomatis terdaftar, masuk /docs, dan tampil di dashboard admin. */
 const BUILTIN = [
@@ -19,6 +20,7 @@ const BUILTIN = [
     [downloaderYtmp4Route, downloaderYtmp4Handler],
     [downloaderAioRoute, downloaderAioHandler],
     [downloaderApplemusicRoute, downloaderApplemusicHandler],
+    [downloaderCapcutRoute, downloaderCapcutHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
