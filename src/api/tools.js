@@ -198,6 +198,23 @@ tools.post('/smm/deposit', async (c) => {
     return c.json({ ok: true, deposit: String(j.deposit), amount: nominal, total_amount: total, qr_url: https(j.qr_url), payment_url: https(j.payment_url), expired_at: j.expired_at || null, currency: j.currency || 'IDR' })
 })
 
+/* batalkan / tutup deposit yang belum dibayar. Kalau ternyata sudah dibayar, saldo dikreditkan dan deposit TIDAK dibatalkan. */
+tools.post('/smm/deposit-cancel', async (c) => {
+    const id = String((await body(c)).deposit || '').trim()
+    if (!/^[\w\-]{3,80}$/.test(id)) return out(c, 400, 'bad_deposit', 'ID deposit tidak valid.')
+    const st = store(c), uid = uidOf(c), d = await st.smmDepGet(id)
+    if (!d || d.user_id !== uid) return out(c, 404, 'not_found', 'Deposit tidak ditemukan di akunmu.')
+    if (d.credited) return c.json({ ok: true, paid: true, status: 'success', amount: d.amount, bonus: 0, balance: await st.smmBal(uid) })
+    if (c.env.SMM_API_KEY) {
+        const r = await settleDeposit(c, id)
+        if (r && r.err) return r.err
+        if (r && r.status === 'success') return c.json({ ok: true, paid: true, ...r })
+    }
+    await st.smmDepStatus(id, 'canceled')
+    c.header('Cache-Control', 'no-store')
+    return c.json({ ok: true, canceled: true, balance: await st.smmBal(uid) })
+})
+
 tools.get('/smm/deposit-status', async (c) => {
     const id = String(c.req.query('deposit') || '').trim()
     if (!/^[\w\-]{3,80}$/.test(id)) return out(c, 400, 'bad_deposit', 'ID deposit tidak valid.')
