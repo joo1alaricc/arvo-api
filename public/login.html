@@ -6,10 +6,11 @@
 <body><main class="wrap"><div class="panel auth">
   <div class="tabs"><button class="on" data-m="login">Masuk</button><button data-m="register">Daftar</button></div>
   <form id="f" style="margin-top:16px">
-    <input id="u" placeholder="Username" autocomplete="username" required>
+    <input id="u" placeholder="Username atau email" autocomplete="username" required>
     <input id="e" type="email" placeholder="Email (opsional)" autocomplete="email" hidden>
     <input id="p" type="password" placeholder="Password (min. 8 karakter)" autocomplete="current-password" required>
     <button class="btn" id="go">Masuk</button>
+    <label id="admrow" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px;cursor:pointer"><input type="checkbox" id="adm" style="width:auto;margin:0"> Login sebagai Pengelola</label>
   </form>
   <p class="msg" id="m"></p>
   <div id="gwrap" hidden><div class="sep">atau</div>
@@ -29,11 +30,16 @@ document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => {
   mode = b.dataset.m
   document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b))
   $('#e').hidden = mode !== 'register'; $('#go').textContent = mode === 'login' ? 'Masuk' : 'Buat akun'
+  $('#admrow').hidden = mode !== 'login'; if (mode !== 'login') $('#adm').checked = false; admUi()
   $('#p').autocomplete = mode === 'login' ? 'current-password' : 'new-password'
 }))
+/* Login sebagai Pengelola: isi email pengelola + password; akun harus pengelola, lalu langsung ke panel admin. */
+const admUi = () => { const a = $('#adm').checked; $('#u').placeholder = a ? 'Email pengelola' : 'Username atau email'; $('#u').type = a ? 'email' : 'text'; $('#u').autocomplete = a ? 'email' : 'username' }
+$('#adm').onchange = admUi
 $('#f').onsubmit = async (ev) => {
   ev.preventDefault()
-  try { await put('/auth/' + mode, { username: $('#u').value, password: $('#p').value, email: $('#e').value }, 'POST'); location.href = dest }
+  const adm = mode === 'login' && $('#adm').checked
+  try { await put('/auth/' + mode, { username: $('#u').value, password: $('#p').value, email: $('#e').value, ...(adm ? { as: 'admin' } : {}) }, 'POST'); location.href = adm ? '/admin.html' : dest }
   catch (e) { say($('#m'), e.message, 1) }
 }
 /* Google: mode redirect. Tombol membawa kamu ke Google lalu kembali ke /api/auth/google/callback,
