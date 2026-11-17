@@ -74,7 +74,7 @@ const panelEvents = () => `<div class="sec">Claim Trial</div><div id="trial"><di
   <button class="btn go" id="rcb">${ico('check')} Submit</button><p class="msg" id="rcm"></p>`
 
 /* Access Key: hanya tampil untuk pengelola. Dipakai sebagai x-api-key untuk endpoint khusus owner / panel admin (tanpa batas). */
-const panelAccessKey = () => !(who.is_admin || who.is_owner) ? '' : `<div class="sec">Access Key Pengelola</div>
+const panelAccessKey = () => !who.is_admin ? '' : `<div class="sec">Access Key Pengelola</div>
   <p class="hint">Isi sebagai <code>x-api-key</code> untuk memanggil endpoint khusus owner. Berlaku tanpa batas, jangan dibagikan.</p>
   <div class="iprow"><input id="akv" readonly placeholder="Belum dibuat" autocomplete="off" spellcheck="false"><button class="ib" id="akshow" type="button" aria-label="Tampilkan/sembunyikan" title="Tampilkan/sembunyikan">${ico('eye')}</button><button class="ib" id="akcopy" type="button" aria-label="Salin" title="Salin" hidden>${ico('copy')}</button></div>
   <button class="btn go" id="akgen">${ico('plus')} Generate</button><p class="msg" id="akm"></p>
