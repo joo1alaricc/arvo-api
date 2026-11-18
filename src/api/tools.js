@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { store, requireUser } from '../utils/session.js'
+import { loadCfg, btzCreate, btzCancel, qrUrl, httpsOnly, settleBtzDeposit } from '../utils/btzpay.js'
 
 /* Tools: fitur tambahan khusus member berbayar. Saat ini: Aktivasi AM (/api/tools/am/*).
  * Kunci layanan (CUPZ_API_KEY) hanya ada di server (wrangler secret), tidak pernah dikirim ke browser. */
@@ -97,6 +98,8 @@ const master = async (c, params) => {
 }
 const https = (u) => { try { return new URL(u).protocol === 'https:' ? String(u) : null } catch { return null } }
 const uidOf = (c) => c.get('user').id
+/* galat dari BTZPay: admin melihat penyebab aslinya, user biasa pesan umum */
+const btzErr = (c, e) => out(c, e.status || 502, e.error || 'btzpay_error', c.get('isOwner') ? `BTZPay: ${e.message}` : 'Pembayaran sedang bermasalah, coba lagi sebentar atau hubungi admin.')
 
 /* daftar layanan di-cache di memori Worker 5 menit (dipakai untuk menghitung harga di server, bukan dari kiriman browser) */
 let SVC = { t: 0, list: null }
@@ -112,6 +115,10 @@ const getServices = async (c) => {
 const settleDeposit = async (c, id) => {
     const st = store(c), d = await st.smmDepGet(id); if (!d) return null
     if (d.credited) return { status: 'success', amount: d.amount, bonus: 0, balance: await st.smmBal(d.user_id) }
+    if (d.provider === 'btzpay') {
+        const r = await settleBtzDeposit(c, d)
+        return r.err ? { err: btzErr(c, r.err) } : r
+    }
     const { j, res } = await master(c, { action: 'deposit_status', deposit: id }); if (res) return { err: res }
     const status = String(j.status || 'pending').toLowerCase(), bonus = Math.max(0, Math.floor(Number(j.bonus) || 0))
     if (status === 'success') {
@@ -124,11 +131,11 @@ const settleDeposit = async (c, id) => {
 
 tools.get('/smm/balance', async (c) => {
     const st = store(c), uid = uidOf(c)
-    if (c.env.SMM_API_KEY) {   /* deposit yang sudah dibayar tapi halaman keburu ditutup tetap ikut dikreditkan di sini */
-        try { for (const d of await st.smmDepPending(uid, Date.now())) await settleDeposit(c, d.id) } catch (e) { console.error('[smm] rekonsiliasi deposit', e.message || e) }
-    }
+    /* deposit yang sudah dibayar tapi halaman keburu ditutup tetap ikut dikreditkan di sini */
+    try { for (const d of await st.smmDepPending(uid, Date.now())) await settleDeposit(c, d.id) } catch (e) { console.error('[smm] rekonsiliasi deposit', e.message || e) }
+    const cfg = await loadCfg(c)
     c.header('Cache-Control', 'no-store')
-    return c.json({ ok: true, balance: await st.smmBal(uid), currency: 'IDR' })
+    return c.json({ ok: true, balance: await st.smmBal(uid), currency: 'IDR', deposit_min: cfg.enabled ? cfg.min_amount : 1000, deposit_max: cfg.enabled ? cfg.max_amount : 50000000 })
 })
 
 tools.get('/smm/services', async (c) => {
@@ -186,9 +193,34 @@ tools.get('/smm/status', async (c) => {
     return c.json({ ok: true, order, status, start_count: j.start_count ?? null, remains: j.remains ?? null, cost: o.cost, refunded: r.refunded || 0, balance: r.balance })
 })
 
+/* Deposit lewat BTZPay (aktif kalau admin menyalakannya di Admin > Pembayaran). Saldo dikredit sebesar nominal yang diminta; fee unik dibayar user. */
+const btzDeposit = async (c, cfg, amount) => {
+    const apikey = c.env.BTZPAY_APIKEY
+    if (!apikey || !c.env.BTZPAY_CALLBACK_TOKEN) return out(c, 503, 'not_configured', c.get('isOwner') ? 'BTZPay belum lengkap: isi secret BTZPAY_APIKEY dan BTZPAY_CALLBACK_TOKEN.' : 'Deposit belum bisa dibuat. Hubungi admin.')
+    const st = store(c), u = c.get('user'), now = Date.now(), origin = new URL(c.req.url).origin
+    const live = (await st.smmDepPending(u.id, now)).filter((r) => !r.expired_at || r.expired_at > now)
+    if (live.length >= cfg.max_pending) return out(c, 429, 'too_many', `Masih ada ${live.length} deposit yang belum dibayar. Selesaikan atau tunggu kedaluwarsa dulu.`)
+    const r = await btzCreate(c.env, apikey, {
+        amount, fee: cfg.fee, paymentMethod: cfg.payment_method, timeout: cfg.timeout_min * 60000,
+        callback_url: `${origin}/api/billing/btzpay/callback?t=${encodeURIComponent(c.env.BTZPAY_CALLBACK_TOKEN)}`,
+        return_url: cfg.return_url || `${origin}/smm`,
+        notes: `Deposit saldo Arvo (${u.username})`.slice(0, 200),
+        metadata: { orderId: `dep-${u.id}-${now}`, productName: 'Deposit Saldo Arvo' },
+    })
+    if (!r.ok) { console.error('[btzpay] create', r.message); return btzErr(c, r) }
+    const t = r.data || {}
+    if (!t.transactionId || !t.accessKey) return out(c, 502, 'upstream_bad_response', 'BTZPay tidak mengembalikan ID transaksi.')
+    const total = Number(t.totalAmount) || amount, exp = Date.parse(t.expiredAt || '') || now + cfg.timeout_min * 60000
+    await st.smmDepNew(String(t.transactionId), u.id, amount, total, now, { provider: 'btzpay', access_key: String(t.accessKey), pay_url: httpsOnly(t.paymentUrl), expired_at: exp, fee: Number(t.fee) || 0 })
+    return c.json({ ok: true, deposit: String(t.transactionId), amount, total_amount: total, qr_url: qrUrl(c.env, t), payment_url: httpsOnly(t.paymentUrl), expired_at: new Date(exp).toISOString(), currency: 'IDR', provider: 'btzpay' })
+}
+
 tools.post('/smm/deposit', async (c) => {
     const amount = Number((await body(c)).amount)
-    if (!Number.isInteger(amount) || amount < 1000 || amount > 50000000) return out(c, 400, 'bad_amount', 'Nominal deposit minimal Rp1.000 dan maksimal Rp50.000.000.')
+    const cfg = await loadCfg(c)
+    const [lo, hi] = cfg.enabled ? [cfg.min_amount, cfg.max_amount] : [1000, 50000000]
+    if (!Number.isInteger(amount) || amount < lo || amount > hi) return out(c, 400, 'bad_amount', `Nominal deposit minimal Rp${lo.toLocaleString('id-ID')} dan maksimal Rp${hi.toLocaleString('id-ID')}.`)
+    if (cfg.enabled) return btzDeposit(c, cfg, amount)
     const st = store(c), uid = uidOf(c)
     if ((await st.smmDepPending(uid, Date.now())).length >= 3) return out(c, 429, 'too_many', 'Masih ada 3 deposit yang belum dibayar. Selesaikan atau tunggu kedaluwarsa dulu.')
     const { j, res } = await master(c, { action: 'deposit', amount: String(amount) }); if (res) return res
@@ -205,11 +237,12 @@ tools.post('/smm/deposit-cancel', async (c) => {
     const st = store(c), uid = uidOf(c), d = await st.smmDepGet(id)
     if (!d || d.user_id !== uid) return out(c, 404, 'not_found', 'Deposit tidak ditemukan di akunmu.')
     if (d.credited) return c.json({ ok: true, paid: true, status: 'success', amount: d.amount, bonus: 0, balance: await st.smmBal(uid) })
-    if (c.env.SMM_API_KEY) {
+    if (d.provider === 'btzpay' || c.env.SMM_API_KEY) {
         const r = await settleDeposit(c, id)
         if (r && r.err) return r.err
         if (r && r.status === 'success') return c.json({ ok: true, paid: true, ...r })
     }
+    if (d.provider === 'btzpay' && c.env.BTZPAY_APIKEY) { const k = await btzCancel(c.env, c.env.BTZPAY_APIKEY, id); if (!k.ok) console.error('[btzpay] cancel', k.message) }
     await st.smmDepStatus(id, 'canceled')
     c.header('Cache-Control', 'no-store')
     return c.json({ ok: true, canceled: true, balance: await st.smmBal(uid) })
