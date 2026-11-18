@@ -30,6 +30,7 @@ import { sologoRoute as aiSologoRoute, sologoHandler as aiSologoHandler } from '
 import { attpRoute as makerAttpRoute, attpHandler as makerAttpHandler } from './maker/attp.js'
 import { bratRoute as makerBratRoute, bratHandler as makerBratHandler } from './maker/brat.js'
 import { bratAnimeRoute as makerBratanimeRoute, bratAnimeHandler as makerBratanimeHandler } from './maker/bratanime.js'
+import { bratHdRoute as makerBrathdRoute, bratHdHandler as makerBrathdHandler } from './maker/brathd.js'
 
 /* Tambah endpoint bawaan baru cukup di sini: otomatis terdaftar, masuk /docs, dan tampil di dashboard admin. */
 const BUILTIN = [
@@ -63,6 +64,7 @@ const BUILTIN = [
     [makerAttpRoute, makerAttpHandler],
     [makerBratRoute, makerBratHandler],
     [makerBratanimeRoute, makerBratanimeHandler],
+    [makerBrathdRoute, makerBrathdHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
