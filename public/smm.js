@@ -80,10 +80,11 @@ const loadBal = async () => {
 }
 
 /* ---------- daftar layanan ---------- */
+const az = (a, b) => String(a).localeCompare(String(b), 'en', { numeric: true, sensitivity: 'base' })   /* urutan A-Z */
 const loadSvcs = async () => {
   try {
-    const r = await api('/tools/smm/services'); S.svcs = r.services || []
-    const cats = [...new Set(S.svcs.map((s) => s.category))].sort((a, b) => a.localeCompare(b))
+    const r = await api('/tools/smm/services'); S.svcs = (r.services || []).sort((a, b) => az(a.category, b.category) || az(a.name, b.name))
+    const cats = [...new Set(S.svcs.map((s) => s.category))].sort(az)
     $('#cat').innerHTML = '<option value="">Semua kategori (' + S.svcs.length + ')</option>' + cats.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('')
     drawList()
   } catch (e) { const l = $('#sl'); if (l) l.innerHTML = `<p class="sm-empty err">${esc(e.message)}</p>` }
