@@ -56,7 +56,7 @@ export class StoreDO extends DurableObject {
             created_at: 'INTEGER', expires_at: 'INTEGER', paid_at: 'INTEGER' },
         { user_id: ['uid', 'userid', 'user', 'owner_id'], total: ['amount', 'price'], created_at: ['created', 'ts', 'time'] })
         /* deposit lewat BTZPay: access key transaksi (untuk cek status), link bayar, batas waktu, fee unik. provider kosong = deposit lama lewat panel SMM */
-        this.ensureCols('smm_deposits', { provider: 'TEXT', access_key: 'TEXT', pay_url: 'TEXT', expired_at: 'INTEGER', fee: 'INTEGER' })
+        this.ensureCols('smm_deposits', { provider: 'TEXT', access_key: 'TEXT', pay_url: 'TEXT', expired_at: 'INTEGER', fee: 'INTEGER', qr_data: 'TEXT' })
         for (const col of ['phone', 'bio', 'avatar_url', 'banner_url', 'reg_ip', 'last_ip', 'avatar_data', 'avatar_ver', 'stack', 'border_colors']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`) } catch {} }
         try { this.sql.exec('ALTER TABLE users ADD COLUMN last_seen INTEGER') } catch {}
         try { this.sql.exec('ALTER TABLE users ADD COLUMN access_key TEXT') } catch {}
@@ -491,7 +491,7 @@ export class StoreDO extends DurableObject {
         this.sql.exec('UPDATE smm_wallet SET balance=balance-? WHERE user_id=?', cost, uid)
         return { ok: true, balance: b - cost }
     }
-    smmDepNew(id, uid, amount, total, now, x = {}) { this.sql.exec('INSERT OR IGNORE INTO smm_deposits(id,user_id,amount,total,status,credited,created_at,provider,access_key,pay_url,expired_at,fee) VALUES(?,?,?,?,?,0,?,?,?,?,?,?)', id, uid, amount, total, 'pending', now, x.provider || null, x.access_key || null, x.pay_url || null, x.expired_at || null, x.fee ?? null); return { ok: true } }
+    smmDepNew(id, uid, amount, total, now, x = {}) { this.sql.exec('INSERT OR IGNORE INTO smm_deposits(id,user_id,amount,total,status,credited,created_at,provider,access_key,pay_url,expired_at,fee,qr_data) VALUES(?,?,?,?,?,0,?,?,?,?,?,?,?)', id, uid, amount, total, 'pending', now, x.provider || null, x.access_key || null, x.pay_url || null, x.expired_at || null, x.fee ?? null, x.qr_data || null); return { ok: true } }
     smmDepGet(id) { const [d] = this.q('SELECT * FROM smm_deposits WHERE id=?', id); return d || null }
     smmDepPending(uid, now) { return this.q("SELECT id,expired_at FROM smm_deposits WHERE user_id=? AND status='pending' AND created_at>? ORDER BY created_at DESC LIMIT 10", uid, now - DAY) }
     smmDepStatus(id, status) { this.sql.exec('UPDATE smm_deposits SET status=? WHERE id=? AND credited=0', status, id); return { ok: true } }
