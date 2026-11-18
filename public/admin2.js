@@ -28,11 +28,80 @@ async function decodeQr(file) {
   throw new Error('QR tidak terbaca. Pakai gambar yang tajam dan hanya berisi QR, atau tempel teks QRIS manual di kolom bawah.')
 }
 
+/* ---- BTZPay: pengaturan deposit + Sandbox ---- */
+const SECRET_DOC = { apikey: ['BTZPAY_APIKEY', 'API key Payment Method (live) dari dashboard BTZPay. Dipakai membuat, mengecek, dan membatalkan transaksi deposit user.'], sandbox_apikey: ['BTZPAY_SANDBOX_APIKEY', 'API key Payment Method khusus uji (opsional). Hanya dipakai panel Sandbox ini.'], callback_token: ['BTZPAY_CALLBACK_TOKEN', 'Token acak buatanmu sendiri (mis. 32+ karakter). Ditempel di callback URL supaya hanya BTZPay yang bisa memanggil Arvo.'] }
+const stIc = (s) => ({ sukses: 'ok', success: 'ok' }[String(s).toLowerCase()] ? '✅' : /gagal|expired|cancel|canceled|review/.test(String(s).toLowerCase()) ? '⚠️' : '⏳')
+function btzHtml(p) {
+  const c = p.config, sup = LEVEL === 'super', dis = sup ? '' : 'disabled'
+  const sec = Object.entries(SECRET_DOC).map(([k, [n, d]]) => `<div style="margin:6px 0;font-size:12.5px">${p.secrets[k] ? '✅' : '❌'} <code>${n}</code> <span class="sub" style="margin:0">— ${d}</span></div>`).join('')
+  const opt = (v, t) => `<option value="${v}" ${c.payment_method === v ? 'selected' : ''}>${t}</option>`
+  const cb = p.last_callback
+  return `<div class="panel"><h3>Deposit via BTZPay</h3>
+    <p class="sub" style="font-size:12.5px">Saat aktif, deposit saldo user dibuat lewat BTZPay (QRIS/e-wallet) dan dikredit otomatis begitu pembayaran terdeteksi. Saat nonaktif, deposit memakai panel lama. Uji dulu di Sandbox sebelum mengaktifkan.</p>
+    <div style="margin:8px 0">${sec}</div>
+    <label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="bz-en" ${c.enabled ? 'checked' : ''} ${dis}> Aktifkan deposit via BTZPay</label>
+    <div class="row" style="flex-wrap:wrap;gap:10px">
+      <div><label>Metode</label><select id="bz-pm" ${dis}>${opt('', 'Otomatis (default akun)')}${opt('qrisdana', 'QRIS DANA')}${opt('qrisgopay', 'QRIS GoPay')}${opt('qrisorkut', 'QRIS OrKut')}${opt('qrisshopeepay', 'QRIS ShopeePay')}</select></div>
+      <div><label>Timeout (menit, 1-60)</label><input id="bz-to" type="number" min="1" max="60" value="${c.timeout_min}" ${dis}></div>
+      <div><label>Fee tetap (Rp)</label><input id="bz-fee" type="number" min="0" value="${c.fee}" ${dis}></div>
+      <div><label>Deposit minimal</label><input id="bz-min" type="number" min="1" value="${c.min_amount}" ${dis}></div>
+      <div><label>Deposit maksimal</label><input id="bz-max" type="number" min="1" value="${c.max_amount}" ${dis}></div>
+      <div><label>Maks. deposit tertunda / user</label><input id="bz-mp" type="number" min="1" max="10" value="${c.max_pending}" ${dis}></div>
+    </div>
+    <label style="margin-top:8px;display:block">Return URL (opsional, kosong = halaman /smm)</label>
+    <input id="bz-ru" value="${esc(c.return_url)}" placeholder="https://…" ${dis}>
+    <p class="sub" style="font-size:12px;margin-top:8px">Callback URL (otomatis dikirim tiap transaksi, tidak perlu diisi di BTZPay):<br><code style="overflow-wrap:anywhere">${esc(p.callback_url)}</code></p>
+    <p class="sub" style="font-size:12px">Callback terakhir: ${cb ? `${esc(fmtExp(cb.at))} · ${esc(cb.pay_id || '-')} · status ${esc(cb.status || '-')} · ${cb.matched ? 'cocok deposit' : 'bukan deposit (uji)'}${cb.result ? ' → ' + esc(cb.result) : ''}` : 'belum ada'}</p>
+    <p class="msg" id="bz-m"></p>
+    <div class="row"><button class="btn" id="bz-save" ${dis}>Simpan pengaturan</button></div>
+    ${sup ? '' : '<p class="sub" style="font-size:12px">Hanya super admin yang bisa mengubah pengaturan dan memakai Sandbox.</p>'}
+  </div>
+  <div class="panel"><h3>Sandbox (uji pembayaran)</h3>
+    <p class="sub" style="font-size:12.5px">Membuat transaksi uji dengan <code>BTZPAY_SANDBOX_APIKEY</code>; tidak mengubah saldo user mana pun. Tombol “Simulasikan bayar” meniru notifikasi dari aplikasi listener sehingga transaksi menjadi sukses dan callback ke Arvo bisa diuji.</p>
+    <div class="row"><input id="sb-amt" type="number" min="1" max="100000" value="1000" style="max-width:140px" ${dis}><button class="btn" id="sb-new" ${dis}>Buat transaksi uji</button></div>
+    <p class="msg" id="sb-m"></p><div id="sb-v"></div>
+  </div>
+  <div class="panel"><h3>Deposit terbaru</h3>
+    <p class="sub" style="font-size:12.5px">Berhasil: <b>${p.credited_count}</b> (${rp(p.credited_sum)}) · Tertunda: <b>${p.pending}</b> · Perlu diperiksa: <b>${p.review}</b></p>
+    <div style="overflow-x:auto"><table><thead><tr><th>Waktu</th><th>User</th><th>Nominal</th><th>Total bayar</th><th>Via</th><th>Status</th></tr></thead><tbody>${p.items.map((d) => `<tr><td>${esc(fmtExp(d.created_at))}</td><td>${esc(d.username || '-')}</td><td>${rp(d.amount)}</td><td>${rp(d.total)}</td><td>${d.provider === 'btzpay' ? 'BTZPay' : 'Panel lama'}</td><td>${stIc(d.status)} ${esc(d.status)}${d.credited ? '' : ''}</td></tr>`).join('') || '<tr><td colspan="6">Belum ada deposit.</td></tr>'}</tbody></table></div>
+  </div>`
+}
+const fmtExp = (x) => { const d = new Date(x); return Number.isNaN(+d) ? String(x) : d.toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }
+function btzWire(reload) {
+  const m = $('#bz-m'), sm = $('#sb-m'), sv = $('#sb-v'); let sb = null, timer = null
+  $('#bz-save').onclick = async () => {
+    try {
+      await put('/admin/pay', { enabled: $('#bz-en').checked, payment_method: $('#bz-pm').value, timeout_min: +$('#bz-to').value, fee: +$('#bz-fee').value, min_amount: +$('#bz-min').value, max_amount: +$('#bz-max').value, max_pending: +$('#bz-mp').value, return_url: $('#bz-ru').value.trim() })
+      say(m, 'Pengaturan tersimpan.'); toast('Tersimpan')
+    } catch (e) { say(m, e.message, 1) }
+  }
+  const draw = (extra = '') => {
+    if (!sb) { sv.innerHTML = ''; return }
+    sv.innerHTML = `<div style="display:grid;gap:8px;justify-items:center;margin-top:10px">${sb.qr_url ? `<img alt="QR uji" src="${esc(sb.qr_url)}" style="width:220px;max-width:100%;background:#fff;border-radius:12px;padding:8px">` : '<p class="sub">Tidak ada QR (metode e-wallet): pakai link bayar.</p>'}
+      <div class="sub" style="font-size:12.5px;text-align:center">ID <code>${esc(sb.id)}</code><br>Nominal ${rp(sb.amount)} · fee ${rp(sb.fee)} · total <b>${rp(sb.total)}</b><br>Status: <b id="sb-st">${esc(sb.status)}</b>${sb.callback_set ? '' : '<br>⚠️ BTZPAY_CALLBACK_TOKEN belum diisi: callback tidak diuji.'}${extra}</div>
+      <div class="row">${sb.payment_url ? `<a class="btn ghost" target="_blank" rel="noopener noreferrer" href="${esc(sb.payment_url)}">Buka halaman bayar</a>` : ''}<button class="btn ghost" id="sb-chk">Cek status</button><button class="btn" id="sb-sim">Simulasikan bayar</button><button class="btn ghost" id="sb-x">Batalkan</button></div></div>`
+    $('#sb-chk').onclick = check; $('#sb-sim').onclick = simulate; $('#sb-x').onclick = cancel
+  }
+  const check = async () => {
+    if (!sb) return
+    try { const r = await api(`/admin/pay/sandbox/status?id=${encodeURIComponent(sb.id)}&key=${encodeURIComponent(sb.key)}`); sb.status = r.status; const lc = r.last_callback
+      draw(lc ? `<br>Callback terakhir: ${esc(fmtExp(lc.at))} · ${esc(lc.pay_id || '-')} · ${esc(lc.status || '-')}` : ''); if (/sukses|success|gagal|expired|cancel/i.test(r.status)) clearInterval(timer) } catch (e) { say(sm, e.message, 1) }
+  }
+  const simulate = async () => { try { say(sm, 'Mengirim notifikasi simulasi…'); await put('/admin/pay/sandbox/simulate', { id: sb.id, key: sb.key }, 'POST'); say(sm, 'Simulasi terkirim. Mengecek status…'); setTimeout(check, 1500) } catch (e) { say(sm, e.message, 1) } }
+  const cancel = async () => { try { await put('/admin/pay/sandbox/cancel', { id: sb.id }, 'POST'); clearInterval(timer); sb.status = 'cancel'; draw(); say(sm, 'Transaksi uji dibatalkan.') } catch (e) { say(sm, e.message, 1) } }
+  $('#sb-new').onclick = async () => {
+    say(sm, 'Membuat transaksi uji…'); clearInterval(timer)
+    try { sb = await put('/admin/pay/sandbox/create', { amount: +$('#sb-amt').value }, 'POST'); say(sm, 'Transaksi uji dibuat.'); draw(); timer = setInterval(() => { if (!document.hidden && $('#sb-st')) check(); else if (!$('#sb-st')) clearInterval(timer) }, 6000) }
+    catch (e) { say(sm, e.message, 1) }
+  }
+}
+
 V.pembayaran = async function () {
-  const q = await api('/admin/qris')
+  const q = await api('/admin/qris'), pay = await api('/admin/pay')
   const src = { secret: 'secret QRIS_STATIC', dashboard: 'tersimpan dari dashboard (aktif)', image_url: 'gambar QRIS_IMAGE_URL (dibaca server)' }[q.source]
   out().innerHTML = `<h1>Pembayaran</h1>
-    <div class="panel"><h3>QRIS statis</h3>
+    ${btzHtml(pay)}
+    <div class="panel"><h3>QRIS statis (pembelian paket)</h3>
       <p class="sub">Sumber saat ini: <b>${src}</b>${q.info?.merchant ? ` · merchant <b>${esc(q.info.merchant)}</b>` : ''}</p>
       <p class="sub" style="font-size:12.5px">Unggah foto QRIS-mu. Gambar dibaca <b>di browser</b> (bukan di server), jadi JPG/JPEG/PNG apa pun aman. Teks QRIS-nya lalu disimpan dan dipakai untuk membuat QR dinamis tiap order.</p>
       <div class="row"><input type="file" id="qf" accept="image/*"></div>
@@ -41,6 +110,7 @@ V.pembayaran = async function () {
       <p class="msg" id="qm"></p>
       <div class="row"><button class="btn" id="qs">Simpan QRIS</button><button class="btn ghost" id="qt">Tes buat QR Rp1.000</button></div>
       <div id="qr" style="margin-top:12px"></div></div>`
+  btzWire()
   const m = $('#qm'), pl = $('#qp')
   $('#qf').onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return
