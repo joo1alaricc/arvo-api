@@ -22,6 +22,7 @@ import { epsilonRoute as aiEpsilonRoute, epsilonHandler as aiEpsilonHandler } fr
 import { geminiRoute as aiGeminiRoute, geminiHandler as aiGeminiHandler } from './ai/gemini.js'
 import { jeevesRoute as aiJeevesRoute, jeevesHandler as aiJeevesHandler } from './ai/jeeves.js'
 import { monicaRoute as aiMonicaRoute, monicaHandler as aiMonicaHandler } from './ai/monica.js'
+import { muslimRoute as aiMuslimRoute, muslimHandler as aiMuslimHandler } from './ai/muslim.js'
 
 /* Tambah endpoint bawaan baru cukup di sini: otomatis terdaftar, masuk /docs, dan tampil di dashboard admin. */
 const BUILTIN = [
@@ -47,6 +48,7 @@ const BUILTIN = [
     [aiGeminiRoute, aiGeminiHandler],
     [aiJeevesRoute, aiJeevesHandler],
     [aiMonicaRoute, aiMonicaHandler],
+    [aiMuslimRoute, aiMuslimHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
