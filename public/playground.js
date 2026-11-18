@@ -141,7 +141,10 @@ Promise.all([ready.catch(() => ({})), fetch('/api/catalog', { cache: 'no-store',
   const by = {}
   for (const [path, ms] of Object.entries(spec.paths)) for (const [m, d] of Object.entries(ms)) (by[d.tags?.[0] || 'default'] ||= []).push([path, m, d])
   if (!Object.keys(by).length) { list.innerHTML = `<p class="nores">Belum ada endpoint yang bisa kamu akses.${spec.warnings ? '<br><small>' + esc(spec.warnings.join(' · ')) + '</small>' : ''}</p>`; return }
-  Object.entries(by).forEach(([tag, eps], i) => {
+  /* kategori A-Z, endpoint di dalamnya A-Z menurut path lalu method */
+  const az = (a, b) => String(a).localeCompare(String(b), 'en', { numeric: true, sensitivity: 'base' })
+  Object.entries(by).sort(([a], [b]) => az(a, b)).forEach(([tag, eps], i) => {
+    eps.sort((x, y) => az(x[0], y[0]) || az(x[1], y[1]))
     const g = document.createElement('section'); g.className = 'grp' + (i === 0 ? ' open' : ''); g.style.animationDelay = i * 0.05 + 's'
     g.innerHTML = `<button class="grp-h">${tile('folder')}<span>${esc(tag)}</span><span class="cnt"></span><span class="chev">${ico('chev')}</span></button><div class="grp-b"><div class="in"></div></div>`
     const els = eps.map(([p, m, d]) => card(p, m, d, tag)); g.querySelector('.in').append(...els)
