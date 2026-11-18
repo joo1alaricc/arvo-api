@@ -6,7 +6,7 @@ import { BUILTIN_PATHS, builtinInfo } from './index.js'
 import { ghStatus, ghTree, ghGet, ghPut, ghDelete, ghRuns, safePath, b64ToText, textToB64 } from '../utils/github.js'
 import { analyze, build, readBack, patchIndex, exportNames, slugFrom, EXAMPLE, STRUCTURE_HELP } from '../utils/endpointGen.js'
 import { makeQris, qrisInfo } from '../utils/payment.js'
-import { loadCfg, cleanCfg, secretsStatus, btzCreate, btzStatus, btzCancel, btzSimulate, qrUrl, httpsOnly, base } from '../utils/btzpay.js'
+import { loadCfg, cleanCfg, secretsStatus, btzCreate, btzStatus, btzCancel, btzSimulate, btzQr, httpsOnly, base } from '../utils/btzpay.js'
 
 /* Dashboard admin.
  *  - Panel hanya bisa dibuka setelah login (sesi) sebagai pengelola, atau memakai access key di header x-access-key. IP tidak memberi akses.
@@ -144,7 +144,13 @@ admin.post('/pay/sandbox/create', async (c) => {
     if (!r.ok) return sbErr(c, r)
     const t = r.data || {}
     return c.json({ ok: true, id: t.transactionId, key: t.accessKey, amount: t.amount ?? amount, fee: t.fee ?? 0, total: t.totalAmount ?? amount, status: t.status || 'pending', expired_at: t.expiredAt || null,
-        qr_url: qrUrl(c.env, t), payment_url: httpsOnly(t.paymentUrl), callback_set: !!c.env.BTZPAY_CALLBACK_TOKEN, raw: r.raw })
+        qr_url: t.qrisString ? '/api/admin/pay/qr?data=' + encodeURIComponent(t.qrisString) : null, payment_url: httpsOnly(t.paymentUrl), callback_set: !!c.env.BTZPAY_CALLBACK_TOKEN, raw: r.raw })
+})
+admin.get('/pay/qr', async (c) => {
+    const data = String(c.req.query('data') || '')
+    if (!/^000201/.test(data) || data.length > 1500) return send(c, fail(400, 'bad_request', 'Data QR tidak valid.'))
+    const q = await btzQr(c.env, data)
+    return q ? c.body(q.body, 200, { 'Content-Type': q.type, 'Cache-Control': 'private, max-age=300' }) : send(c, fail(502, 'qr_failed', 'QR gagal dibuat.'))
 })
 admin.get('/pay/sandbox/status', async (c) => {
     const id = String(c.req.query('id') || ''), key = String(c.req.query('key') || '')
