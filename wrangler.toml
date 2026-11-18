@@ -35,6 +35,7 @@ FREE_DAILY_LIMIT = "100"
 OWNER_ACCESS_KEY = "admin123"
 GOOGLE_CLIENT_ID = "978603752308-2crtqbtdjangppler9i9qf70bmvchacn.apps.googleusercontent.com"
 # Secret (wrangler secret put, JANGAN ditulis di file ini): GITHUB_API, PAYMENT_WEBHOOK_SECRET, dan opsional QRIS_STATIC
+# Secret BTZPay (deposit): BTZPAY_APIKEY, BTZPAY_CALLBACK_TOKEN, dan opsional BTZPAY_SANDBOX_APIKEY. Opsional di [vars]: BTZPAY_BASE_URL (default https://web.btzpay.my.id)
 
 # Waktu deploy versi aktif, dipakai untuk "Server Uptime" di Dashboard.
 [version_metadata]
