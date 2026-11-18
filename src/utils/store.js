@@ -55,6 +55,8 @@ export class StoreDO extends DurableObject {
         this.ensureCols('orders', { user_id: 'INTEGER', plan: 'TEXT', days: 'INTEGER', amount: 'INTEGER', code: 'INTEGER', total: 'INTEGER', status: 'TEXT', ip: 'TEXT',
             created_at: 'INTEGER', expires_at: 'INTEGER', paid_at: 'INTEGER' },
         { user_id: ['uid', 'userid', 'user', 'owner_id'], total: ['amount', 'price'], created_at: ['created', 'ts', 'time'] })
+        /* deposit lewat BTZPay: access key transaksi (untuk cek status), link bayar, batas waktu, fee unik. provider kosong = deposit lama lewat panel SMM */
+        this.ensureCols('smm_deposits', { provider: 'TEXT', access_key: 'TEXT', pay_url: 'TEXT', expired_at: 'INTEGER', fee: 'INTEGER' })
         for (const col of ['phone', 'bio', 'avatar_url', 'banner_url', 'reg_ip', 'last_ip', 'avatar_data', 'avatar_ver', 'stack', 'border_colors']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`) } catch {} }
         try { this.sql.exec('ALTER TABLE users ADD COLUMN last_seen INTEGER') } catch {}
         try { this.sql.exec('ALTER TABLE users ADD COLUMN access_key TEXT') } catch {}
@@ -489,9 +491,9 @@ export class StoreDO extends DurableObject {
         this.sql.exec('UPDATE smm_wallet SET balance=balance-? WHERE user_id=?', cost, uid)
         return { ok: true, balance: b - cost }
     }
-    smmDepNew(id, uid, amount, total, now) { this.sql.exec('INSERT OR IGNORE INTO smm_deposits(id,user_id,amount,total,status,credited,created_at) VALUES(?,?,?,?,?,0,?)', id, uid, amount, total, 'pending', now); return { ok: true } }
+    smmDepNew(id, uid, amount, total, now, x = {}) { this.sql.exec('INSERT OR IGNORE INTO smm_deposits(id,user_id,amount,total,status,credited,created_at,provider,access_key,pay_url,expired_at,fee) VALUES(?,?,?,?,?,0,?,?,?,?,?,?)', id, uid, amount, total, 'pending', now, x.provider || null, x.access_key || null, x.pay_url || null, x.expired_at || null, x.fee ?? null); return { ok: true } }
     smmDepGet(id) { const [d] = this.q('SELECT * FROM smm_deposits WHERE id=?', id); return d || null }
-    smmDepPending(uid, now) { return this.q("SELECT id FROM smm_deposits WHERE user_id=? AND status='pending' AND created_at>? ORDER BY created_at DESC LIMIT 3", uid, now - DAY) }
+    smmDepPending(uid, now) { return this.q("SELECT id,expired_at FROM smm_deposits WHERE user_id=? AND status='pending' AND created_at>? ORDER BY created_at DESC LIMIT 10", uid, now - DAY) }
     smmDepStatus(id, status) { this.sql.exec('UPDATE smm_deposits SET status=? WHERE id=? AND credited=0', status, id); return { ok: true } }
     /* kredit saldo SEKALI saja per deposit (aman dipanggil berulang / bersamaan) */
     smmDepCredit(id, amount) {
@@ -499,6 +501,17 @@ export class StoreDO extends DurableObject {
         if (d.credited) return { ok: true, credited: false, balance: this.smmBal(d.user_id) }
         this.sql.exec("UPDATE smm_deposits SET credited=1,status='success' WHERE id=?", id)
         return { ok: true, credited: true, balance: this.smmAdd(d.user_id, amount) }
+    }
+    /* ---- BTZPay: pengaturan (diubah admin), catatan callback terakhir, daftar deposit untuk admin ---- */
+    btzCfg() { return this.setting('btzpay', null) }
+    setBtzCfg(v) { this.saveSetting('btzpay', v); return { ok: true } }
+    btzCb() { return this.setting('btzpay_cb', null) }
+    setBtzCb(v) { this.saveSetting('btzpay_cb', v); return { ok: true } }
+    adminDeposits() {
+        const one = (sql, ...a) => this.q(sql, ...a)[0]
+        const ok = one("SELECT COALESCE(SUM(amount),0) s,COUNT(*) n FROM smm_deposits WHERE credited=1")
+        return { ok: true, credited_sum: ok.s, credited_count: ok.n, pending: one("SELECT COUNT(*) n FROM smm_deposits WHERE status='pending'").n, review: one("SELECT COUNT(*) n FROM smm_deposits WHERE status='review'").n,
+            items: this.q('SELECT d.id,d.amount,d.total,d.status,d.credited,d.provider,d.created_at,u.username FROM smm_deposits d LEFT JOIN users u ON u.id=d.user_id ORDER BY d.created_at DESC LIMIT 40') }
     }
     smmOrderAdd(o) {
         this.sql.exec('INSERT INTO smm_orders(order_id,user_id,service,name,link,qty,cost,status,refunded,created_at) VALUES(?,?,?,?,?,?,?,?,0,?)',
