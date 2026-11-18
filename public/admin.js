@@ -90,13 +90,13 @@ const V = {
     out().innerHTML = `<div class="bar"><h1>Endpoint</h1><button class="btn" id="add">${ico('plus')} Tambah endpoint</button></div>
       <div class="panel tw" style="padding:6px 10px"><h3 style="margin:8px 0 2px">Endpoint bawaan <span class="badge">${builtin.length}</span></h3>
         <p class="sub" style="font-size:12px;margin:0 0 6px">Ada di kode (<span class="mono">src/api</span>). Nama, deskripsi, akses, dan status bisa diubah dari sini (tanpa deploy); logikanya tetap di kode.</p>
-        <table><tr><th>Fitur</th><th>Path</th><th>Akses</th><th>Status</th><th>Aksi</th></tr>${builtin.map((e) => `<tr>
+        <table><tr><th>Fitur</th><th>Path</th><th>Akses</th><th>Status</th><th>Aksi</th></tr>${[...builtin].sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true, sensitivity: 'base' })).map((e) => `<tr>
           <td><b>${esc(e.name)}</b>${e.overridden ? ' <span class="badge warn">diubah</span>' : ''}<br><span class="sub" style="margin:0;font-size:11.5px">${esc(e.description)}</span></td>
           <td><span class="mt ${e.method.toLowerCase()}" style="font-size:10px">${e.method}</span> <span class="mono" style="font-size:12px">${esc(e.path)}</span></td>
           <td>${accessBadge(e.access)}</td><td><span class="badge ${e.status}">${e.status === 'online' ? 'Online' : 'Offline'}</span></td>
           <td><div class="acts"><button class="btn go" data-bt="${esc(e.path)}">Tes</button><button class="btn ghost" data-be="${esc(e.path)}">Edit</button>${e.overridden ? `<button class="btn ghost" data-br="${esc(e.path)}">Reset</button>` : ''}</div></td></tr>`).join('') || '<tr><td colspan="5" class="sub">Tidak ada endpoint bawaan.</td></tr>'}</table></div>
       <p class="sub">Endpoint konfigurasi (proxy/JSON) buatan dashboard versi lama. Endpoint baru dibuat lewat tombol Tambah endpoint (kode JavaScript).</p>
-      <div class="panel tw" style="padding:6px 10px"><table><tr><th>Fitur</th><th>Path</th><th>Akses</th><th>Mode</th><th>Online</th><th>Aksi</th></tr>${endpoints.map((e) => `<tr>
+      <div class="panel tw" style="padding:6px 10px"><table><tr><th>Fitur</th><th>Path</th><th>Akses</th><th>Mode</th><th>Online</th><th>Aksi</th></tr>${[...endpoints].sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true, sensitivity: 'base' })).map((e) => `<tr>
         <td><b>${esc(e.name)}</b><br><span class="sub" style="margin:0;font-size:11.5px">${e.inputs.map((i) => esc(i.name)).join(', ') || 'tanpa input'}</span></td>
         <td><span class="mt ${e.method.toLowerCase()}" style="font-size:10px">${e.method}</span> <span class="mono" style="font-size:12px">${esc(e.path)}</span></td>
         <td>${accessBadge(e.access)}</td><td>${e.mode}</td>
