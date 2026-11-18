@@ -19,6 +19,7 @@ import { twitterRoute as downloaderTwitterRoute, twitterHandler as downloaderTwi
 import { claudeRoute as aiClaudeRoute, claudeHandler as aiClaudeHandler } from './ai/claude.js'
 import { copilotRoute as aiCopilotRoute, copilotHandler as aiCopilotHandler } from './ai/copilot.js'
 import { epsilonRoute as aiEpsilonRoute, epsilonHandler as aiEpsilonHandler } from './ai/epsilon.js'
+import { geminiRoute as aiGeminiRoute, geminiHandler as aiGeminiHandler } from './ai/gemini.js'
 
 /* Tambah endpoint bawaan baru cukup di sini: otomatis terdaftar, masuk /docs, dan tampil di dashboard admin. */
 const BUILTIN = [
@@ -41,6 +42,7 @@ const BUILTIN = [
     [aiClaudeRoute, aiClaudeHandler],
     [aiCopilotRoute, aiCopilotHandler],
     [aiEpsilonRoute, aiEpsilonHandler],
+    [aiGeminiRoute, aiGeminiHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
