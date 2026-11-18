@@ -67,12 +67,14 @@ export const btzCancel = (env, apikey, id, reason = 'cancelled_by_user') => call
 export const btzSimulate = (env, apikey, total) => call(env, '/api/qris/callback', { method: 'POST', json: { action: 'update', app: 'com.dana.id', notification: `Kamu menerima Rp${total} dari Sandbox Arvo`, amount: total, appVersionCode: 123, apikey } })
 
 const isImg = (s) => typeof s === 'string' && (/^data:image\//.test(s) || /^https:\/\//.test(s))
-/* Gambar QR untuk <img>: pakai qrisImage dari BTZPay kalau ada, kalau tidak buat dari qrisString lewat endpoint create-qr-code. */
+/* Gambar QR untuk <img>: dibuat dari qrisString lewat endpoint create-qr-code BTZPay supaya tampilannya sama dengan halaman bayar BTZPay
+ * (titik bulat, warna navy). qrisImage bawaan transaksi hanya dipakai kalau qrisString tidak ada. */
+export const QR_STYLE = { style: 1, color: '0f1056' }
 export const qrUrl = (env, d) => {
     if (!d) return null
+    if (d.qrisString) return `${base(env)}/api/qris/create-qr-code?size=500x500&style=${QR_STYLE.style}&color=${QR_STYLE.color}&format=svg&viewer=0&data=${encodeURIComponent(d.qrisString)}`
     if (isImg(d.qrisImage)) return d.qrisImage
     if (d.qrisImage && /^[A-Za-z0-9+/=\s]+$/.test(d.qrisImage) && d.qrisImage.length > 200) return 'data:image/png;base64,' + d.qrisImage.replace(/\s+/g, '')
-    if (d.qrisString) return `${base(env)}/api/qris/create-qr-code?size=420x420&style=2&format=svg&viewer=0&data=${encodeURIComponent(d.qrisString)}`
     return null
 }
 export const httpsOnly = (u) => { try { return new URL(u).protocol === 'https:' ? String(u) : null } catch { return null } }
