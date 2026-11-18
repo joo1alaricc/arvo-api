@@ -49,19 +49,21 @@ const noDial = (o) => { const d = String(o.dial || '').replace(/\D/g, ''), p = S
 
 const view = () => {
   el.innerHTML = `<h1>Layanan OTP</h1><p class="sub">Nomor virtual untuk menerima SMS verifikasi (WhatsApp, Telegram, dll). Biaya dipotong dari saldo akunmu; nomor yang tidak menerima SMS dikembalikan otomatis.</p>
-  <div class="card"><div class="card-b"><div class="ot-bal"><div><small>Saldo</small><b id="bv">…</b></div><a class="btn sm" href="/smm">Isi saldo</a></div>
-    <p class="hint">Saldo OTP sama dengan saldo Layanan SMM. Isi lewat deposit QRIS di halaman SMM.</p></div></div>
+  <div class="card"><div class="card-b"><div class="ot-bal"><div><small>Saldo</small><b id="bv">…</b></div><button class="btn sm" id="bdp" type="button">Deposit</button></div>
+    <p class="hint">Saldo OTP sama dengan saldo Layanan SMM. Isi saldo lewat deposit QRIS di sini.</p></div></div>
+  <div id="dpm"></div>
   <div class="card"><div class="card-h">${I('bolt')}<span>Pesan nomor</span></div><div class="card-b"><div class="ot-steps" id="ss"></div><div id="wz"></div><p class="msg" id="mw"></p></div></div>
   <div class="card"><div class="card-h">${I('list')}<span>Pesanan kamu</span></div><div class="card-b" id="ol"><p class="hint">Memuat…</p></div></div>`
   $('#wz').onclick = wzClick; $('#wz').oninput = (e) => { if (e.target.id === 'sq') drawList() }
   $('#ol').onclick = olClick
+  S.dep = ArvoDeposit.mount($('#dpm'), { onBalance: setBal }); $('#bdp').onclick = () => S.dep.open()
   loadBal(); loadCountries(); loadOrders()
   clearInterval(S.poll); clearInterval(S.tick)
   S.poll = setInterval(() => { if (!document.hidden) pollLive() }, 5000)
   S.tick = setInterval(tick, 1000)
   draw()
 }
-const loadBal = async () => { try { setBal((await api('/tools/smm/balance')).balance) } catch (e) { const b = $('#bv'); if (b && S.bal === null) b.textContent = '—' } }
+const loadBal = async () => { try { const r = await api('/tools/smm/balance'); setBal(r.balance); if (S.dep) S.dep.setLimits(r.deposit_min, r.deposit_max) } catch (e) { const b = $('#bv'); if (b && S.bal === null) b.textContent = '—' } }
 
 /* ---------- wizard ---------- */
 const draw = () => {
@@ -84,7 +86,7 @@ const draw = () => {
       <div><span>Jumlah nomor<br><small class="hint">Maks. ${MAXQ} nomor sekaligus</small></span><span class="ot-qty"><button data-a="qm" type="button" ${S.qty <= 1 ? 'disabled' : ''}>−</button><b>${S.qty}</b><button data-a="qp" type="button" ${S.qty >= MAXQ ? 'disabled' : ''}>+</button></span></div></div>
       <div class="ot-rows"><div><span>Total biaya</span><b style="font-size:17px">${rp(total)}</b></div><hr><div><span>Saldo saat ini</span><b>${S.bal === null ? '…' : rp(S.bal)}</b></div>
       <div><span>Saldo setelah order</span><b class="${after !== null && after < 0 ? 'neg' : 'pos'}">${after === null ? '…' : after < 0 ? 'kurang ' + rp(-after) : rp(after)}</b></div></div>
-      ${after !== null && after < 0 ? '<p class="msg err">Saldo tidak cukup. <a href="/smm">Isi saldo dulu</a>.</p>' : ''}
+      ${after !== null && after < 0 ? '<p class="msg err">Saldo tidak cukup. <a href="#" data-a="dep">Deposit dulu</a>.</p>' : ''}
       <div class="ot-row2"><button class="btn ghost" data-a="to3" type="button">Kembali</button><button class="btn" data-a="go" type="button" id="go" ${after !== null && after < 0 ? 'disabled' : ''}>Konfirmasi Order</button></div>`
   }
 }
@@ -114,6 +116,7 @@ const go = (n) => { S.step = n; note($('#mw'), ''); draw() }
 const wzClick = (e) => {
   const b = e.target.closest('[data-a]'); if (!b) return
   const a = b.dataset.a, id = Number(b.dataset.id)
+  if (a === 'dep') { e.preventDefault(); return S.dep && S.dep.open() }
   if (a === 'to1') { S.country = S.service = S.server = null; go(1) }
   else if (a === 'to2') { S.service = S.server = null; go(2); drawList() }
   else if (a === 'to3') go(3)
