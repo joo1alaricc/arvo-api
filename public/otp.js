@@ -89,6 +89,7 @@ const draw = () => {
   }
 }
 const MAXQ = 3
+const az = (a, b) => String(a).localeCompare(String(b), 'en', { numeric: true, sensitivity: 'base' })   /* urutan A-Z */
 const drawList = () => {
   const l = $('#sl'); if (!l) return
   const q = ($('#sq')?.value || '').trim().toLowerCase(), MAX = 60
@@ -125,10 +126,10 @@ const wzClick = (e) => {
   else if (a === 'go') placeOrder(b)
 }
 const fail = (e, step) => { const l = $('#sl'); if (l && S.step === step) l.innerHTML = `<p class="ot-empty err">${esc(e.message)}</p>` }
-const loadCountries = async () => { try { S.countries = (await api('/tools/otp/countries')).countries || []; if (S.step === 1) drawList() } catch (e) { fail(e, 1) } }
+const loadCountries = async () => { try { S.countries = ((await api('/tools/otp/countries')).countries || []).sort((a, b) => az(a.name, b.name)); if (S.step === 1) drawList() } catch (e) { fail(e, 1) } }
 const loadServices = async () => {
   const id = S.country.id
-  try { const r = await api('/tools/otp/services?country_id=' + id); if (S.country?.id !== id) return; S.services = r.services || []; if (S.step === 2) drawList() } catch (e) { fail(e, 2) }
+  try { const r = await api('/tools/otp/services?country_id=' + id); if (S.country?.id !== id) return; S.services = (r.services || []).sort((a, b) => az(a.name, b.name)); if (S.step === 2) drawList() } catch (e) { fail(e, 2) }
 }
 const loadServers = async () => {
   const c = S.country.id, s = S.service.id
