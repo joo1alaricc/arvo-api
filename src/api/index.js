@@ -18,6 +18,7 @@ import { spotifyRoute as downloaderSpotifyRoute, spotifyHandler as downloaderSpo
 import { twitterRoute as downloaderTwitterRoute, twitterHandler as downloaderTwitterHandler } from './downloader/twitter.js'
 import { claudeRoute as aiClaudeRoute, claudeHandler as aiClaudeHandler } from './ai/claude.js'
 import { copilotRoute as aiCopilotRoute, copilotHandler as aiCopilotHandler } from './ai/copilot.js'
+import { epsilonRoute as aiEpsilonRoute, epsilonHandler as aiEpsilonHandler } from './ai/epsilon.js'
 
 /* Tambah endpoint bawaan baru cukup di sini: otomatis terdaftar, masuk /docs, dan tampil di dashboard admin. */
 const BUILTIN = [
@@ -39,6 +40,7 @@ const BUILTIN = [
     [downloaderTwitterRoute, downloaderTwitterHandler],
     [aiClaudeRoute, aiClaudeHandler],
     [aiCopilotRoute, aiCopilotHandler],
+    [aiEpsilonRoute, aiEpsilonHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
