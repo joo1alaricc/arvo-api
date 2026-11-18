@@ -77,6 +77,20 @@ export const qrUrl = (env, d) => {
     if (d.qrisImage && /^[A-Za-z0-9+/=\s]+$/.test(d.qrisImage) && d.qrisImage.length > 200) return 'data:image/png;base64,' + d.qrisImage.replace(/\s+/g, '')
     return null
 }
+/* Gambar QR dari qrisString lewat generator BTZPay, diambil SERVER-SIDE lalu diteruskan ke browser dari domain Arvo sendiri
+ * (browser tidak perlu memuat gambar dari domain lain). Coba mode styled dulu, lalu native. */
+export const btzQr = async (env, data) => {
+    for (const mode of ['styled', 'native']) {
+        try {
+            const r = await fetch(base(env) + '/api/qris/create-qr-code', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data, size: '500x500', style: String(QR_STYLE.style), color: QR_STYLE.color, format: 'png', pngMode: mode, viewer: '0' }), signal: AbortSignal.timeout(15000) })
+            const type = r.headers.get('content-type') || ''
+            if (r.ok && /^image\//.test(type)) return { body: await r.arrayBuffer(), type }
+            console.error('[btzpay] qr', mode, r.status, type)
+        } catch (e) { console.error('[btzpay] qr', mode, e.message || e) }
+    }
+    return null
+}
 export const httpsOnly = (u) => { try { return new URL(u).protocol === 'https:' ? String(u) : null } catch { return null } }
 export const tokenOk = (env, given) => !!env.BTZPAY_CALLBACK_TOKEN && sameHash(String(given || ''), String(env.BTZPAY_CALLBACK_TOKEN))
 
