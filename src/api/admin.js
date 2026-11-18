@@ -6,6 +6,7 @@ import { BUILTIN_PATHS, builtinInfo } from './index.js'
 import { ghStatus, ghTree, ghGet, ghPut, ghDelete, ghRuns, safePath, b64ToText, textToB64 } from '../utils/github.js'
 import { analyze, build, readBack, patchIndex, exportNames, slugFrom, EXAMPLE, STRUCTURE_HELP } from '../utils/endpointGen.js'
 import { makeQris, qrisInfo } from '../utils/payment.js'
+import { loadCfg, cleanCfg, secretsStatus, btzCreate, btzStatus, btzCancel, btzSimulate, qrUrl, httpsOnly, base } from '../utils/btzpay.js'
 
 /* Dashboard admin.
  *  - Panel hanya bisa dibuka setelah login (sesi) sebagai pengelola, atau memakai access key di header x-access-key. IP tidak memberi akses.
@@ -104,6 +105,69 @@ admin.put('/qris', async (c) => {
 admin.post('/qris/test', async (c) => {
     try { return c.json({ ok: true, qris: await makeQris(c.env, 1000 + Math.floor(Math.random() * 99), await store(c).getQrisStatic()) }) }
     catch (e) { return send(c, fail(500, 'qris_fail', e.message)) }
+})
+
+/* ---------- pembayaran / BTZPay (deposit saldo) ----------
+ * Semua admin boleh melihat; mengubah pengaturan dan memakai Sandbox hanya super admin. Secret tidak pernah dikirim, hanya status terisi/belum. */
+const payWrite = async (c, next) => c.req.method === 'GET' || c.get('adminLevel') === 'super' ? next()
+    : c.json({ error: 'Forbidden', message: 'Hanya super admin yang boleh mengubah pengaturan pembayaran.', status: 403 }, 403)
+admin.use('/pay', payWrite)
+admin.use('/pay/*', payWrite)
+admin.get('/pay', async (c) => {
+    const st = store(c)
+    return c.json({ ok: true, config: await loadCfg(c), secrets: secretsStatus(c.env), base_url: base(c.env), callback_url: new URL(c.req.url).origin + '/api/billing/btzpay/callback?t=<BTZPAY_CALLBACK_TOKEN>',
+        last_callback: await st.btzCb(), ...(await st.adminDeposits()) })
+})
+admin.put('/pay', async (c) => {
+    const b = await body(c), cur = await loadCfg(c), r = cleanCfg(b, cur)
+    if (r.error) return send(c, fail(400, 'bad_config', r.error))
+    if (r.cfg.enabled) {
+        const miss = ['BTZPAY_APIKEY', 'BTZPAY_CALLBACK_TOKEN'].filter((k) => !c.env[k])
+        if (miss.length) return send(c, fail(400, 'secret_missing', `Belum bisa diaktifkan, secret belum diisi: ${miss.join(', ')}.`))
+    }
+    await store(c).setBtzCfg(r.cfg)
+    return c.json({ ok: true, config: r.cfg })
+})
+/* Sandbox: transaksi uji memakai BTZPAY_SANDBOX_APIKEY, tidak menyentuh saldo user mana pun. Callback uji tetap diterima dan tercatat di "Callback terakhir". */
+const sbKey = (c) => c.env.BTZPAY_SANDBOX_APIKEY ? null : send(c, fail(503, 'not_configured', 'Secret BTZPAY_SANDBOX_APIKEY belum diisi (API key Payment Method khusus uji).'))
+const sbErr = (c, r) => send(c, fail(r.status || 502, r.error || 'btzpay_error', 'BTZPay: ' + r.message))
+admin.post('/pay/sandbox/create', async (c) => {
+    const no = sbKey(c); if (no) return no
+    const b = await body(c), cfg = await loadCfg(c), amount = Math.floor(Number(b.amount) || 1000)
+    if (amount < 1 || amount > 100000) return send(c, fail(400, 'bad_amount', 'Nominal uji 1 sampai 100.000.'))
+    const origin = new URL(c.req.url).origin
+    const r = await btzCreate(c.env, c.env.BTZPAY_SANDBOX_APIKEY, {
+        amount, fee: cfg.fee, paymentMethod: cfg.payment_method, timeout: Math.max(1, Math.min(cfg.timeout_min, 15)) * 60000,
+        callback_url: c.env.BTZPAY_CALLBACK_TOKEN ? `${origin}/api/billing/btzpay/callback?t=${encodeURIComponent(c.env.BTZPAY_CALLBACK_TOKEN)}` : undefined,
+        notes: 'Uji sandbox Arvo', metadata: { orderId: 'sandbox-' + Date.now(), productName: 'Sandbox Arvo' },
+    })
+    if (!r.ok) return sbErr(c, r)
+    const t = r.data || {}
+    return c.json({ ok: true, id: t.transactionId, key: t.accessKey, amount: t.amount ?? amount, fee: t.fee ?? 0, total: t.totalAmount ?? amount, status: t.status || 'pending', expired_at: t.expiredAt || null,
+        qr_url: qrUrl(c.env, t), payment_url: httpsOnly(t.paymentUrl), callback_set: !!c.env.BTZPAY_CALLBACK_TOKEN, raw: r.raw })
+})
+admin.get('/pay/sandbox/status', async (c) => {
+    const id = String(c.req.query('id') || ''), key = String(c.req.query('key') || '')
+    if (!/^[\w\-]{3,80}$/.test(id) || !/^[\w\-]{8,80}$/.test(key)) return send(c, fail(400, 'bad_request', 'ID / key transaksi tidak valid.'))
+    const r = await btzStatus(c.env, id, key)
+    return r.ok ? c.json({ ok: true, status: r.data?.status || 'pending', data: r.data, last_callback: await store(c).btzCb() }) : sbErr(c, r)
+})
+admin.post('/pay/sandbox/simulate', async (c) => {
+    const no = sbKey(c); if (no) return no
+    const b = await body(c), id = String(b.id || ''), key = String(b.key || '')
+    if (!/^[\w\-]{3,80}$/.test(id) || !/^[\w\-]{8,80}$/.test(key)) return send(c, fail(400, 'bad_request', 'ID / key transaksi tidak valid.'))
+    const t = await btzStatus(c.env, id, key)
+    if (!t.ok) return sbErr(c, t)
+    if (!/^pending$/i.test(String(t.data?.status || ''))) return send(c, fail(409, 'not_pending', `Transaksi sudah berstatus ${t.data?.status}.`))
+    const r = await btzSimulate(c.env, c.env.BTZPAY_SANDBOX_APIKEY, Number(t.data?.totalAmount))
+    return r.ok ? c.json({ ok: true, result: r.raw }) : sbErr(c, r)
+})
+admin.post('/pay/sandbox/cancel', async (c) => {
+    const no = sbKey(c); if (no) return no
+    const id = String((await body(c)).id || '')
+    if (!/^[\w\-]{3,80}$/.test(id)) return send(c, fail(400, 'bad_request', 'ID transaksi tidak valid.'))
+    const r = await btzCancel(c.env, c.env.BTZPAY_SANDBOX_APIKEY, id, 'sandbox_cancel')
+    return r.ok ? c.json({ ok: true }) : sbErr(c, r)
 })
 
 /* ---------- GitHub: status, tree, satu file per request ---------- */
