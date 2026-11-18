@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { store, requireUser } from '../utils/session.js'
-import { loadCfg, btzCreate, btzCancel, qrUrl, httpsOnly, settleBtzDeposit } from '../utils/btzpay.js'
+import { loadCfg, btzCreate, btzCancel, btzQr, httpsOnly, settleBtzDeposit } from '../utils/btzpay.js'
 
 /* Tools: fitur tambahan khusus member berbayar. Saat ini: Aktivasi AM (/api/tools/am/*).
  * Kunci layanan (CUPZ_API_KEY) hanya ada di server (wrangler secret), tidak pernah dikirim ke browser. */
@@ -211,9 +211,20 @@ const btzDeposit = async (c, cfg, amount) => {
     const t = r.data || {}
     if (!t.transactionId || !t.accessKey) return out(c, 502, 'upstream_bad_response', 'BTZPay tidak mengembalikan ID transaksi.')
     const total = Number(t.totalAmount) || amount, exp = Date.parse(t.expiredAt || '') || now + cfg.timeout_min * 60000
-    await st.smmDepNew(String(t.transactionId), u.id, amount, total, now, { provider: 'btzpay', access_key: String(t.accessKey), pay_url: httpsOnly(t.paymentUrl), expired_at: exp, fee: Number(t.fee) || 0 })
-    return c.json({ ok: true, deposit: String(t.transactionId), amount, total_amount: total, qr_url: qrUrl(c.env, t), payment_url: httpsOnly(t.paymentUrl), expired_at: new Date(exp).toISOString(), currency: 'IDR', provider: 'btzpay' })
+    await st.smmDepNew(String(t.transactionId), u.id, amount, total, now, { provider: 'btzpay', access_key: String(t.accessKey), pay_url: httpsOnly(t.paymentUrl), expired_at: exp, fee: Number(t.fee) || 0, qr_data: t.qrisString || null })
+    return c.json({ ok: true, deposit: String(t.transactionId), amount, total_amount: total, qr_url: t.qrisString ? `/api/tools/smm/deposit-qr?deposit=${encodeURIComponent(t.transactionId)}` : /^data:image\//.test(t.qrisImage || '') ? t.qrisImage : null, payment_url: httpsOnly(t.paymentUrl), expired_at: new Date(exp).toISOString(), currency: 'IDR', provider: 'btzpay' })
 }
+
+/* gambar QR deposit milik user ini (diteruskan dari BTZPay lewat server Arvo) */
+tools.get('/smm/deposit-qr', async (c) => {
+    const id = String(c.req.query('deposit') || '').trim()
+    if (!/^[\w\-]{3,80}$/.test(id)) return out(c, 400, 'bad_deposit', 'ID deposit tidak valid.')
+    const d = await store(c).smmDepGet(id)
+    if (!d || d.user_id !== uidOf(c) || !d.qr_data) return out(c, 404, 'not_found', 'QR tidak ditemukan.')
+    const q = await btzQr(c.env, d.qr_data)
+    if (!q) return out(c, 502, 'qr_failed', 'QR gagal dibuat.')
+    return c.body(q.body, 200, { 'Content-Type': q.type, 'Cache-Control': 'private, max-age=600' })
+})
 
 tools.post('/smm/deposit', async (c) => {
     const amount = Number((await body(c)).amount)
