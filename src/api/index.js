@@ -27,6 +27,7 @@ import { powerbrainRoute as aiPowerbrainRoute, powerbrainHandler as aiPowerbrain
 import { publicRoute as aiPublicRoute, publicHandler as aiPublicHandler } from './ai/public.js'
 import { fluxRoute as aiFluxRoute, fluxHandler as aiFluxHandler } from './ai/flux.js'
 import { sologoRoute as aiSologoRoute, sologoHandler as aiSologoHandler } from './ai/sologo.js'
+import { attpRoute as makerAttpRoute, attpHandler as makerAttpHandler } from './maker/attp.js'
 
 /* Tambah endpoint bawaan baru cukup di sini: otomatis terdaftar, masuk /docs, dan tampil di dashboard admin. */
 const BUILTIN = [
@@ -57,6 +58,7 @@ const BUILTIN = [
     [aiPublicRoute, aiPublicHandler],
     [aiFluxRoute, aiFluxHandler],
     [aiSologoRoute, aiSologoHandler],
+    [makerAttpRoute, makerAttpHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
