@@ -33,7 +33,7 @@ const LS = (k, v) => { try { if (v === undefined) return JSON.parse(localStorage
 const note = (e, t, bad) => { if (!e) return; e.textContent = t; e.className = 'msg' + (bad ? ' err' : ''); e.style.cssText = bad || !t ? '' : 'color:var(--g)' }
 const stChip = (s) => { const k = String(s || '').toLowerCase(); const c = /success|complete|selesai|done/.test(k) ? 'ok' : /cancel|fail|error|refund|pasti|kedaluwarsa/.test(k) ? 'bad' : /partial/.test(k) ? 'mid' : 'wait'; return `<span class="sm-st ${c}">${esc(s)}</span>` }
 const DEPK = 'arvo_smm_dep'
-const S = { bal: null, svcs: [], sel: null, poll: null }
+const S = { bal: null, svcs: [], sel: null, poll: null, min: 1000, max: 50000000 }
 const setBal = (n) => { if (n == null) return; S.bal = n; const b = $('#bv'); if (b) b.textContent = rp(n); est() }
 
 const view = () => {
@@ -75,7 +75,7 @@ const view = () => {
 }
 
 const loadBal = async () => {
-  try { const r = await api('/tools/smm/balance'); setBal(r.balance); note($('#mb'), '') }
+  try { const r = await api('/tools/smm/balance'); setBal(r.balance); if (r.deposit_min) { S.min = r.deposit_min; S.max = r.deposit_max; const da = $('#da'); if (da) da.min = S.min }; note($('#mb'), '') }
   catch (e) { const b = $('#bv'); if (b && S.bal === null) b.textContent = '—'; note($('#mb'), e.message, 1) }
 }
 
@@ -175,7 +175,8 @@ const fmtExp = (x) => { const d = new Date(x); return Number.isNaN(+d) ? String(
 async function mkDeposit(ev) {
   ev.preventDefault()
   const m = $('#md'), b = $('#bd'), amt = Math.floor(Number($('#da').value))
-  if (!(amt >= 1000)) return note(m, 'Minimal deposit Rp1.000.', 1)
+  if (!(amt >= S.min)) return note(m, `Minimal deposit ${rp(S.min)}.`, 1)
+  if (amt > S.max) return note(m, `Maksimal deposit ${rp(S.max)}.`, 1)
   b.disabled = true; note(m, 'Membuat deposit…')
   try {
     const r = await put('/tools/smm/deposit', { amount: amt }, 'POST')
