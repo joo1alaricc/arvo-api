@@ -27,7 +27,7 @@ api('/auth/config').then(({ hero_video, hero_poster }) => {
 
 /* teks berjalan: kategori endpoint (AI • DOWNLOADER • STATS), bergerak kiri ke kanan tanpa putus */
 const marquee = (paths) => {
-  const cats = [...new Set(Object.values(paths).flatMap((ms) => Object.values(ms).map((d) => String(d.tags?.[0] || '').trim().toUpperCase()).filter(Boolean)))]
+  const cats = [...new Set(Object.values(paths).flatMap((ms) => Object.values(ms).map((d) => String(d.tags?.[0] || '').trim().toUpperCase()).filter(Boolean)))].sort((a, b) => a.localeCompare(b))
   const box = $('#mq'), tr = $('#mqt'); if (!cats.length) return
   const unit = cats.map((c) => `<span>${esc(c)}</span><i aria-hidden="true"></i>`).join('')
   tr.innerHTML = `<div class="mq-g">${unit}</div>`
