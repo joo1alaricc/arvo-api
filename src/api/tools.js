@@ -104,7 +104,7 @@ const getServices = async (c) => {
     if (SVC.list && Date.now() - SVC.t < 300000) return { list: SVC.list }
     const { j, res } = await master(c, { action: 'services' }); if (res) return { res }
     if (!Array.isArray(j)) return { res: out(c, 502, 'upstream_bad_response', 'Daftar layanan tidak valid.') }
-    SVC = { t: Date.now(), list: j.map((s) => ({ id: String(s.service), name: String(s.name || ''), category: String(s.category || 'Lainnya'), rate: Number(s.rate) || 0, min: Number(s.min) || 1, max: Number(s.max) || 0, refill: !!s.refill })) }
+    SVC = { t: Date.now(), list: j.map((s) => ({ id: String(s.service), name: String(s.name || ''), category: String(s.category || 'Lainnya'), rate: Number(s.rate) || 0, min: Number(s.min) || 1, max: Number(s.max) || 0, refill: !!s.refill })).sort((a, b) => az(a.category, b.category) || az(a.name, b.name)) }
     return { list: SVC.list }
 }
 
@@ -268,13 +268,16 @@ const scCall = async (c, method, path, { query, body, idem } = {}) => {
 }
 const scOut = (c, r) => out(c, r.status, r.error, r.message)
 
+/* pembanding A-Z (tidak peka huruf besar/kecil, angka diurutkan sebagai angka) */
+const az = (a, b) => String(a).localeCompare(String(b), 'en', { numeric: true, sensitivity: 'base' })
+
 /* daftar negara & layanan jarang berubah: simpan di memori Worker */
 let OC = { t: 0, list: null }
 const getCountries = async (c) => {
     if (OC.list && Date.now() - OC.t < 3600000) return { list: OC.list }
     const r = await scCall(c, 'GET', '/catalog/countries'); if (r.j === undefined) return { res: scOut(c, r) }
     if (!Array.isArray(r.j)) return { res: out(c, 502, 'upstream_bad_response', 'Daftar negara tidak valid.') }
-    OC = { t: Date.now(), list: r.j.filter((x) => x.active !== false).map((x) => ({ id: Number(x.id), code: String(x.code || ''), name: String(x.name || ''), dial: String(x.dial_code || ''), emoji: String(x.emoji || '') })) }
+    OC = { t: Date.now(), list: r.j.filter((x) => x.active !== false).map((x) => ({ id: Number(x.id), code: String(x.code || ''), name: String(x.name || ''), dial: String(x.dial_code || ''), emoji: String(x.emoji || '') })).sort((a, b) => az(a.name, b.name)) }
     return { list: OC.list }
 }
 const OS = new Map()
@@ -283,7 +286,7 @@ const getServicesOtp = async (c, country) => {
     if (hit && Date.now() - hit.t < 600000) return { list: hit.list }
     const r = await scCall(c, 'GET', '/catalog/services', { query: { country_id: String(country) } }); if (r.j === undefined) return { res: scOut(c, r) }
     if (!Array.isArray(r.j)) return { res: out(c, 502, 'upstream_bad_response', 'Daftar layanan tidak valid.') }
-    const list = r.j.filter((x) => x.active !== false).map((x) => ({ id: Number(x.id), code: String(x.code || ''), name: String(x.name || '') }))
+    const list = r.j.filter((x) => x.active !== false).map((x) => ({ id: Number(x.id), code: String(x.code || ''), name: String(x.name || '') })).sort((a, b) => az(a.name, b.name))
     if (OS.size > 300) OS.clear()
     OS.set(country, { t: Date.now(), list })
     return { list }
