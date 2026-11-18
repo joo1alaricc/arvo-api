@@ -191,7 +191,7 @@ function showDep() {
   if (!d) { v.innerHTML = ''; return }
   $('#cd').hidden = false
   const ex = depExp(d)
-  v.innerHTML = `<div class="sm-qr">${ex ? '<p class="msg err" style="text-align:center">QR kedaluwarsa. Tutup lalu buat deposit baru.</p>' : d.qr ? `<img alt="QR pembayaran" src="${esc(d.qr)}">` : ''}
+  v.innerHTML = `<div class="sm-qr">${ex ? '<p class="msg err" style="text-align:center">QR kedaluwarsa. Tutup lalu buat deposit baru.</p>' : d.qr ? `<img alt="QR pembayaran" src="${esc(d.qr)}" onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'msg err',textContent:'QR gagal dimuat. Tutup lalu buat deposit baru, atau hubungi admin.'}))">` : ''}
     <div class="sm-rows"><div><span>Nominal</span><b>${rp(d.amount)}</b></div><div><span>Total bayar</span><b>${rp(d.total)}</b></div>${d.exp ? `<div><span>Berlaku s/d</span><b>${esc(fmtExp(d.exp))}</b></div>` : ''}<div><span>Status</span><b id="dst">${stChip(ex ? 'Kedaluwarsa' : 'Menunggu pembayaran')}</b></div></div>
     <div class="sm-row2" style="width:100%"><button class="btn ghost" id="bdc" type="button" style="flex:1">Cek status</button></div>
     <button class="btn ghost block" id="bdx" type="button" style="width:100%">${ex ? 'Tutup' : 'Batalkan deposit'}</button></div>`
