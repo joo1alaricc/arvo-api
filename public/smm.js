@@ -193,7 +193,7 @@ function showDep() {
   const ex = depExp(d)
   v.innerHTML = `<div class="sm-qr">${ex ? '<p class="msg err" style="text-align:center">QR kedaluwarsa. Tutup lalu buat deposit baru.</p>' : d.qr ? `<img alt="QR pembayaran" src="${esc(d.qr)}">` : ''}
     <div class="sm-rows"><div><span>Nominal</span><b>${rp(d.amount)}</b></div><div><span>Total bayar</span><b>${rp(d.total)}</b></div>${d.exp ? `<div><span>Berlaku s/d</span><b>${esc(fmtExp(d.exp))}</b></div>` : ''}<div><span>Status</span><b id="dst">${stChip(ex ? 'Kedaluwarsa' : 'Menunggu pembayaran')}</b></div></div>
-    <div class="sm-row2" style="width:100%">${!ex && d.pay ? `<a class="btn go" style="flex:1" href="${esc(d.pay)}" target="_blank" rel="noopener noreferrer">Buka halaman bayar</a>` : ''}<button class="btn ghost" id="bdc" type="button" style="flex:1">Cek status</button></div>
+    <div class="sm-row2" style="width:100%"><button class="btn ghost" id="bdc" type="button" style="flex:1">Cek status</button></div>
     <button class="btn ghost block" id="bdx" type="button" style="width:100%">${ex ? 'Tutup' : 'Batalkan deposit'}</button></div>`
   $('#bdc').onclick = () => pollDep(true)
   $('#bdx').onclick = () => closeDep(ex)
