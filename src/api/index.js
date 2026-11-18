@@ -32,6 +32,7 @@ import { bratRoute as makerBratRoute, bratHandler as makerBratHandler } from './
 import { bratAnimeRoute as makerBratanimeRoute, bratAnimeHandler as makerBratanimeHandler } from './maker/bratanime.js'
 import { bratHdRoute as makerBrathdRoute, bratHdHandler as makerBrathdHandler } from './maker/brathd.js'
 import { bratVidRoute as makerBratvidRoute, bratVidHandler as makerBratvidHandler } from './maker/bratvid.js'
+import { bratVidHdRoute as makerBratvidhdRoute, bratVidHdHandler as makerBratvidhdHandler } from './maker/bratvidhd.js'
 
 /* Tambah endpoint bawaan baru cukup di sini: otomatis terdaftar, masuk /docs, dan tampil di dashboard admin. */
 const BUILTIN = [
@@ -67,6 +68,7 @@ const BUILTIN = [
     [makerBratanimeRoute, makerBratanimeHandler],
     [makerBrathdRoute, makerBrathdHandler],
     [makerBratvidRoute, makerBratvidHandler],
+    [makerBratvidhdRoute, makerBratvidhdHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
