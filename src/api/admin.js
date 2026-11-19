@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { store, send, fail, currentUser } from '../utils/session.js'
 import { refreshBlocked } from '../utils/rateLimit.js'
-import { refreshServices } from '../utils/services.js'
+import { refreshServices, refreshUi } from '../utils/services.js'
 import { getOverrides, refreshOverrides } from '../utils/overrides.js'
 import { BUILTIN_PATHS, builtinInfo } from './index.js'
 import { ghStatus, ghTree, ghGet, ghPut, ghDelete, ghRuns, safePath, b64ToText, textToB64 } from '../utils/github.js'
@@ -31,7 +31,7 @@ admin.use('*', async (c, next) => {
 })
 const superOnly = async (c, next) => c.get('adminLevel') === 'super' ? next()
     : c.json({ error: 'Forbidden', message: 'Hanya super admin (owner) yang boleh melakukan ini.', status: 403 }, 403)
-for (const p of ['/endpoints', '/endpoints/*', '/builtin', '/builtin/*', '/admins', '/admins/*', '/github', '/github/*', '/deploy', '/deploy/*', '/code-endpoints', '/code-endpoints/*', '/media/hero', '/services']) admin.use(p, superOnly)
+for (const p of ['/endpoints', '/endpoints/*', '/builtin', '/builtin/*', '/admins', '/admins/*', '/github', '/github/*', '/deploy', '/deploy/*', '/code-endpoints', '/code-endpoints/*', '/media/hero', '/services', '/ui']) admin.use(p, superOnly)
 const who = (c) => `[Arvo:${c.get('adminName')}]`
 admin.get('/stats', async (c) => send(c, await store(c).adminStats(Date.now())))
 admin.get('/users', async (c) => send(c, await store(c).adminUsers(c.req.query('q'), Date.now())))
@@ -66,6 +66,10 @@ admin.delete('/plans/:id', async (c) => send(c, await store(c).adminDeletePlan(c
 /* ---- layanan aktif/nonaktif: smm, otp, am (hanya super admin) ---- */
 admin.get('/services', async (c) => c.json({ ok: true, ...(await store(c).servicesCfg()) }))
 admin.put('/services', async (c) => { const r = await store(c).adminSaveServices(await body(c)); refreshServices(); return send(c, r) })
+
+/* ---- skala tampilan situs (hanya super admin) ---- */
+admin.get('/ui', async (c) => c.json({ ok: true, ...(await store(c).uiCfg()) }))
+admin.put('/ui', async (c) => { const r = await store(c).adminSaveUi(await body(c)); refreshUi(); return send(c, r) })
 
 /* ---- konten dashboard (Contributor, S&K, Thanks To) ---- */
 admin.get('/site-content', async (c) => c.json({ ok: true, ...(await store(c).siteContent()) }))
