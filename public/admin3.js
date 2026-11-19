@@ -88,3 +88,60 @@ V.layanan = async function () {
     cb.disabled = false
   }))
 }
+
+/* Admin: skala ukuran tampilan seluruh situs (HP & desktop terpisah), dengan pratinjau langsung sebelum disimpan. */
+Object.assign(MENU, { tampilan: ['Tampilan', 'image'] })
+SUPER_ONLY.push('tampilan')
+V.tampilan = async function () {
+  const d = await api('/admin/ui')
+  const S = { d: d.scale, m: d.scale_mobile, dev: 'm', page: '/' }
+  const PAGES = [['/', 'Beranda'], ['/dashboard.html', 'Dashboard'], ['/playground.html', 'Playground']]
+  const slider = (k, t, sub) => `<div class="cx-r" style="align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:140px"><b>${t}</b><div class="sub" style="font-size:12px;margin:2px 0 0">${sub}</div></div>
+    <input type="range" min="70" max="130" step="5" data-sc="${k}" value="${S[k]}" style="flex:2;min-width:160px"><b data-scv="${k}" style="min-width:48px;text-align:right">${S[k]}%</b></div>`
+  out().innerHTML = `<h1>Tampilan</h1><p class="sub">Atur skala ukuran seluruh situs. 100% = ukuran asli, di bawah 100% semuanya lebih kecil, di atas 100% lebih besar. Geser slider dan lihat hasilnya di pratinjau, lalu klik Simpan supaya berlaku untuk semua pengunjung.</p>
+  <div class="panel"><h3>Skala ukuran web</h3>
+    ${slider('m', 'HP', 'Layar sentuh / ponsel')}${slider('d', 'Desktop', 'Laptop & komputer')}
+    <div class="row" style="margin-top:10px"><button class="btn go" id="sc-save">Simpan</button><button class="btn ghost" id="sc-reset">Kembalikan ke 100%</button></div></div>
+  <div class="panel"><h3>Pratinjau</h3>
+    <div class="acts" id="sc-dev" style="margin-bottom:8px"><button class="btn sm" data-dev="m">HP</button><button class="btn sm" data-dev="d">Desktop</button></div>
+    <div class="acts" id="sc-pg" style="margin-bottom:10px">${PAGES.map(([u, t]) => `<button class="btn sm" data-pg="${u}">${t}</button>`).join('')}</div>
+    <div id="sc-wrap" style="width:100%"><div id="sc-box" style="margin:0 auto;overflow:hidden;border:1px solid var(--line);border-radius:14px;background:var(--bg)"><iframe id="sc-fr" title="Pratinjau situs" style="border:0;display:block;background:var(--bg)"></iframe></div></div></div>`
+  const fr = $('#sc-fr'), box = $('#sc-box'), wrap = $('#sc-wrap')
+  const cur = () => (S.dev === 'm' ? S.m : S.d)
+  const post = () => { try { fr.contentWindow.postMessage({ arvoScale: cur() }, location.origin) } catch {} }
+  const fit = () => {
+    const W = S.dev === 'm' ? 390 : 1180, H = S.dev === 'm' ? 760 : 720, k = Math.min(1, (wrap.clientWidth || W) / W)
+    fr.style.width = W + 'px'; fr.style.height = H + 'px'; fr.style.transform = `scale(${k})`; fr.style.transformOrigin = '0 0'
+    box.style.width = W * k + 'px'; box.style.height = H * k + 'px'
+  }
+  const marks = () => {
+    out().querySelectorAll('[data-dev]').forEach((b) => b.classList.toggle('go', b.dataset.dev === S.dev))
+    out().querySelectorAll('[data-pg]').forEach((b) => b.classList.toggle('go', b.dataset.pg === S.page))
+  }
+  const load = () => { fr.src = S.page }
+  fr.onload = post
+  out().querySelectorAll('[data-sc]').forEach((r) => (r.oninput = () => {
+    const k = r.dataset.sc; S[k] = +r.value; $(`[data-scv="${k}"]`).textContent = r.value + '%'
+    if (S.dev !== k) { S.dev = k; fit(); marks() }
+    post()
+  }))
+  $('#sc-dev').onclick = (e) => { const b = e.target.closest('[data-dev]'); if (!b) return; S.dev = b.dataset.dev; fit(); marks(); post() }
+  $('#sc-pg').onclick = (e) => { const b = e.target.closest('[data-pg]'); if (!b) return; S.page = b.dataset.pg; marks(); load() }
+  $('#sc-reset').onclick = () => {
+    S.d = S.m = 100
+    out().querySelectorAll('[data-sc]').forEach((r) => { r.value = 100; $(`[data-scv="${r.dataset.sc}"]`).textContent = '100%' })
+    post()
+  }
+  $('#sc-save').onclick = async (e) => {
+    const b = e.currentTarget; b.disabled = true
+    try {
+      const r = await put('/admin/ui', { scale: S.d, scale_mobile: S.m })
+      const cfg = { d: r.scale, m: r.scale_mobile }
+      try { localStorage.setItem('uiscale', JSON.stringify(cfg)) } catch {}
+      applyScale(cfg); toast('Skala tampilan disimpan')
+    } catch (er) { toast(er.message) }
+    b.disabled = false
+  }
+  addEventListener('resize', fit)
+  fit(); marks(); load()
+}
