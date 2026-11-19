@@ -10,7 +10,7 @@ const lim = () => (me.daily_limit === null ? 'Unlimited' : `Sisa ${n(me.remainin
 const DEF_BORDER = ['#f7d774', '#b8860b', '#fff1a8']
 const SILVER_NAVY = ['#0a2463', '#c9d1dc', '#1e3a8a', '#f1f4f8']
 /* warna cincin foto: free = Google, premium = silver & navy, vip = pilihan user */
-const ringCss = (c) => `conic-gradient(${[...c, c[0]].join(',')})`
+/* ringCss sudah didefinisikan di common.js; jangan dideklarasikan ulang (const ganda = SyntaxError, halaman macet di "Memuat…") */
 /* free: empat warna Google, potongan tegas (tanpa gradasi) */
 const GOOGLE_RING = 'conic-gradient(#4285f4 0 25%,#ea4335 0 50%,#fbbc05 0 75%,#34a853 0 100%)'
 const ringStyle = () => (me.role === 'vip' ? ringCss(me.border_colors && me.border_colors.length ? me.border_colors : DEF_BORDER) : me.role === 'premium' ? ringCss(SILVER_NAVY) : GOOGLE_RING)
