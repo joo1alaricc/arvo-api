@@ -1,3 +1,5 @@
+/* Tandai tab ini sudah pernah membuka situs, dipakai beranda (index.html) untuk tahu navigasi dari halaman lain di situs tanpa bergantung pada document.referrer. */
+try { sessionStorage.setItem('arvo_nav', '1') } catch {}
 const $ = (s, r = document) => r.querySelector(s)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 const rp = (n) => 'Rp' + Number(n).toLocaleString('id-ID')
@@ -87,6 +89,7 @@ Object.assign(NI, {
   bars: '<path d="M4 20v-6M10 20V9M16 20V4M22 20H2"/>',
   star: '<path d="m12 2.5 2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z"/>',
   palette: '<circle cx="12" cy="12" r="10"/><circle cx="7.5" cy="11" r="1" fill="currentColor"/><circle cx="10.5" cy="7" r="1" fill="currentColor"/><circle cx="15.5" cy="7.5" r="1" fill="currentColor"/><path d="M12 22a2.5 2.5 0 0 1-.6-4.9c1-.3 1.6-1.2 1.4-2.1-.2-1 .6-2 1.7-2H18a4 4 0 0 0 4-4"/>',
+  copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
 })
 const ni = (n) => `<svg viewBox="0 0 24 24" aria-hidden="true">${NI[n]}</svg>`
 const DR_GROUPS = [   /* [judul grup, ikon, [[href, label, ikon], ...]] */
