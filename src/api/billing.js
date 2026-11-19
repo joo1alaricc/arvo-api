@@ -26,11 +26,12 @@ billing.get('/whoami', async (c) => {
 })
 
 /* Dipanggil pembaca mutasi/notifikasi pembayaran: POST {amount} + Bearer PAYMENT_WEBHOOK_SECRET */
-billing.post('/webhook', async (c) => {
+export const paymentWebhook = async (c) => {
     const secret = c.env.PAYMENT_WEBHOOK_SECRET
     if (!secret || c.req.header('authorization') !== `Bearer ${secret}`) return c.json({ error: 'Unauthorized', status: 401 }, 401)
     return send(c, await store(c).confirmByAmount(Number((await body(c)).amount), Date.now()))
-})
+}
+billing.post('/webhook', paymentWebhook)
 
 /* Beli paket: semua akun (member, premium, vip) boleh, wajib login. */
 billing.post('/orders', requireUser, async (c) => {
@@ -47,8 +48,8 @@ billing.post('/orders/:id/cancel', requireUser, async (c) =>
 /* Callback BTZPay (POST ke callback_url saat status transaksi berubah). Dijaga token di URL (BTZPAY_CALLBACK_TOKEN).
  * Isi body TIDAK dipercaya: dipakai hanya untuk tahu transaksi mana; status asli diambil ulang dari BTZPay sebelum saldo dikredit.
  * Selalu balas {success:true} untuk transaksi tak dikenal (mis. uji Sandbox) supaya BTZPay tidak mengulang terus. */
-billing.post('/btzpay/callback', async (c) => {
-    if (!tokenOk(c.env, c.req.query('t'))) return c.json({ success: false, message: 'Unauthorized' }, 401)
+export const btzCallback = async (c) => {
+    if (!tokenOk(c.env, c.req.query('t') || c.req.header('x-callback-token'))) return c.json({ success: false, message: 'Unauthorized' }, 401)
     const b = await body(c), id = String(b.pay_id || b.raw?.data?.transactionId || '').trim()
     let matched = false, result = null
     if (/^[\w\-]{3,80}$/.test(id)) {
@@ -60,4 +61,5 @@ billing.post('/btzpay/callback', async (c) => {
     }
     await store(c).setBtzCb({ at: Date.now(), pay_id: id.slice(0, 80), status: String(b.status || '').slice(0, 20), matched, result: result && String(result).slice(0, 120) }).catch(() => {})
     return c.json({ success: true })
-})
+}
+billing.post('/btzpay/callback', btzCallback)
