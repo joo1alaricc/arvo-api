@@ -15,7 +15,7 @@ import { dynamicHandler, mergeSpec } from './api/dynamic.js'
 import { BUILTIN_PATHS, builtinInfo } from './api/index.js'
 import { store, currentUser } from './utils/session.js'
 import { getOverrides } from './utils/overrides.js'
-import { services } from './utils/services.js'
+import { services, uiCfg } from './utils/services.js'
 
 const createApp = () => {
     const app = new OpenAPIHono()
@@ -38,6 +38,8 @@ const createApp = () => {
     app.route('/api/admin', admin)
     app.route('/api/tools', tools)
     /* Status layanan (publik) untuk menyembunyikan menu layanan yang dimatikan admin. */
+    /* Skala tampilan (publik): diatur admin di Dashboard Admin > Tampilan. */
+    app.get('/api/ui', async (c) => { c.header('Cache-Control', 'no-store'); return c.json({ ok: true, ...(await uiCfg(c)) }) })
     app.get('/api/services', async (c) => { c.header('Cache-Control', 'no-store'); return c.json(await services(c)) })
 
     /* Halaman /smm, /otp, /am: kalau layanannya dinonaktifkan admin, tampil 404. (wrangler.toml: run_worker_first memastikan Worker yang menjawab, bukan aset statis.) */
