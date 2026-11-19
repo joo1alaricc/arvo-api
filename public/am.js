@@ -10,10 +10,10 @@ const loadJob = () => { try { const j = JSON.parse(localStorage.getItem(KEY) || 
 const saveJob = (j) => { try { j ? localStorage.setItem(KEY, JSON.stringify(j)) : localStorage.removeItem(KEY) } catch {} }
 const note = (e, t, bad) => { e.textContent = t; e.className = 'msg' + (bad ? ' err' : ''); e.style.cssText = bad || !t ? '' : okc }
 
-const locked = (user) => {
+const locked = (user, requiredName = 'Premium 1') => {
   el.innerHTML = `<h1>Aktivasi AM</h1><p class="sub">Aktivasi premium Alight Motion lewat magic link.</p>
   <div class="card"><div class="card-b">
-    <p style="margin:0 0 6px;font-weight:700">Khusus Premium 1 ke atas</p>
+    <p style="margin:0 0 6px;font-weight:700">Khusus ${esc(requiredName)} ke atas.</p>
     <p class="sub" style="margin:0 0 12px">${user.expired ? 'Paketmu sudah berakhir. Perpanjang' : 'Upgrade paketmu'} untuk memakai fitur ini.</p>
     <a class="btn" href="/#paket">Lihat paket</a>
   </div></div>`
@@ -61,8 +61,17 @@ const render = () => {
   }
 }
 
-ready.then(({ user, who }) => {
+Promise.all([
+  api('/auth/me').catch((error) => ({ __error: error })),
+  api('/billing/whoami').catch(() => ({ is_admin: false })),
+  api('/billing/plans').catch(() => ({ plans: [] })),
+]).then(([user, who, catalog]) => {
+  if (user?.__error) {
+    if (user.__error.status === 401) return (location.href = '/login.html?next=/am')
+    el.innerHTML = `<p class="msg err">${esc(user.__error.message || 'Gagal memuat data akun.')}</p>`; return
+  }
   if (!user) return (location.href = '/login.html?next=/am')
-  const allowed = (user.active && (user.role === 'premium' || user.role === 'vip')) || (who && who.is_admin)
-  allowed ? render() : locked(user)
-})
+  const allowed = (user.active && ['premium1','premium2','premium3','vip1','vip2','vip3'].includes(user.plan)) || (who && who.is_admin)
+  const requiredName = catalog?.plans?.find((p) => p.id === 'premium1')?.name || 'Premium 1'
+  allowed ? render() : locked(user, requiredName)
+}).catch((e) => { el.innerHTML = `<p class="msg err">${esc(e?.message || 'Gagal memuat data akun.')}</p>` })
