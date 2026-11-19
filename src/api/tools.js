@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { store, requireUser } from '../utils/session.js'
+import { services } from '../utils/services.js'
 import { loadCfg, btzCreate, btzCancel, btzQr, httpsOnly, settleBtzDeposit } from '../utils/btzpay.js'
 
 /* Tools: fitur tambahan khusus member berbayar. Saat ini: Aktivasi AM (/api/tools/am/*).
@@ -12,6 +13,17 @@ const body = (c) => c.req.json().catch(() => ({}))
 const out = (c, status, error, message) => c.json({ ok: false, error, message, status }, status)
 
 tools.use('*', requireUser)
+
+/* Layanan yang dinonaktifkan admin: semua endpoint-nya ditolak (503), KECUALI yang dipakai menuntaskan transaksi yang sudah berjalan
+ * (cek/ batalkan deposit, status/ batal/ selesai OTP) supaya saldo atau refund user tidak tersangkut saat layanan dimatikan. */
+const gate = (key, label, allow = []) => async (c, next) => {
+    const sub = c.req.path.replace(/^\/api\/tools\/[a-z]+\//, '')
+    if (!allow.includes(sub) && !(await services(c))[key]) return out(c, 503, 'service_disabled', `${label} sedang dinonaktifkan.`)
+    await next()
+}
+tools.use('/smm/*', gate('smm', 'Layanan SMM', ['balance', 'orders', 'status', 'deposit-status', 'deposit-cancel', 'deposit-qr']))
+tools.use('/otp/*', gate('otp', 'Layanan OTP', ['orders', 'status', 'cancel', 'finish']))
+tools.use('/am/*', gate('am', 'Aktivasi AM'))
 
 /* Premium 1 ke atas (premium/vip yang masih aktif). Pengelola juga boleh. */
 tools.use('/am/*', async (c, next) => {
