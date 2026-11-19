@@ -22,9 +22,10 @@
 <link rel="stylesheet" href="site.css?v=a2e3a1e8"><link rel="stylesheet" href="motion.css?v=79935f3d">
 <script>
 /* Splash hanya saat web dibuka / di-refresh. Pindah dari halaman lain di dalam situs (mis. /playground -> beranda) dan tombol back tidak memicunya. */
-(function(){var h=document.documentElement;try{h.dataset.theme=localStorage.getItem('theme')||'dark'}catch(e){}var n=performance.getEntriesByType&&performance.getEntriesByType('navigation')[0],t=n&&n.type,same=false;
-try{same=!!document.referrer&&new URL(document.referrer).origin===location.origin}catch(e){}
-var fresh=t==='reload'||(t!=='back_forward'&&!same);window.__fresh=fresh;
+(function(){var h=document.documentElement;try{h.dataset.theme=localStorage.getItem('theme')||'dark'}catch(e){}var n=performance.getEntriesByType&&performance.getEntriesByType('navigation')[0],t=n&&n.type,visited=false;
+/* document.referrer tidak dipakai lagi: kosong/hilang di banyak in-app browser & mode hemat data, sehingga navigasi dalam situs (mis. /am -> /) salah terbaca sebagai kunjungan baru. */
+try{visited=sessionStorage.getItem('arvo_nav')==='1'}catch(e){}
+var fresh=t==='reload'||(t!=='back_forward'&&!visited);window.__fresh=fresh;
 if(fresh&&!matchMedia('(prefers-reduced-motion:reduce)').matches){h.classList.add('splash-on');setTimeout(function(){h.classList.remove('splash-on')},9000)}else{h.classList.add('no-splash')}})();
 </script>
 <style id="splash-css">
@@ -120,7 +121,7 @@ html[data-theme=light] .sp-fillbar{background:linear-gradient(90deg,#4350d8,#b04
 
 
 <dialog id="pay"><div id="paybody"></div><button class="btn ghost" id="payclose">Tutup</button></dialog>
-<script src="common.js?v=630858de"></script>
+<script src="common.js?v=cp2"></script>
 <script src="splash.js?v=a55d8701"></script>
 <script src="site.js?v=d9144639"></script>
 <script src="welcome.js?v=0b4948b4"></script>
