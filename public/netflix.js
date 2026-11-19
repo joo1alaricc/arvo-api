@@ -6,7 +6,7 @@ document.head.append(css)
 const I = (n) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${NI[n] || ''}</svg>`
 const note = (e, t, bad) => { e.textContent = t; e.className = 'msg' + (bad ? ' err' : ''); e.style.color = bad ? 'var(--r)' : t ? 'var(--g)' : '' }
 const safe = (v) => v == null || v === '' ? '—' : esc(String(v))
-const copyToken = async (v, b) => { try { await navigator.clipboard.writeText(v); const old = b.textContent; b.textContent = 'Tersalin'; setTimeout(() => b.textContent = old, 1200) } catch { note($('#result-msg'), 'Browser tidak mengizinkan akses clipboard.', true) } }
+const copyToken = async (v, b) => { try { await navigator.clipboard.writeText(v); const old = b.innerHTML; b.innerHTML = b.classList.contains('link-copy') ? I('check') : 'Tersalin'; setTimeout(() => b.innerHTML = old, 1200) } catch { note($('#result-msg'), 'Browser tidak mengizinkan akses clipboard.', true) } }
 const render = () => {
   el.innerHTML = `<h1>Netflix Token Generator</h1><p class="sub">Buat token Netflix untuk akun yang kamu miliki. Cookie bersifat opsional, kosongkan untuk mode auto-generate.</p>
   <div class="card"><div class="card-h">${I('key')}<span>Konfigurasi Token</span></div><div class="card-b">
@@ -32,11 +32,12 @@ const show = (r) => {
     <div><label style="font-size:12px;font-weight:700">Netflix Token</label><textarea class="token mono" id="token" readonly spellcheck="false"></textarea><button class="btn" id="copy-token" style="margin-top:7px">Salin Token</button></div>
     <div class="data">${rows.map(([k,v])=>`<div class="datum"><small>${k}</small><strong>${safe(v)}</strong></div>`).join('')}</div>
     <div class="datum"><small>Kedaluwarsa</small><strong>${safe(r.expiry ? new Date(r.expiry).toLocaleString('id-ID') : null)}</strong></div>
-    <div><label style="font-size:12px;font-weight:700">Tautan perangkat</label><div class="links" style="margin-top:7px">${[['PC',links.pc],['Android',links.android],['Android Intent',links.androidIntent],['TV',links.tv]].filter(x=>x[1]).map(([n,u])=>`<a class="btn" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${n}</a>`).join('')}</div></div>
+    <div><label style="font-size:12px;font-weight:700">Tautan perangkat</label><div class="links" style="margin-top:7px">${[['PC',links.pc],['Android',links.android],['Android Intent',links.androidIntent],['TV',links.tv]].filter(x=>x[1]).map(([n,u],i)=>`<a class="btn" href="${esc(u)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px">${n}</a><button type="button" class="btn link-copy" data-u="${esc(u)}" title="Salin tautan ${esc(n)}" style="padding:9px 10px">${I('copy')}</button>`).join('')}</div></div>
     <p class="muted" style="margin:0">Token dan tautan ini dapat memberikan akses ke sesi akun. Simpan secara pribadi. Data harga tidak ditampilkan.</p>
   </div></div>`
   $('#token').value = r.token || ''
   $('#copy-token').onclick = () => copyToken(r.token || '', $('#copy-token'))
+  $('#result').querySelectorAll('.link-copy').forEach((b) => { b.onclick = () => copyToken(b.dataset.u || '', b) })
 }
 const locked = (user, requiredName = 'Premium 2') => {
   const current = user?.plan_name || 'Free User'
