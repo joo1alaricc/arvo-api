@@ -527,3 +527,53 @@ tools.post('/otp/reactivate', async (c) => {
         phone: String(x.phone_number || o.phone), cost, status: String(x.status || 'ACTIVE').toUpperCase(), expires_at: ms(x.expires_at), now: Date.now() })
     return c.json({ ok: true, order: otpView(await st.otpGet(String(x.id), uid)), balance: await st.smmBal(uid) })
 })
+
+/* Netflix Token Generator. VAMX_API_KEY hanya disimpan sebagai Cloudflare Worker Secret. */
+tools.post('/netflix-token/generate', async (c) => {
+    const b = await body(c)
+    const cookie = String(b.cookie || '').trim()
+    if (cookie.length > 12000) return out(c, 400, 'bad_cookie', 'Session cookie terlalu panjang.')
+    const key = c.env.VAMX_API_KEY
+    if (!key) return out(c, 503, 'not_configured', 'Layanan belum dikonfigurasi (VAMX_API_KEY belum diisi).')
+    let r
+    try {
+        r = await fetch('https://vamxapi.my.id/api/v1/tools/netflix-token', {
+            method: 'POST',
+            headers: { 'x-api-key': key, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cookie }),
+            signal: AbortSignal.timeout(25000),
+        })
+    } catch (e) {
+        return out(c, 504, 'upstream_unreachable', e.name === 'TimeoutError' ? 'Layanan Netflix Token tidak merespons (timeout).' : 'Tidak bisa menghubungi layanan Netflix Token.')
+    }
+    const j = await r.json().catch(() => null)
+    if (!j || typeof j !== 'object') return out(c, 502, 'upstream_bad_response', 'Respons layanan Netflix Token tidak valid.')
+    if (!r.ok || j.status !== true || !j.result?.token) {
+        if (r.status === 401 || r.status === 403) {
+            console.error('[tools/netflix-token] upstream menolak API key', r.status)
+            return out(c, 502, 'upstream_auth', 'Layanan sedang bermasalah. Hubungi admin.')
+        }
+        return out(c, r.status >= 400 && r.status < 500 ? 400 : 502, 'upstream_error', String(j.code || 'Gagal membuat token.').slice(0, 300))
+    }
+    const x = j.result
+    return c.json({
+        ok: true,
+        code: j.code || 'Netflix token generated successfully',
+        result: {
+            token: x.token,
+            expiry: x.expiry || null,
+            expiresTimestamp: x.expiresTimestamp || null,
+            links: x.links || {},
+            mode: x.mode || 'auto',
+            generatedAt: x.generatedAt || new Date().toISOString(),
+            accountData: x.accountData ? {
+                plan: x.accountData.plan || null,
+                email: x.accountData.email || null,
+                country: x.accountData.country || null,
+                deviceLimit: x.accountData.deviceLimit || null,
+                profiles: x.accountData.profiles || null,
+                paymentMethod: x.accountData.paymentMethod || null,
+            } : null,
+        },
+    })
+})
