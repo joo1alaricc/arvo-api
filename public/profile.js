@@ -1,4 +1,5 @@
-let me, who = { ip: '-' }, tab = 'events', showKey = false
+const TAB_IDS = ['events', 'settings', 'manage']
+let me, who = { ip: '-' }, tab = TAB_IDS.find((x) => '#' + x === location.hash) || 'events', showKey = false
 const el = $('#app')
 const maskKey = (k) => (k.length > 8 ? k.slice(0, 5) + '•'.repeat(Math.min(14, k.length - 7)) + k.slice(-2) : '•'.repeat(k.length))
 const muted = (t) => `<span style="color:var(--mut)">${t}</span>`
@@ -350,3 +351,6 @@ el.onchange = (e) => { if (e.target.id === 'pf') pickPhoto(e.target.files[0]) }
 
 ready.then(({ user, who: w }) => { who = w; return user ? render() : (location.href = '/login.html?next=/profile.html') })
   .catch((e) => { el.innerHTML = `<p class="err" style="padding:20px">Gagal memuat profil: ${esc(e.message || e)}. <a href="" style="color:var(--blue)">Coba lagi</a></p>` })
+
+/* tautan dari menu profil (#settings, #manage) pindah tab walau halaman profil sudah terbuka */
+addEventListener('hashchange', () => { const t = TAB_IDS.find((x) => '#' + x === location.hash); if (t) document.querySelector(`[data-tab="${t}"]`)?.click() })
