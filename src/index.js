@@ -6,7 +6,7 @@ import { secureHeaders } from 'hono/secure-headers'
 import { setupRoutes } from './api/index.js'
 import { logApiRequest } from './utils/logApiRequest.js'
 import { rateLimiter } from './utils/rateLimit.js'
-import { billing } from './api/billing.js'
+import { billing, paymentWebhook, btzCallback } from './api/billing.js'
 import { auth } from './api/auth.js'
 import { admin } from './api/admin.js'
 import { tools } from './api/tools.js'
@@ -30,6 +30,20 @@ const createApp = () => {
     app.route('/api/auth', auth)
     app.route('/api/admin', admin)
     app.route('/api/tools', tools)
+    /* Halaman /callback dan /webhook untuk kebutuhan API (payment gateway & pembaca notifikasi pembayaran).
+     *  POST /callback?t=BTZPAY_CALLBACK_TOKEN   : callback BTZPay (sama dengan /api/billing/btzpay/callback)
+     *  POST /webhook  + Bearer PAYMENT_WEBHOOK_SECRET {amount} : konfirmasi pembayaran (sama dengan /api/billing/webhook)
+     *  GET/HEAD: balasan 200 berisi info singkat, supaya validasi URL dari penyedia pembayaran lolos. */
+    const hook = (name, method, handler) => app.all(name, (c) => {
+        const m = c.req.method
+        if (m === 'POST') return handler(c)
+        if (m === 'GET' || m === 'HEAD') { c.header('Cache-Control', 'no-store'); return c.json({ status: 200, endpoint: name, accepts: method, message: `Endpoint ${name} aktif.` }) }
+        c.header('Allow', 'GET, HEAD, POST')
+        return c.json({ error: 'Method Not Allowed', message: `Gunakan ${method} untuk ${name}.`, status: 405 }, 405)
+    })
+    hook('/callback', 'POST', btzCallback)
+    hook('/webhook', 'POST', paymentWebhook)
+
     setupRoutes(app)
 
     /* Katalog untuk Playground: hanya info yang perlu untuk memanggil endpoint (path, method, input, akses). Tidak ada skema respons,
