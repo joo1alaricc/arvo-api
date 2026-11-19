@@ -5,7 +5,7 @@ import { refreshServices } from '../utils/services.js'
 import { getOverrides, refreshOverrides } from '../utils/overrides.js'
 import { BUILTIN_PATHS, builtinInfo } from './index.js'
 import { ghStatus, ghTree, ghGet, ghPut, ghDelete, ghRuns, safePath, b64ToText, textToB64 } from '../utils/github.js'
-import { analyze, build, readBack, patchIndex, exportNames, slugFrom, EXAMPLE, STRUCTURE_HELP } from '../utils/endpointGen.js'
+import { analyze, build, readBack, patchIndex, syncIndex, exportPairs, SYNC_FILE_RE, exportNames, slugFrom, EXAMPLE, STRUCTURE_HELP } from '../utils/endpointGen.js'
 import { makeQris, qrisInfo } from '../utils/payment.js'
 import { loadCfg, cleanCfg, secretsStatus, btzCreate, btzStatus, btzCancel, btzSimulate, btzQr, httpsOnly, base } from '../utils/btzpay.js'
 
@@ -280,6 +280,23 @@ admin.post('/code-endpoints', async (c) => {
     if (!pt.ok) return send(c, fail(422, 'index_unknown', `File endpoint sudah dibuat, tapi pendaftaran otomatis gagal: ${pt.message}`))
     if (pt.changed) { const w2 = await ghPut(c.env, 'src/api/index.js', textToB64(pt.src), `${who(c)} daftarkan ${r.endpoint.category}/${r.endpoint.slug}`); if (w2.ok === false) return send(c, w2); steps.push({ path: 'src/api/index.js', ...w2 }) }
     return c.json({ ok: true, path: `/api/${r.endpoint.category}/${r.endpoint.slug}`, steps, notes: r.notes })
+})
+/* Sinkronisasi src/api/index.js dengan file yang benar-benar ada di src/api/<kategori>/. { apply: false } = hanya cek (dry-run); { apply: true } = commit satu kali. */
+admin.post('/code-endpoints/sync', async (c) => {
+    const apply = (await body(c)).apply === true
+    const tree = await ghTree(c.env); if (tree.ok === false) return send(c, tree)
+    const idx = await ghGet(c.env, 'src/api/index.js'); if (idx.ok === false) return send(c, idx)
+    if (!idx.exists) return send(c, fail(404, 'no_index', 'src/api/index.js tidak ada di repo.'))
+    const present = Object.keys(tree.files).map((p) => p.match(SYNC_FILE_RE)).filter(Boolean).map((m) => `${m[1]}/${m[2]}.js`)
+    const read = async (file) => { const g = await ghGet(c.env, 'src/api/' + file); return g.ok === false || !g.exists ? null : exportPairs(b64ToText(g.content)) }
+    const r = await syncIndex(b64ToText(idx.content), present, read, { canRemove: !tree.truncated })
+    if (!r.ok) return send(c, fail(422, 'index_unknown', r.message))
+    const info = { total: present.length, added: r.added, removed: r.removed, repaired: r.repaired, skipped: r.skipped, truncated: !!tree.truncated }
+    if (!apply || !r.changed) return c.json({ ok: true, applied: false, changed: r.changed, ...info })
+    const n = r.added.length + r.removed.length + r.repaired.length
+    const w = await ghPut(c.env, 'src/api/index.js', textToB64(r.src), `${who(c)} sinkronisasi endpoint src/api/index.js (${n} perubahan)`)
+    if (w.ok === false) return send(c, w)
+    return c.json({ ok: true, applied: true, changed: true, commit: w.commit || null, ...info })
 })
 admin.delete('/code-endpoints/:category/:slug', async (c) => {
     const n = exportNames(c.req.param('category'), c.req.param('slug'))
