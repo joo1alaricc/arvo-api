@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="site.css?v=147e4455"><link rel="stylesheet" href="motion.css?v=091a8e42">
 <script>
 /* Splash hanya saat web dibuka / di-refresh. Pindah dari halaman lain di dalam situs (mis. /playground -> beranda) dan tombol back tidak memicunya. */
-(function(){var h=document.documentElement,n=performance.getEntriesByType&&performance.getEntriesByType('navigation')[0],t=n&&n.type,same=false;
+(function(){var h=document.documentElement;try{h.dataset.theme=localStorage.getItem('theme')||'dark'}catch(e){}var n=performance.getEntriesByType&&performance.getEntriesByType('navigation')[0],t=n&&n.type,same=false;
 try{same=!!document.referrer&&new URL(document.referrer).origin===location.origin}catch(e){}
 var fresh=t==='reload'||(t!=='back_forward'&&!same);window.__fresh=fresh;
 if(fresh&&!matchMedia('(prefers-reduced-motion:reduce)').matches){h.classList.add('splash-on');setTimeout(function(){h.classList.remove('splash-on')},9000)}else{h.classList.add('no-splash')}})();
@@ -34,6 +34,17 @@ html.no-splash #splash{display:none}
 .sp-top b{font-weight:600;font-variant-numeric:tabular-nums;color:#c9d0e0}
 .sp-track{height:4px;border-radius:9px;background:#1a1f2d;overflow:hidden}
 .sp-fillbar{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,#7c8cff,#e16bff);box-shadow:0 0 14px rgba(124,140,255,.75)}
+/* tema terang: layar pembuka ikut tema (tema dibaca dari localStorage oleh skrip di <head>) */
+html[data-theme=light] #splash{background:#f4f6fb;color:#141821}
+html[data-theme=light] #splash::before{background:radial-gradient(60% 40% at 50% 46%,rgba(67,80,216,.13),transparent 70%),linear-gradient(rgba(20,24,33,.06) 1px,transparent 1px) 0 0/44px 44px,linear-gradient(90deg,rgba(20,24,33,.06) 1px,transparent 1px) 0 0/44px 44px}
+html[data-theme=light] .sp-logo.done{filter:drop-shadow(0 0 18px rgba(67,80,216,.4))}
+html[data-theme=light] .sp-ghost{stroke:#c5cbdb}
+html[data-theme=light] .sp-line{stroke:#141821;filter:drop-shadow(0 0 2px rgba(67,80,216,.5)) drop-shadow(0 0 6px rgba(67,80,216,.55))}
+html[data-theme=light] #spg stop:first-child{stop-color:#4350d8}html[data-theme=light] #spg stop:last-child{stop-color:#8b5cf6}
+html[data-theme=light] .sp-dot{fill:#4350d8;filter:drop-shadow(0 0 3px #4350d8) drop-shadow(0 0 8px rgba(67,80,216,.7))}
+html[data-theme=light] .sp-top{color:#5c6678}html[data-theme=light] .sp-top b{color:#141821}
+html[data-theme=light] .sp-track{background:#e0e4ee}
+html[data-theme=light] .sp-fillbar{background:linear-gradient(90deg,#4350d8,#b04cff);box-shadow:0 0 12px rgba(67,80,216,.45)}
 </style>
 </head>
 <body>
@@ -96,9 +107,9 @@ html.no-splash #splash{display:none}
 
 
 <dialog id="pay"><div id="paybody"></div><button class="btn ghost" id="payclose">Tutup</button></dialog>
-<script src="common.js?v=4e287a8d"></script>
+<script src="common.js?v=66c6dae5"></script>
 <script src="splash.js?v=a55d8701"></script>
-<script src="site.js?v=e61a8e6a"></script>
+<script src="site.js?v=dcdb3585"></script>
 <script src="welcome.js?v=0b4948b4"></script>
 </body>
 </html>
