@@ -67,7 +67,7 @@ export const mergeSpec = (doc, endpoints, isOwner) => {
         const op = {
             tags: [e.category], summary: e.name, description: e.description || undefined,
             'x-status': e.status === 'offline' ? 'OFFLINE' : 'ONLINE', 'x-access': e.access, 'x-premium': e.access !== 'free',
-            parameters: q.map((i) => ({ name: i.name, in: 'query', required: i.required, example: i.example || undefined, schema: { type: 'string' } })),
+            parameters: q.map((i) => ({ name: i.name, in: 'query', required: i.required, example: i.example || undefined, schema: { type: 'string', ...(i.example ? { example: i.example } : {}) } })),
             responses: { 200: { description: 'OK' } },
         }
         if (b.length) op.requestBody = { content: { 'application/json': { schema: { type: 'object', properties: Object.fromEntries(b.map((i) => [i.name, { type: 'string', example: i.example || undefined }])), required: b.filter((i) => i.required).map((i) => i.name) } } } }
