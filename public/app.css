@@ -251,3 +251,7 @@ svg.i.gi{stroke:none}
 .tnc-pw{flex:1;min-width:0}
 .tnc-x>.tnc-c>.tnc-ci{padding-top:2px}
 @media(prefers-reduced-motion:reduce){.tnc-c,.tnc-cv{transition:none}}
+
+/* ---------- ikon sub bab: monokrom ikut tema (putih di gelap, hitam di terang), tanpa warna biru/hijau/kuning/merah ---------- */
+.ico,.ico.green,.ico.amber,.ico.red,.ico.mut,.tile .ico,.stat .ico,.ck-id .ico{color:var(--tx);background:color-mix(in srgb,var(--tx) 9%,transparent)}
+.card-h svg{color:var(--tx)}
