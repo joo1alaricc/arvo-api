@@ -139,16 +139,18 @@ input,textarea,select{transition:border-color .3s var(--ease),box-shadow .45s va
 
 
 /* =====================================================================
-   Sentuhan: cincin + kilau lembut muncul di titik layar yang disentuh / diklik
+   Sentuhan: letupan petasan kecil (sinar + percikan) di titik layar yang disentuh / diklik
    ===================================================================== */
 .tap-layer{position:fixed;inset:0;z-index:2147483000;pointer-events:none;overflow:hidden}
 .tap{position:absolute;width:0;height:0;pointer-events:none}
-.tap::before,.tap::after{content:"";position:absolute;border-radius:50%;left:0;top:0;translate:-50% -50%;will-change:transform,opacity}
-.tap::before{width:64px;height:64px;background:radial-gradient(circle,color-mix(in srgb,var(--ac) 55%,transparent) 0,color-mix(in srgb,var(--ac) 18%,transparent) 45%,transparent 70%);animation:tapGlow .55s var(--ease-out) both}
-.tap::after{width:46px;height:46px;border:2px solid color-mix(in srgb,var(--ac) 80%,#fff);animation:tapRing .7s var(--ease-out) both}
+.tap::before{content:"";position:absolute;left:0;top:0;width:34px;height:34px;border-radius:50%;translate:-50% -50%;background:radial-gradient(circle,#fff 0,color-mix(in srgb,var(--ac) 55%,transparent) 35%,transparent 70%);animation:tapFlash .42s var(--ease-out) both;will-change:transform,opacity}
+.tap b{position:absolute;left:0;top:0;pointer-events:none;opacity:0;will-change:transform,opacity}
+.tap b.r{width:var(--l,11px);height:2px;margin-top:-1px;border-radius:2px;background:var(--c,#fff);transform-origin:0 50%;animation:tapRay .55s cubic-bezier(.12,.7,.3,1) var(--dl,0s) both}
+.tap b.d{width:var(--z,3px);height:var(--z,3px);margin:calc(var(--z,3px) / -2) 0 0 calc(var(--z,3px) / -2);border-radius:50%;background:var(--c,#fff);animation:tapDot .7s cubic-bezier(.12,.7,.3,1) var(--dl,0s) both}
 dialog>.tap{position:absolute}
-@keyframes tapGlow{from{transform:scale(.25);opacity:.95}to{transform:scale(1.25);opacity:0}}
-@keyframes tapRing{from{transform:scale(.3);opacity:.9}to{transform:scale(1.9);opacity:0}}
+@keyframes tapFlash{from{transform:scale(.2);opacity:1}to{transform:scale(1.5);opacity:0}}
+@keyframes tapRay{0%{transform:rotate(var(--a)) translateX(var(--s)) scaleX(.35);opacity:1}35%{transform:rotate(var(--a)) translateX(calc(var(--s) + (var(--d) - var(--s)) * .6)) scaleX(1);opacity:1}100%{transform:rotate(var(--a)) translateX(var(--d)) scaleX(.2);opacity:0}}
+@keyframes tapDot{0%{transform:rotate(var(--a)) translateX(var(--s)) scale(1);opacity:1}100%{transform:rotate(var(--a)) translateX(var(--d)) scale(.15);opacity:0}}
 @media(prefers-reduced-motion:reduce){.tap-layer{display:none}}
 
 
