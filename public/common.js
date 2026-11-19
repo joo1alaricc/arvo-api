@@ -243,6 +243,19 @@ document.querySelectorAll('.dr-g').forEach((g) => {
 })
 drActive()
 
+/* layanan yang dimatikan admin (Admin > Layanan) disembunyikan dari menu atas & sidebar. Status terakhir disimpan supaya tidak berkedip. */
+const SVC_PATH = { '/smm': 'smm', '/otp': 'otp', '/am': 'am' }
+const applySvc = (cfg) => {
+  if (!cfg) return
+  document.querySelectorAll('.links a, #drnav a.dr-it').forEach((a) => {
+    const k = SVC_PATH[drNorm(new URL(a.href).pathname)]
+    if (k) a.style.display = cfg[k] === false ? 'none' : ''
+  })
+  document.querySelectorAll('.dr-g').forEach((g) => { const its = [...g.querySelectorAll('.dr-it')]; g.style.display = its.length && its.every((a) => a.style.display === 'none') ? 'none' : '' })
+}
+try { applySvc(JSON.parse(localStorage.getItem('svc'))) } catch {}
+api('/services').then((c) => { try { localStorage.setItem('svc', JSON.stringify(c)) } catch {} ; applySvc(c) }).catch(() => {})
+
 const ready = Promise.all([
   api('/auth/me').catch(() => null),
   api('/billing/whoami').catch(() => ({ ip: '-', is_owner: false })),
