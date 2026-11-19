@@ -20,6 +20,25 @@ import { spotifyRoute as downloaderSpotifyRoute, spotifyHandler as downloaderSpo
 import { twitterRoute as downloaderTwitterRoute, twitterHandler as downloaderTwitterHandler } from './downloader/twitter.js'
 import { claudeRoute as aiClaudeRoute, claudeHandler as aiClaudeHandler } from './ai/claude.js'
 import { copilotRoute as aiCopilotRoute, copilotHandler as aiCopilotHandler } from './ai/copilot.js'
+import { epsilonRoute as aiEpsilonRoute, epsilonHandler as aiEpsilonHandler } from './ai/epsilon.js'
+import { fluxRoute as aiFluxRoute, fluxHandler as aiFluxHandler } from './ai/flux.js'
+import { geminiRoute as aiGeminiRoute, geminiHandler as aiGeminiHandler } from './ai/gemini.js'
+import { jeevesRoute as aiJeevesRoute, jeevesHandler as aiJeevesHandler } from './ai/jeeves.js'
+import { monicaRoute as aiMonicaRoute, monicaHandler as aiMonicaHandler } from './ai/monica.js'
+import { muslimRoute as aiMuslimRoute, muslimHandler as aiMuslimHandler } from './ai/muslim.js'
+import { powerbrainRoute as aiPowerbrainRoute, powerbrainHandler as aiPowerbrainHandler } from './ai/powerbrain.js'
+import { publicRoute as aiPublicRoute, publicHandler as aiPublicHandler } from './ai/public.js'
+import { sologoRoute as aiSologoRoute, sologoHandler as aiSologoHandler } from './ai/sologo.js'
+import { attpRoute as makerAttpRoute, attpHandler as makerAttpHandler } from './maker/attp.js'
+import { bratRoute as makerBratRoute, bratHandler as makerBratHandler } from './maker/brat.js'
+import { bratAnimeRoute as makerBratanimeRoute, bratAnimeHandler as makerBratanimeHandler } from './maker/bratanime.js'
+import { bratHdRoute as makerBrathdRoute, bratHdHandler as makerBrathdHandler } from './maker/brathd.js'
+import { bratVidRoute as makerBratvidRoute, bratVidHandler as makerBratvidHandler } from './maker/bratvid.js'
+import { bratVidHdRoute as makerBratvidhdRoute, bratVidHdHandler as makerBratvidhdHandler } from './maker/bratvidhd.js'
+import { codesnapRoute as makerCodesnapRoute, codesnapHandler as makerCodesnapHandler } from './maker/codesnap.js'
+import { iqcRoute as makerIpqcRoute, iqcHandler as makerIpqcHandler } from './maker/ipqc.js'
+import { iqcV2Route as makerIpqcv2Route, iqcV2Handler as makerIpqcv2Handler } from './maker/ipqcv2.js'
+import { quickchatRoute as makerQcRoute, quickchatHandler as makerQcHandler } from './maker/qc.js'
 
 /* Tambah endpoint bawaan baru cukup di sini: otomatis terdaftar, masuk /docs, dan tampil di dashboard admin. */
 const BUILTIN = [
@@ -41,6 +60,25 @@ const BUILTIN = [
     [downloaderTwitterRoute, downloaderTwitterHandler],
     [aiClaudeRoute, aiClaudeHandler],
     [aiCopilotRoute, aiCopilotHandler],
+    [aiEpsilonRoute, aiEpsilonHandler],
+    [aiFluxRoute, aiFluxHandler],
+    [aiGeminiRoute, aiGeminiHandler],
+    [aiJeevesRoute, aiJeevesHandler],
+    [aiMonicaRoute, aiMonicaHandler],
+    [aiMuslimRoute, aiMuslimHandler],
+    [aiPowerbrainRoute, aiPowerbrainHandler],
+    [aiPublicRoute, aiPublicHandler],
+    [aiSologoRoute, aiSologoHandler],
+    [makerAttpRoute, makerAttpHandler],
+    [makerBratRoute, makerBratHandler],
+    [makerBratanimeRoute, makerBratanimeHandler],
+    [makerBrathdRoute, makerBrathdHandler],
+    [makerBratvidRoute, makerBratvidHandler],
+    [makerBratvidhdRoute, makerBratvidhdHandler],
+    [makerCodesnapRoute, makerCodesnapHandler],
+    [makerIpqcRoute, makerIpqcHandler],
+    [makerIpqcv2Route, makerIpqcv2Handler],
+    [makerQcRoute, makerQcHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
