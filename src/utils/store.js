@@ -829,6 +829,18 @@ export class StoreDO extends DurableObject {
     getQrisStatic() { return this.setting('qris_static', null) }
     setQrisStatic(payload) { this.saveSetting('qris_static', payload); return { ok: true } }
 
+    /* ---------- skala tampilan situs (diatur admin): scale = desktop, scale_mobile = HP; 70-130 persen ---------- */
+    uiCfg() {
+        const d = this.setting('ui', null) || {}, n = (v) => { v = Number(v); return Number.isFinite(v) ? Math.min(130, Math.max(70, Math.round(v))) : 100 }
+        return { scale: n(d.scale), scale_mobile: n(d.scale_mobile) }
+    }
+    adminSaveUi(b) {
+        const cur = this.uiCfg(), n = (v, d) => { v = Number(v); return Number.isFinite(v) ? Math.min(130, Math.max(70, Math.round(v))) : d }
+        const v = { scale: n(b?.scale, cur.scale), scale_mobile: n(b?.scale_mobile, cur.scale_mobile) }
+        this.saveSetting('ui', v)
+        return { ok: true, ...v }
+    }
+
     /* ---------- layanan aktif/nonaktif (diatur admin): smm, otp, am ---------- */
     servicesCfg() { const d = this.setting('services', null) || {}; return { smm: d.smm !== false, otp: d.otp !== false, am: d.am !== false } }
     adminSaveServices(b) {
