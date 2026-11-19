@@ -310,15 +310,49 @@ V.endpoint = async function () {
 }
 async function codePanel(host) {
   const { files } = await api('/admin/code-endpoints')
-  host.innerHTML = `<div class="bar" style="margin-top:18px"><h2 style="margin:0">Endpoint kode (di GitHub)</h2></div>
+  host.innerHTML = `<div class="bar" style="margin-top:18px"><h2 style="margin:0">Endpoint kode (di GitHub)</h2><button class="btn ghost" id="csync" title="Cocokkan src/api/index.js dengan file di src/api/&lt;kategori&gt;/">Sinkronisasi endpoint</button></div>
     <p class="sub">Dibuat dari tombol <b>Tambah endpoint</b> di atas: kode JavaScript disimpan sebagai file di <span class="mono">src/api/&lt;kategori&gt;/&lt;slug&gt;.js</span>, didaftarkan otomatis, lalu di-deploy. Aktif setelah deploy selesai.</p>
     <div class="panel tw" style="padding:6px 10px"><table><tr><th>Fitur</th><th>Path</th><th>Akses</th><th>Status</th><th>Aksi</th></tr>${[...files].sort((a, b) => (a.category + '/' + a.slug).localeCompare(b.category + '/' + b.slug, 'en', { numeric: true, sensitivity: 'base' })).map((f) => { const b = BI['/api/' + f.category + '/' + f.slug]; return `<tr>
       <td><b>${esc(b ? b.name : f.slug)}</b></td><td class="mono" style="font-size:12px">${esc(b ? b.method + ' ' : '')}/api/${esc(f.category)}/${esc(f.slug)}</td>
       <td>${b ? accessBadge(b.access) : '–'}</td><td>${b ? '<span class="badge online">Live</span>' : '<span class="badge">Menunggu deploy</span>'}</td>
       <td><div class="acts">${b ? `<button class="btn go sm" data-ct="${esc(f.category)}/${esc(f.slug)}">Tes</button>` : ''}<button class="btn ghost sm" data-ce="${esc(f.category)}/${esc(f.slug)}">Edit</button><button class="btn ghost red sm" data-cx="${esc(f.category)}/${esc(f.slug)}">Hapus</button></div></td></tr>` }).join('') || '<tr><td colspan="5" class="sub">Belum ada endpoint kode buatan dashboard.</td></tr>'}</table></div>`
+  $('#csync', host).onclick = (ev) => syncEndpoints(ev.currentTarget)
   host.querySelectorAll('[data-ct]').forEach((b) => (b.onclick = () => epTest(BI['/api/' + b.dataset.ct])))
   host.querySelectorAll('[data-ce]').forEach((b) => (b.onclick = async () => { const [c, s] = b.dataset.ce.split('/'); try { const bi = BI['/api/' + c + '/' + s], f = await api(`/admin/code-endpoints/file?category=${c}&slug=${s}`); codeForm({ ...f, name: f.info?.name || bi?.name || '', category: c, slug: s, edit: true }) } catch (e) { toast(e.message) } }))
   host.querySelectorAll('[data-cx]').forEach((b) => (b.onclick = async () => { if (confirm(`Hapus endpoint ${b.dataset.cx} dari repo? (commit, lalu deploy)`)) { try { await api('/admin/code-endpoints/' + b.dataset.cx, { method: 'DELETE' }); toast('Dihapus dari repo, menunggu deploy'); V.endpoint() } catch (e) { toast(e.message) } } }))
+}
+
+/* Sinkronisasi src/api/index.js <-> file di src/api/<kategori>/ : cek dulu (tanpa commit), tampilkan rencana, baru commit setelah dikonfirmasi. */
+async function syncEndpoints(btn) {
+  const label = btn.textContent
+  btn.disabled = true; btn.textContent = 'Memeriksa…'
+  try {
+    const r = await put('/admin/code-endpoints/sync', { apply: false }, 'POST')
+    if (!r.changed && !r.skipped.length) { toast(`Sudah sinkron: ${r.total} file endpoint cocok dengan src/api/index.js.`); return }
+    syncDialog(r)
+  } catch (e) { toast(e.message) } finally { btn.disabled = false; btn.textContent = label }
+}
+function syncDialog(r) {
+  const list = (title, items, cls = '') => items.length ? `<div style="margin:10px 0 0"><b${cls ? ` class="${cls}"` : ''}>${title} (${items.length})</b><ul class="sub mono" style="font-size:12px;margin:4px 0 0 16px">${items.map((x) => `<li>${x}</li>`).join('')}</ul></div>` : ''
+  const d = modal(`<h3>Sinkronisasi endpoint</h3>
+    <p class="sub">${r.changed ? 'src/api/index.js tidak cocok dengan isi folder src/api/. Perubahan di bawah akan di-commit ke GitHub sebagai satu commit (file endpoint tidak disentuh).' : 'src/api/index.js sudah cocok, tetapi ada file yang dilewati:'}</p>
+    ${list('Didaftarkan (file ada, import hilang)', r.added.map(esc))}
+    ${list('Didaftarkan ulang (import ada, entri BUILTIN hilang)', r.repaired.filter((x) => x.type === 'unregistered').map((x) => esc(x.file)))}
+    ${list('Dibuang (file sudah tidak ada)', r.removed.map(esc), 'err')}
+    ${list('Dibuang (entri BUILTIN tanpa import)', r.repaired.filter((x) => x.type === 'dangling').map((x) => esc(x.name)), 'err')}
+    ${list('Dilewati', r.skipped.map((x) => `${esc(x.file)}: ${esc(x.reason)}`))}
+    ${r.truncated ? '<p class="sub err">Daftar file GitHub terpotong, jadi pembuangan import otomatis dimatikan.</p>' : ''}
+    <p class="msg" id="smsg"></p>
+    <div class="row" style="margin-top:10px">${r.changed ? '<button class="btn go" id="sgo">Terapkan &amp; commit</button>' : ''}<button class="btn ghost" id="scl">${r.changed ? 'Batal' : 'Tutup'}</button></div>`, 'lg')
+  $('#scl', d).onclick = () => d.close()
+  const go = $('#sgo', d); if (!go) return
+  go.onclick = async () => {
+    go.disabled = true; say($('#smsg', d), 'Commit src/api/index.js ke GitHub…')
+    try {
+      const x = await put('/admin/code-endpoints/sync', { apply: true }, 'POST')
+      d.close(); toast(x.applied ? `index.js disinkronkan${x.commit ? ' (commit ' + x.commit + ')' : ''}. Aktif setelah deploy.` : 'Sudah sinkron, tidak ada yang perlu di-commit.'); V.endpoint()
+    } catch (e) { say($('#smsg', d), e.message, 1); go.disabled = false }
+  }
 }
 
 async function codeForm(e) {
