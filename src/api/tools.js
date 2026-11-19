@@ -202,7 +202,7 @@ const btzDeposit = async (c, cfg, amount) => {
     if (live.length >= cfg.max_pending) return out(c, 429, 'too_many', `Masih ada ${live.length} deposit yang belum dibayar. Selesaikan atau tunggu kedaluwarsa dulu.`)
     const r = await btzCreate(c.env, apikey, {
         amount, fee: cfg.fee, paymentMethod: cfg.payment_method, timeout: cfg.timeout_min * 60000,
-        callback_url: `${origin}/api/billing/btzpay/callback?t=${encodeURIComponent(c.env.BTZPAY_CALLBACK_TOKEN)}`,
+        callback_url: `${origin}/callback?t=${encodeURIComponent(c.env.BTZPAY_CALLBACK_TOKEN)}`,
         return_url: cfg.return_url || `${origin}/smm`,
         notes: `Deposit saldo Arvo (${u.username})`.slice(0, 200),
         metadata: { orderId: `dep-${u.id}-${now}`, productName: 'Deposit Saldo Arvo' },
