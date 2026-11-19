@@ -55,6 +55,14 @@ const NI = {
   code: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>', grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', up: '<path d="m6 15 6-6 6 6"/>',
   tool: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>', msg: '<path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-5.4A8 8 0 1 1 21 12z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01"/>', trend: '<path d="m3 17 6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
 }
+Object.assign(NI, {
+  cog: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  userc: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19.5 8v6M16.5 11h6"/>',
+  shieldk: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="10" r="1.6"/><path d="M12 11.6V15"/>',
+  bars: '<path d="M4 20v-6M10 20V9M16 20V4M22 20H2"/>',
+  star: '<path d="m12 2.5 2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z"/>',
+  palette: '<circle cx="12" cy="12" r="10"/><circle cx="7.5" cy="11" r="1" fill="currentColor"/><circle cx="10.5" cy="7" r="1" fill="currentColor"/><circle cx="15.5" cy="7.5" r="1" fill="currentColor"/><path d="M12 22a2.5 2.5 0 0 1-.6-4.9c1-.3 1.6-1.2 1.4-2.1-.2-1 .6-2 1.7-2H18a4 4 0 0 0 4-4"/>',
+})
 const ni = (n) => `<svg viewBox="0 0 24 24" aria-hidden="true">${NI[n]}</svg>`
 const DR_GROUPS = [   /* [judul grup, ikon, [[href, label, ikon], ...]] */
   ['Utama', 'compass', [['/', 'Beranda', 'home'], ['/dashboard.html', 'Dashboard', 'grid'], ['/#paket', 'Paket', 'bag'], ['/#cara', 'Cara kerja', 'list'], ['/#faq', 'FAQ', 'help']]],
@@ -128,6 +136,7 @@ const syncTheme = () => {
   const dark = root.dataset.theme === 'dark'
   $('#theme').innerHTML = ni(dark ? 'sun' : 'moon')
   const sw = $('#drtheme'); if (sw) { sw.setAttribute('aria-checked', dark); sw.querySelector('b').textContent = dark ? 'Dark' : 'Light' }
+  const pw = $('#pmtheme'); if (pw) { pw.setAttribute('aria-checked', dark); pw.querySelector('b').textContent = dark ? 'Gelap' : 'Terang' }
 }
 const toggleTheme = () => {
   const swap = () => { root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark'; localStorage.setItem('theme', root.dataset.theme); syncTheme() }
@@ -256,16 +265,93 @@ const applySvc = (cfg) => {
 try { applySvc(JSON.parse(localStorage.getItem('svc'))) } catch {}
 api('/services').then((c) => { try { localStorage.setItem('svc', JSON.stringify(c)) } catch {} ; applySvc(c) }).catch(() => {})
 
+/* ---------- menu profil (klik foto profil di bar atas): kartu identitas + daftar menu, gaya Zireku ---------- */
+const pmAvatar = (u) => `<span class="pm-av">${u.avatar_url ? `<img src="${esc(u.avatar_url)}" alt="" draggable="false">` : ''}<i>${esc((u.username || '?')[0].toUpperCase())}</i></span>`
+const initProfileMenu = (user, who, doLogout) => {
+  const st = document.createElement('style'); st.id = 'pm-css'
+  st.textContent = `
+.pm-btn{padding:0;border-radius:50%;overflow:hidden}
+.pm-av{position:relative;display:grid;place-items:center;width:100%;height:100%;border-radius:50%;overflow:hidden;background:color-mix(in srgb,var(--tx) 10%,transparent);color:var(--tx);font-weight:800;font-size:.9em}
+.pm-av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.pm-av i{font-style:normal}.pm-av img+i{visibility:hidden}.pm-av.no-img img{display:none}.pm-av.no-img i{visibility:visible}
+.pm-bd{position:fixed;inset:0;z-index:69;display:none}.pm-bd.open{display:block}
+.pm{position:fixed;z-index:70;top:calc(var(--navh,53px) + 8px);right:12px;width:min(340px,calc(100vw - 24px));max-height:calc(100dvh - var(--navh,53px) - 20px);overflow:auto;overscroll-behavior:contain;background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:18px;box-shadow:0 24px 60px -22px #000c;opacity:0;visibility:hidden;transform:translate3d(0,-8px,0) scale(.97);transform-origin:top right;transition:opacity .22s,transform .35s var(--ease),visibility 0s .35s}
+.pm.open{opacity:1;visibility:visible;transform:none;transition:opacity .22s,transform .35s var(--ease),visibility 0s}
+.pm-h{display:flex;align-items:center;gap:14px;padding:18px 16px 16px;position:relative}
+.pm-h .pm-av{width:60px;height:60px;flex:none;font-size:24px;border:1px solid var(--line)}
+.pm-id{min-width:0;flex:1;display:grid;gap:2px;line-height:1.3}
+.pm-id b{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pm-id span{color:var(--mut);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pm-on{display:inline-flex;align-items:center;gap:7px;color:var(--tx)!important;font-size:13px!important;margin-top:3px}
+.pm-on::before{content:"";width:8px;height:8px;border-radius:50%;background:#34d081;box-shadow:0 0 0 3px color-mix(in srgb,#34d081 22%,transparent)}
+.pm-plan{align-self:flex-end;flex:none;display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:1px solid var(--line);border-radius:9px;font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--mut);background:color-mix(in srgb,var(--tx) 4%,transparent)}
+.pm-plan svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pm-sec{border-top:1px solid var(--line);padding:6px 0}
+.pm-it{display:flex;align-items:center;gap:14px;width:100%;padding:11px 16px;border:0;background:none;color:var(--tx);font:inherit;text-align:left;text-decoration:none;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color .2s}
+.pm-it:hover,.pm-it:focus-visible{background:color-mix(in srgb,var(--tx) 6%,transparent);outline:0}.pm-it:active{background:color-mix(in srgb,var(--tx) 10%,transparent)}
+.pm-ic{width:22px;height:22px;display:grid;place-items:center;flex:none;color:var(--mut)}
+.pm-ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.pm-tx{display:grid;gap:1px;line-height:1.3;min-width:0;flex:1}.pm-tx b{font-size:15.5px;font-weight:600}.pm-tx small{color:var(--mut);font-size:13.5px}
+.pm-sw{display:flex;align-items:center;gap:9px;border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:0}
+.pm-sw i{position:relative;width:44px;height:26px;border-radius:99px;background:color-mix(in srgb,var(--mut) 35%,transparent);transition:background-color .3s;flex:none}
+.pm-sw i::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 4px #0006;transition:transform .45s cubic-bezier(.34,1.5,.64,1)}
+.pm-sw[aria-checked=true] i{background:var(--tx)}.pm-sw[aria-checked=true] i::after{transform:translateX(18px);background:var(--bg)}
+.pm-sw b{min-width:42px;text-align:left;font-style:italic;font-weight:800;font-size:15px}
+.pm-it.out,.pm-it.out .pm-ic{color:#ef4444}.pm-it.out .pm-tx b{font-weight:600}.pm-it.out:hover{background:color-mix(in srgb,#ef4444 10%,transparent)}
+@media(prefers-reduced-motion:reduce){.pm{transition-duration:.01s!important}}`
+  document.head.append(st)
+  const it = (h, ic, t, sub) => `<a class="pm-it" role="menuitem" href="${h}"><span class="pm-ic">${ni(ic)}</span><span class="pm-tx"><b>${t}</b><small>${sub}</small></span></a>`
+  const plan = user.active ? String(user.role || user.plan_name || 'Premium').toUpperCase() : 'FREE'
+  const dark = root.dataset.theme === 'dark'
+  document.body.insertAdjacentHTML('beforeend', `<div class="pm-bd" id="pmbd"></div>
+<div class="pm" id="pm" role="menu" aria-label="Menu profil" aria-hidden="true" inert>
+  <div class="pm-h">${pmAvatar(user)}
+    <div class="pm-id"><b>${esc(user.username)}</b><span>@${esc(user.username)}</span><span class="pm-on">Online</span></div>
+    <span class="pm-plan">${ni('star')}${esc(plan)}</span></div>
+  <div class="pm-sec">
+    ${it('/profile.html', 'userc', 'Profil &amp; Kredensial', 'Ubah profil, foto &amp; keamanan')}
+    ${it('/profile.html#settings', 'cog', 'Pengaturan Akun', 'Atur preferensi akun')}
+    ${it('/profile.html#settings', 'shieldk', 'Keamanan', 'Whitelist IP &amp; access key')}
+  </div>
+  <div class="pm-sec">
+    ${it('/dashboard.html', 'bars', 'Dashboard', 'Lihat statistik')}
+    ${it('/#paket', 'star', 'Kelola Paket', 'Kelola langganan &amp; kuota harian')}
+    ${who.is_admin ? it('/admin.html', 'shield', 'Admin', 'Panel pengelola') : ''}
+    <div class="pm-it" role="none"><span class="pm-ic">${ni('palette')}</span><span class="pm-tx"><b>Tema</b></span>
+      <button type="button" class="pm-sw" id="pmtheme" role="switch" aria-checked="${dark}" aria-label="Mode gelap"><i></i><b>${dark ? 'Gelap' : 'Terang'}</b></button></div>
+  </div>
+  <div class="pm-sec"><button type="button" class="pm-it out" id="pmout" role="menuitem"><span class="pm-ic">${ni('logout')}</span><span class="pm-tx"><b>Keluar</b></span></button></div>
+</div>`)
+  document.querySelectorAll('.pm-av img').forEach((im) => { const f = () => im.parentElement.classList.add('no-img'); im.addEventListener('error', f); if (im.complete && !im.naturalWidth) f() })
+  const pm = $('#pm'), bd = $('#pmbd'), btn = $('#pmbtn')
+  const open = (o) => {
+    if (o === pm.classList.contains('open')) return
+    if (o) { drawer(false); root.style.setProperty('--navh', $('.nav').offsetHeight + 'px') }
+    pm.classList.toggle('open', o); bd.classList.toggle('open', o)
+    btn.setAttribute('aria-expanded', o); pm.setAttribute('aria-hidden', !o); pm.inert = !o
+  }
+  btn.onclick = () => open(!pm.classList.contains('open'))
+  bd.onclick = () => open(false)
+  pm.addEventListener('click', (e) => { if (e.target.closest('a.pm-it')) open(false) })
+  $('#pmtheme').onclick = toggleTheme
+  $('#pmout').onclick = (e) => doLogout(e.currentTarget)
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') open(false) })
+  addEventListener('resize', () => open(false))
+  $('#mbtn').addEventListener('click', () => open(false))
+}
+
 const ready = Promise.all([
   api('/auth/me').catch(() => null),
   api('/billing/whoami').catch(() => ({ ip: '-', is_owner: false })),
 ]).then(([user, who]) => {
   $('#navr').innerHTML = (who.is_admin ? `<a class="nb adm" href="/admin.html" title="Admin" aria-label="Admin">${ni('shield')}</a>` : '') +
-    (user ? `<a class="nb" href="/profile.html" title="${esc(user.username)}" aria-label="Profil ${esc(user.username)}">${ni('user')}</a>` : '<a class="btn" href="/login.html">Masuk</a>')
+    (user ? `<button type="button" class="nb pm-btn" id="pmbtn" title="${esc(user.username)}" aria-label="Menu profil ${esc(user.username)}" aria-haspopup="menu" aria-expanded="false" aria-controls="pm">${pmAvatar(user)}</button>` : '<a class="btn" href="/login.html">Masuk</a>')
   const loose = (h, t, ic, i) => `<a class="dr-it" href="${h}" style="--i:${i}"><span class="dr-ic">${ni(ic)}</span><span>${t}</span>${ni('check')}</a>`
   $('#drme').innerHTML = (who.is_admin ? loose('/admin.html', 'Admin', 'shield', 6) : '') +
     (user ? `<button type="button" class="dr-it dr-out" id="drout" style="--i:7"><span class="dr-ic">${ni('logout')}</span><span>Keluar</span></button>` : loose('/login.html', 'Masuk', 'login', 7))
-  const out = $('#drout'); if (out) out.onclick = async () => { out.disabled = true; try { await api('/auth/logout', { method: 'POST', body: '{}' }) } catch {} ; location.href = '/' }
+  const doLogout = async (b) => { b.disabled = true; try { await api('/auth/logout', { method: 'POST', body: '{}' }) } catch {} ; location.href = '/' }
+  const out = $('#drout'); if (out) out.onclick = () => doLogout(out)
+  if (user) initProfileMenu(user, who, doLogout)
   drActive()
   return { user, who }
 })
