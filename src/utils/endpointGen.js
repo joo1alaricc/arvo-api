@@ -221,3 +221,100 @@ export const patchIndex = (src, { file, route, handler, routeAs = route, handler
     out = out.replace(m[0], () => `${head}\n    [${routeAs}, ${handlerAs}],${m[2]}`)
     return { ok: true, src: out, changed: true }
 }
+
+/* ---- Sinkronisasi src/api/index.js dengan isi folder src/api/<kategori>/ ----
+ * index.js bisa tertimpa (mis. upload ZIP / deploy dari versi lama) sehingga import file endpoint hilang, atau tersisa import ke file yang sudah dihapus.
+ * Sumber kebenarannya adalah file yang benar-benar ada di repo:
+ *   - file endpoint (punya export <x>Route + <x>Handler) yang belum diimpor   -> ditambahkan (import + entri BUILTIN)
+ *   - import yang menunjuk file yang sudah tidak ada                        -> dibuang (beserta entri BUILTIN-nya)
+ *   - import ada tapi entri BUILTIN hilang                                  -> didaftarkan lagi
+ *   - entri BUILTIN yang namanya tidak pernah diimpor                       -> dibuang (kalau dibiarkan, build gagal)
+ * Hanya menyentuh baris import './<kategori>/<slug>.js' dan isi BUILTIN; baris lain tidak diubah. */
+export const SYNC_FILE_RE = /^src\/api\/([\w-]+)\/([\w-]+)\.js$/
+
+export const exportPairs = (src) => {
+    const handlers = new Set([...String(src).matchAll(/export\s+(?:const|async\s+function|function)\s+(\w+)Handler\b/g)].map((m) => m[1]))
+    return [...String(src).matchAll(/export\s+const\s+(\w+)Route\s*=/g)].map((m) => m[1]).filter((p) => handlers.has(p))
+}
+
+/* present: ['downloader/tiktok.js', ...] (relatif terhadap src/api). read(file) -> daftar prefix pasangan [x] atau null bila gagal dibaca. */
+export const syncIndex = async (src, present, read, { canRemove = true } = {}) => {
+    const IMP = /^import\s*\{([^}]*)\}\s*from\s*'\.\/([\w-]+\/[\w-]+\.js)'\s*;?\s*(?:\/\/.*)?$/
+    const ANY_IMP = /^import\s*\{([^}]*)\}\s*from\s*'[^']+'/
+    const ENT = /^\s*\[\s*(\w+)\s*,\s*(\w+)\s*\],?\s*(?:\/\/.*)?$/
+    const specsOf = (s) => s.split(',').map((x) => x.trim()).filter(Boolean).map((x) => { const m = x.match(/^(\w+)(?:\s+as\s+(\w+))?$/); return m ? { orig: m[1], local: m[2] || m[1] } : null }).filter(Boolean)
+    const bounds = (ls) => {
+        const s = ls.findIndex((l) => /const\s+BUILTIN\s*=\s*\[/.test(l)); if (s < 0) return null
+        for (let i = s + 1; i < ls.length; i++) if (/^\]/.test(ls[i])) return [s, i]
+        return null
+    }
+    const have = new Set(present), rep = { added: [], removed: [], repaired: [], skipped: [] }
+    let lines = src.split('\n')
+    if (!bounds(lines)) return { ok: false, message: 'Tidak menemukan "const BUILTIN = [ ... ]" di src/api/index.js.' }
+    const inBlock = (fn) => { const [s, e] = bounds(lines); lines = lines.filter((l, i) => !(i > s && i < e) || fn(l)) }
+
+    /* 1) import ke file yang sudah tidak ada (+ entri BUILTIN-nya) */
+    const gone = new Set()
+    if (canRemove) {
+        lines = lines.filter((l) => { const m = l.match(IMP); if (!m || have.has(m[2])) return true; specsOf(m[1]).forEach((s) => gone.add(s.local)); rep.removed.push(m[2]); return false })
+        if (gone.size) inBlock((l) => { const e = l.match(ENT); return !(e && (gone.has(e[1]) || gone.has(e[2]))) })
+    }
+
+    /* 2) nama yang dikenal index.js: hasil import + deklarasi lokal */
+    const used = new Set()
+    for (const l of lines) { const m = l.match(ANY_IMP); if (m) specsOf(m[1]).forEach((s) => used.add(s.local)) }
+    for (const m of lines.join('\n').matchAll(/(?:^|\n)\s*(?:export\s+)?(?:const|let|var|function|class)\s+(\w+)/g)) used.add(m[1])
+
+    /* 3) entri BUILTIN yang namanya tidak dikenal -> dibuang */
+    inBlock((l) => { const e = l.match(ENT); if (!e || (used.has(e[1]) && used.has(e[2]))) return true; rep.repaired.push({ type: 'dangling', name: `${e[1]}, ${e[2]}` }); return false })
+
+    /* 4) import yang masih ada tapi entri BUILTIN-nya hilang */
+    const [s0, e0] = bounds(lines)
+    const registered = new Set(); for (const l of lines.slice(s0 + 1, e0)) { const e = l.match(ENT); if (e) registered.add(e[1]) }
+    const imported = new Set(), newEntries = [], newImports = []
+    for (const l of lines) {
+        const m = l.match(IMP); if (!m) continue
+        imported.add(m[2])
+        const sp = specsOf(m[1])
+        for (const r of sp.filter((x) => /^\w+Route$/.test(x.orig))) {
+            const h = sp.find((x) => x.orig === r.orig.replace(/Route$/, 'Handler'))
+            if (h && !registered.has(r.local)) { newEntries.push(`    [${r.local}, ${h.local}],`); registered.add(r.local); rep.repaired.push({ type: 'unregistered', file: m[2], name: r.local }) }
+        }
+    }
+
+    /* 5) file endpoint yang ada di repo tapi belum diimpor */
+    const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1)
+    const uniq = (n) => { let x = n, i = 2; while (used.has(x)) x = n + i++; used.add(x); return x }
+    for (const file of [...present].sort()) {
+        if (imported.has(file)) continue
+        const pairs = await read(file)
+        if (!pairs) { rep.skipped.push({ file, reason: 'Gagal dibaca dari GitHub.' }); continue }
+        if (!pairs.length) { rep.skipped.push({ file, reason: 'Bukan endpoint (tidak ada export <nama>Route + <nama>Handler).' }); continue }
+        const [cat, slug] = file.replace(/\.js$/, '').split('/'), base = exportNames(cat, slug).route.replace(/Route$/, '')
+        const specs = []
+        for (const p of pairs) {
+            const b = pairs.length > 1 ? base + cap(p) : base, ra = uniq(b + 'Route'), ha = uniq(b + 'Handler')
+            specs.push(`${p}Route${p + 'Route' === ra ? '' : ' as ' + ra}`, `${p}Handler${p + 'Handler' === ha ? '' : ' as ' + ha}`)
+            newEntries.push(`    [${ra}, ${ha}],`)
+        }
+        newImports.push(`import { ${specs.join(', ')} } from './${file}'`)
+        rep.added.push(file)
+    }
+
+    if (!newImports.length && !newEntries.length && !rep.removed.length && !rep.repaired.length) return { ok: true, src, changed: false, ...rep }
+
+    /* 6) tulis: import baru setelah import terakhir, entri baru di akhir BUILTIN */
+    if (newImports.length) {
+        let last = -1; lines.forEach((l, i) => { if (/^import\s.+from\s.+$/.test(l)) last = i })
+        if (last < 0) return { ok: false, message: 'Tidak menemukan baris import di src/api/index.js.' }
+        lines.splice(last + 1, 0, ...newImports)
+    }
+    if (newEntries.length) {
+        const [, e] = bounds(lines); let k = e - 1
+        while (k >= 0 && !lines[k].trim()) k--
+        if (!/[,\[]\s*(\/\/.*)?$/.test(lines[k])) lines[k] = lines[k].replace(/(\s*\/\/.*)?$/, (m) => ',' + (m || ''))
+        lines.splice(k + 1, 0, ...newEntries)
+    }
+    const out = lines.join('\n')
+    return { ok: true, src: out, changed: out !== src, ...rep }
+}
