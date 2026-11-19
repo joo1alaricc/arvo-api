@@ -25,14 +25,24 @@ tools.use('/smm/*', gate('smm', 'Layanan SMM', ['balance', 'orders', 'status', '
 tools.use('/otp/*', gate('otp', 'Layanan OTP', ['orders', 'status', 'cancel', 'finish']))
 tools.use('/am/*', gate('am', 'Aktivasi AM'))
 
-/* Premium 1 ke atas (premium/vip yang masih aktif). Pengelola juga boleh. */
-tools.use('/am/*', async (c, next) => {
+/* Aktivasi AM: Premium 1 ke atas. Paket aktif ditentukan dari plan ID, bukan sekadar label role. */
+const PLAN_RANK = { premium1: 1, premium2: 2, premium3: 3, vip1: 4, vip2: 5, vip3: 6 }
+const hasMinimumPlan = (u, minimum) => !!u.active && (PLAN_RANK[u.plan] || 0) >= minimum
+const adminOrPlan = (minimum) => async (c, next) => {
     const u = c.get('user')
-    let ok = !!u.active && (u.role === 'premium' || u.role === 'vip')
+    let ok = hasMinimumPlan(u, minimum)
     if (!ok) { try { ok = !!(await store(c).adminLevel(u.id)) } catch {} }
-    if (!ok) return out(c, 403, 'premium_only', 'Fitur ini khusus pengguna Premium 1 ke atas.')
+    if (!ok) {
+        /* Nama paket dibaca dari tabel plans yang dikelola admin, bukan DEFAULT_PLANS/plans.js. ID tetap menjadi dasar hak akses. */
+        const requiredId = minimum >= 2 ? 'premium2' : 'premium1'
+        let requiredName = requiredId
+        try { requiredName = store(c).plans[requiredId]?.name || requiredId } catch {}
+        return out(c, 403, 'premium_only', `Fitur ini khusus pengguna ${requiredName} ke atas.`)
+    }
     await next()
-})
+}
+tools.use('/am/*', adminOrPlan(1))
+tools.use('/netflix-token/*', adminOrPlan(2))
 
 const cupz = async (c, path, payload) => {
     const key = c.env.CUPZ_API_KEY
