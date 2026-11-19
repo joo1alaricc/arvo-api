@@ -158,3 +158,23 @@ tbody tr,table tr{transition:background-color .15s}table tr:hover td{background:
 @keyframes lgR{0%{stroke-dashoffset:1;stroke-opacity:1;fill-opacity:0}10%{stroke-dashoffset:1;stroke-opacity:1;fill-opacity:0}38%{stroke-dashoffset:0;stroke-opacity:1;fill-opacity:0}52%{stroke-dashoffset:0;stroke-opacity:0;fill-opacity:1}86%{stroke-dashoffset:0;stroke-opacity:0;fill-opacity:1}96%{stroke-dashoffset:0;stroke-opacity:0;fill-opacity:0}100%{stroke-dashoffset:1;stroke-opacity:0;fill-opacity:0}}
 @keyframes lgS{0%,56%{opacity:0;transform:translateX(-30px) skewX(-20deg)}58%{opacity:.75}72%{opacity:.75;transform:translateX(130px) skewX(-20deg)}74%,100%{opacity:0;transform:translateX(130px) skewX(-20deg)}}
 @media(prefers-reduced-motion:reduce){.lg-p{animation:none!important;stroke-dashoffset:0;stroke-opacity:0;fill-opacity:1}.lg-s{animation:none}}
+
+/* ---------- carousel paket: swipe horizontal ala iOS ---------- */
+.plans{--cw:min(80vw,340px);position:relative;display:flex;align-items:stretch;gap:14px;overflow-x:auto;overflow-y:hidden;padding:26px calc(50% - var(--cw)/2) 20px;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;outline:0}
+.plans::-webkit-scrollbar{display:none}
+.plans:focus-visible{box-shadow:0 0 0 2px color-mix(in srgb,var(--ac) 45%,transparent);border-radius:var(--r)}
+.plans.drag{scroll-snap-type:none;cursor:grabbing;user-select:none}
+.plans>.sub,.plans>.err{flex:0 0 100%;text-align:center}
+.plans .plan{flex:0 0 var(--cw);padding:18px;gap:10px;scroll-snap-align:center;scroll-snap-stop:always;transform-origin:50% 50%;will-change:transform,opacity;backface-visibility:hidden;transition:border-color .3s var(--ease),box-shadow .3s var(--ease)}
+.plans .plan:not(.cur){cursor:pointer}
+.plans .plan:not(.cur)>*{pointer-events:none}
+.plan ul{font-size:13px}
+.plan li{display:flex;align-items:center;gap:11px;padding:5px 0}
+.plan li::before{content:none}
+.plan li b{color:var(--tx);font-weight:700}
+.fi{width:30px;height:30px;padding:6px;border-radius:9px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,transparent)}
+.plan.best .fi{color:#f5a524;background:color-mix(in srgb,#f5a524 14%,transparent)}
+.pdots{display:flex;justify-content:center;gap:7px}
+.pdots button{width:7px;height:7px;padding:0;border:0;border-radius:99px;background:var(--line);cursor:pointer;transition:width .5s var(--ease),background-color .3s}
+.pdots button.on{width:20px;background:var(--ac)}
+@media(max-width:760px){.plans{width:100vw;margin-left:calc(50% - 50vw)}}
