@@ -10,3 +10,12 @@ export const services = async (c) => {
     return cache.v
 }
 export const refreshServices = () => { cache.at = 0 }
+
+/* Skala tampilan situs (publik, dicache singkat). */
+let uiCache = { at: 0, v: null }
+export const uiCfg = async (c) => {
+    if (uiCache.v && Date.now() - uiCache.at < 5000) return uiCache.v
+    try { uiCache = { at: Date.now(), v: await store(c).uiCfg() } } catch (e) { console.error('[ui]', e); return uiCache.v || { scale: 100, scale_mobile: 100 } }
+    return uiCache.v
+}
+export const refreshUi = () => { uiCache.at = 0 }
