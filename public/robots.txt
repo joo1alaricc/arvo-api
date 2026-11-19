@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /callback
+Disallow: /webhook
+
+Sitemap: https://arvo-api.my.id/sitemap.xml
