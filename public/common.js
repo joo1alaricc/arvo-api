@@ -49,6 +49,7 @@ const NI = {
   login: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>', chev: '<path d="m9 6 6 6-6 6"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>', sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>', shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
   home: '<path d="m3 10.5 9-7.5 9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>', compass: '<circle cx="12" cy="12" r="10"/><path d="m16 8-2.5 5.5L8 16l2.5-5.5z"/>',
   code: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>', grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', up: '<path d="m6 15 6-6 6 6"/>',
@@ -70,7 +71,46 @@ document.body.insertAdjacentHTML('afterbegin', `<header class="nav"><div class="
   <span class="sp"></span>
   <span id="navr" class="navr"></span>
   <button id="theme" class="nb" aria-label="Ganti tema"></button></div></header>`)
-document.body.insertAdjacentHTML('beforeend', `<footer><div class="wrap foot"><b>Arvo</b><span>© 2026 · <a href="/playground.html">Playground</a></span></div></footer>`)
+/* ---------- footer: brand, deskripsi, ikon sosial, kolom tautan. Isinya diatur admin (Admin > Konten Dashboard > Footer) ---------- */
+const TG_PATH = 'M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z'
+const ftIcon = (name, url) => {
+  const k = (name + ' ' + url).toLowerCase()
+  if (/whatsapp|wa\.me/.test(k)) return `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="${WA_PATH}"/></svg>`
+  if (/instagram/.test(k)) return `<svg viewBox="0 0 24 24" aria-hidden="true">${IG_SHAPES}</svg>`
+  if (/telegram|t\.me/.test(k)) return `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="${TG_PATH}"/></svg>`
+  return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>'
+}
+const ftHref = (v) => { const ext = /^https?:\/\//i.test(v) && new URL(v).origin !== location.origin; return `href="${esc(v)}"${ext ? ' target="_blank" rel="noopener noreferrer"' : ''}` }
+const drawFooter = (f) => {
+  const el = $('#ftmain'); if (!el) return
+  const groups = (f.groups || []).filter((g) => g.links && g.links.length)
+  el.innerHTML = `<div class="ft-brand"><a class="brand" href="/"><span class="logo"><svg viewBox="-4 -4 108 78.9" aria-hidden="true"><path fill="#fff" d="${LOGO_PATH}"/></svg></span>Arvo</a>
+      ${f.desc ? `<p>${esc(f.desc)}</p>` : ''}
+      ${(f.social || []).length ? `<div class="ft-soc">${f.social.map((x) => `<a class="ft-ic" ${ftHref(x.value)} title="${esc(x.name)}" aria-label="${esc(x.name)}">${ftIcon(x.name, x.value)}</a>`).join('')}</div>` : ''}</div>
+    ${groups.map((g) => `<nav class="ft-col" aria-label="${esc(g.title)}"><h4>${esc(g.title)}</h4>${g.links.map((x) => `<a ${ftHref(x.value)}>${esc(x.name)}</a>`).join('')}</nav>`).join('')}`
+}
+if (!/^\/admin/.test(location.pathname)) {
+  const st = document.createElement('style'); st.id = 'ft-css'
+  st.textContent = `.ft{border-top:1px solid var(--line);margin-top:40px;padding:36px 0 0;color:var(--mut);font-size:14px}
+.ft-main{display:grid;gap:30px;grid-template-columns:1.6fr 1fr 1fr}
+.ft-brand .brand{display:inline-flex;align-items:center;gap:12px;font-size:19px;color:var(--tx)}
+.ft-brand .logo{width:36px;height:36px;border-radius:10px}.ft-brand .logo svg{width:70%}
+.ft-brand p{margin:14px 0 0;max-width:420px;line-height:1.7}
+.ft-soc{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+.ft-ic{width:44px;height:44px;border:1px solid var(--line);border-radius:12px;display:grid;place-items:center;color:var(--mut);transition:color .2s,border-color .2s,background-color .2s,transform .2s}
+.ft-ic svg{width:21px;height:21px}
+.ft-ic:hover{color:var(--tx);border-color:color-mix(in srgb,var(--ac) 55%,var(--line));background:color-mix(in srgb,var(--ac) 8%,transparent)}.ft-ic:active{transform:scale(.92)}
+.ft-col h4{margin:0 0 14px;font-size:15px;color:var(--tx)}
+.ft-col a{display:block;padding:7px 0;color:var(--mut);transition:color .2s}.ft-col a:hover{color:var(--tx)}
+.ft-copy{border-top:1px solid var(--line);margin-top:30px;padding:20px 0 24px;text-align:center;display:grid;gap:6px;font-size:13px}
+.ft-copy small{font-size:12.5px;opacity:.85}
+@media(max-width:760px){.ft-main{grid-template-columns:1fr;gap:26px}.ft-col a{padding:9px 0}}`
+  document.head.append(st)
+  document.body.insertAdjacentHTML('beforeend', `<footer class="ft"><div class="wrap"><div class="ft-main" id="ftmain"></div>
+    <div class="ft-copy"><span>© ${new Date().getFullYear()} Arvo. All rights reserved.</span><small>Powered by Arvo</small></div></div></footer>`)
+  drawFooter({ desc: '', social: [], groups: [] })
+  api('/site-content').then((d) => d.footer && drawFooter(d.footer)).catch(() => {})
+} else document.body.insertAdjacentHTML('beforeend', `<footer><div class="wrap foot"><b>Arvo</b><span>© 2026 · <a href="/playground.html">Playground</a></span></div></footer>`)
 /* ---------- drawer menu: meluncur dari kiri, ikon garis tiga berubah jadi silang ---------- */
 document.body.insertAdjacentHTML('beforeend', `<div class="dr-bd" id="drbd"></div>
 <aside class="dr" id="dr" aria-label="Menu navigasi" aria-hidden="true" inert>
@@ -131,7 +171,7 @@ addEventListener('resize', () => { if (innerWidth > 760) drawer(false) })
 html.dr-lock{overflow:hidden}
 .dr-bd{display:block;position:fixed;left:0;right:0;bottom:0;top:var(--navh,53px);z-index:49;background:rgba(0,0,0,.38);opacity:0;visibility:hidden;transition:opacity .6s var(--ease,ease),visibility 0s .6s}
 .dr-bd.open{opacity:1;visibility:visible;transition:opacity .6s var(--ease,ease),visibility 0s}
-.dr{display:flex;flex-direction:column;position:fixed;left:0;top:var(--navh,53px);bottom:0;width:min(68vw,268px);z-index:50;background:color-mix(in srgb,var(--bg,#0d1016) 52%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(24px);backdrop-filter:saturate(1.8) blur(24px);color:var(--tx,#e8ecf3);border-right:1px solid var(--line,#242b38);border-radius:0 20px 20px 0;overscroll-behavior:contain;transform:translate3d(-102%,0,0);visibility:hidden;transition:transform .75s cubic-bezier(.22,.8,.24,1),visibility 0s .75s,box-shadow .75s}
+.dr{display:flex;flex-direction:column;position:fixed;left:0;top:var(--navh,53px);bottom:0;width:min(68vw,268px);z-index:50;background:color-mix(in srgb,var(--bg,#0d1016) 52%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(24px);backdrop-filter:saturate(1.8) blur(24px);color:var(--tx,#e8ecf3);border-right:1px solid var(--line,#242b38);border-radius:0;overscroll-behavior:contain;transform:translate3d(-102%,0,0);visibility:hidden;transition:transform .75s cubic-bezier(.22,.8,.24,1),visibility 0s .75s,box-shadow .75s}
 .dr.open{transform:none;visibility:visible;box-shadow:18px 0 50px -26px #000c;transition:transform .75s cubic-bezier(.22,.8,.24,1),visibility 0s,box-shadow .75s}
 .dr-nav{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:8px 8px 4px}
 .dr-g{padding:0}.dr-g+.dr-g{margin-top:2px}
@@ -157,6 +197,8 @@ html.dr-lock{overflow:hidden}
 .dr-it>span:nth-child(2){flex:1;min-width:0;white-space:nowrap}
 .dr-it>svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;flex:none;opacity:0;transform:scale(.6);transition:opacity .25s,transform .35s var(--ease,ease)}
 .dr-it.on>svg{opacity:1;transform:none}
+.dr-out{width:100%;background:none;font-family:inherit;text-align:left;cursor:pointer;color:#ef4444}
+.dr-out .dr-ic svg{stroke:#ef4444}.dr-out:active{background:color-mix(in srgb,#ef4444 14%,transparent)}
 .dr-hr{border:0;height:1px;margin:8px 8px 6px;background:var(--line,#242b38);transform:scaleY(.5);flex:none}
 .dr-loose{display:flex;flex-direction:column}
 .dr-loose .dr-it{height:40px;margin-top:0;padding:0 8px}
@@ -209,7 +251,8 @@ const ready = Promise.all([
     (user ? `<a class="nb" href="/profile.html" title="${esc(user.username)}" aria-label="Profil ${esc(user.username)}">${ni('user')}</a>` : '<a class="btn" href="/login.html">Masuk</a>')
   const loose = (h, t, ic, i) => `<a class="dr-it" href="${h}" style="--i:${i}"><span class="dr-ic">${ni(ic)}</span><span>${t}</span>${ni('check')}</a>`
   $('#drme').innerHTML = (who.is_admin ? loose('/admin.html', 'Admin', 'shield', 6) : '') +
-    (user ? loose('/profile.html', 'Profil', 'user', 7) : loose('/login.html', 'Masuk', 'login', 7))
+    (user ? `<button type="button" class="dr-it dr-out" id="drout" style="--i:7"><span class="dr-ic">${ni('logout')}</span><span>Keluar</span></button>` : loose('/login.html', 'Masuk', 'login', 7))
+  const out = $('#drout'); if (out) out.onclick = async () => { out.disabled = true; try { await api('/auth/logout', { method: 'POST', body: '{}' }) } catch {} ; location.href = '/' }
   drActive()
   return { user, who }
 })
