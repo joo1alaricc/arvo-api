@@ -56,19 +56,101 @@ ready.then((s) => {
 
 const BEST = 'vip2'   /* paket yang diberi sorotan BEST SELLER */
 const price = (p, d, perm) => perm ? p.permanentPrice : Math.max(1000, Math.ceil(p.basePrice * d / p.baseDays / 100) * 100)
-const feats = (p) => [
-  p.daily === null ? 'Request unlimited' : `${p.daily.toLocaleString('id-ID')} request / hari`,
-  p.tier === 'vip' ? 'Akses semua endpoint (termasuk khusus VIP)' : 'Akses endpoint Premium', `Whitelist IP hingga ${p.maxIps} IP`, p.customKey ? 'Custom API key' : null,
-  p.tier === 'vip' ? 'Badge VIP' : 'Badge Premium',
-  p.tier === 'vip' ? 'Profil centang gold & username gold berkilau' : 'Profil centang biru berkilau',
-  p.tier === 'vip' ? 'Border profil custom (pilih warna sendiri)' : null,
-].filter(Boolean).map((f) => `<li>${f}</li>`).join('')
+/* ikon sub-poin paket (gaya garis, ikut warna aksen kartu) */
+const FI = {
+  inf: '<path d="M6 16c5 0 7-8 12-8a4 4 0 0 1 0 8c-5 0-7-8-12-8a4 4 0 1 0 0 8"/>',
+  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  plug: '<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
+  layers: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+  globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+  key: '<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/>',
+  award: '<path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/>',
+  verified: '<path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/>',
+  palette: '<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>',
+}
+const fi = (n) => `<svg class="fi" viewBox="0 0 24 24" aria-hidden="true">${FI[n]}</svg>`
+const feats = (p) => {
+  const vip = p.tier === 'vip'
+  return [
+    p.daily === null ? ['inf', '<b>Request unlimited</b>'] : ['bolt', `<b>${p.daily.toLocaleString('id-ID')}</b> request / hari`],
+    vip ? ['layers', 'Akses semua endpoint (termasuk khusus VIP)'] : ['plug', 'Akses endpoint Premium'],
+    ['globe', `Whitelist IP hingga <b>${p.maxIps}</b> IP`],
+    p.customKey ? ['key', 'Custom API key'] : null,
+    ['award', vip ? 'Badge VIP' : 'Badge Premium'],
+    ['verified', vip ? 'Profil centang gold & username gold berkilau' : 'Profil centang biru berkilau'],
+    vip ? ['palette', 'Border profil custom (pilih warna sendiri)'] : null,
+  ].filter(Boolean).map(([i, t]) => `<li>${fi(i)}<span>${t}</span></li>`).join('')
+}
+
+/* ---- carousel paket: swipe kiri-kanan, kartu tengah membesar, kartu samping mengecil, pudar & sedikit blur ---- */
+const carousel = (box, start = 0) => {
+  const cards = [...box.children]
+  if (!cards.length) return
+  const calm = matchMedia('(prefers-reduced-motion:reduce)').matches
+  let cur = -1, raf = 0, drag = null, moved = false, swallow = false
+  const mid = (c) => c.offsetLeft + c.offsetWidth / 2
+  const go = (i, smooth = true) => box.scrollTo({ left: mid(cards[Math.max(0, Math.min(cards.length - 1, i))]) - box.clientWidth / 2, behavior: smooth ? 'smooth' : 'auto' })
+  const dots = document.createElement('div'); dots.className = 'pdots'
+  cards.forEach((c, i) => {
+    const d = document.createElement('button'); d.type = 'button'; d.ariaLabel = 'Paket ' + (i + 1); d.onclick = () => go(i); dots.append(d)
+    c.addEventListener('click', () => { if (i !== cur) go(i) })
+  })
+  box.after(dots)
+  box.tabIndex = 0; box.setAttribute('role', 'region'); box.setAttribute('aria-label', 'Daftar paket, geser ke kiri atau kanan')
+  const paint = () => {
+    raf = 0
+    const m = box.scrollLeft + box.clientWidth / 2
+    let near = 0, nd = Infinity
+    cards.forEach((c, i) => {
+      const w = c.offsetWidth || 1, d = (mid(c) - m) / w, a = Math.min(Math.abs(d), 1.6)
+      if (Math.abs(d) < nd) { nd = Math.abs(d); near = i }
+      const sc = 1 - 0.1 * a, pull = -Math.sign(d) * Math.min(Math.abs(d), 1) * w * 0.07
+      c.style.transform = `translate3d(${pull.toFixed(1)}px,0,0) scale(${sc.toFixed(4)})`
+      c.style.opacity = Math.max(0.35, 1 - 0.42 * a).toFixed(3)
+      c.style.filter = calm || a < 0.05 ? '' : `blur(${Math.min(2.4, a * 2.2).toFixed(2)}px)`
+      c.style.zIndex = 10 - Math.round(a * 4)
+    })
+    if (near !== cur) {
+      cur = near
+      cards.forEach((c, i) => c.classList.toggle('cur', i === cur))
+      dots.childNodes.forEach((d, i) => d.classList.toggle('on', i === cur))
+    }
+  }
+  const tick = () => { if (!raf) raf = requestAnimationFrame(paint) }
+  box.addEventListener('scroll', tick, { passive: true })
+  addEventListener('resize', () => { go(cur < 0 ? start : cur, false); tick() })
+  box.addEventListener('keydown', (e) => {
+    if (e.target !== box || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return
+    e.preventDefault(); go(cur + (e.key === 'ArrowRight' ? 1 : -1))
+  })
+  /* mouse (desktop): tarik untuk menggeser. Sentuhan sudah ditangani browser secara native. */
+  box.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0 || e.target.closest('button,input,a')) return
+    drag = { x: e.clientX, l: box.scrollLeft }; moved = false
+  })
+  addEventListener('pointermove', (e) => {
+    if (!drag) return
+    const dx = e.clientX - drag.x
+    if (!moved && Math.abs(dx) < 5) return
+    if (!moved) { moved = true; box.classList.add('drag') }
+    box.scrollLeft = drag.l - dx
+  })
+  const end = () => {
+    if (!drag) return
+    drag = null; box.classList.remove('drag')
+    if (moved) { swallow = true; setTimeout(() => (swallow = false), 60); go(cur) }
+  }
+  addEventListener('pointerup', end); addEventListener('pointercancel', end)
+  box.addEventListener('click', (e) => { if (swallow) { e.stopPropagation(); e.preventDefault() } }, true)
+  go(start, false); paint()
+  requestAnimationFrame(() => { go(start, false); paint() })   /* ulangi setelah layout/font siap */
+}
 
 Promise.all([api('/billing/plans'), ready]).then(([{ plans, min_days, max_days }, { user }]) => {
   const stacking = !!(user && user.active)
   $('#plans').innerHTML = ''
   plans.forEach((p) => {
-    const el = document.createElement('article'); el.className = 'rv plan ' + p.tier + (p.id === BEST ? ' best' : '')
+    const el = document.createElement('article'); el.className = 'plan ' + p.tier + (p.id === BEST ? ' best' : '')
     const timed = !!p.basePrice, perm = !!p.permanentPrice
     let days = timed ? p.baseDays : 0, permanent = !timed
     el.innerHTML = `${p.id === BEST ? '<span class="ribbon">BEST SELLER</span>' : ''}<span class="tag">${p.tier === 'vip' ? 'VIP' : 'Premium'}</span><h3>${p.name}</h3>
@@ -92,7 +174,7 @@ Promise.all([api('/billing/plans'), ready]).then(([{ plans, min_days, max_days }
     }
     draw(); el.querySelector('.btn').onclick = () => buy(p.id, days, permanent, p); $('#plans').append(el)
   })
-  reveal($('#plans'))
+  carousel($('#plans'), Math.max(0, plans.findIndex((p) => p.id === BEST)))
 }).catch((e) => ($('#plans').innerHTML = `<p class="err">${esc(e.message)}</p>`))
 
 let poll
