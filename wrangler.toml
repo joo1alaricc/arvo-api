@@ -11,6 +11,8 @@ keep_vars = true   # jangan hapus variabel yang diisi lewat dashboard saat deplo
 directory = "./public"
 binding = "ASSETS"
 not_found_handling = "none"
+# Halaman layanan dijawab Worker dulu supaya bisa dimatikan admin (Admin > Layanan)
+run_worker_first = ["/smm", "/smm/", "/smm.html", "/otp", "/otp/", "/otp.html", "/am", "/am/", "/am.html"]
 
 [vars]
 API_NAME = "Arvo"
@@ -19,7 +21,7 @@ RATE_LIMIT_WINDOW_MS = "900000"
 RATE_LIMIT_MAX = "100"
 RATE_LIMIT_WHITELIST = "127.0.0.1"
 RATE_LIMIT_BAN_LIST = ""
-HERO_VIDEO = "/media/30d28e07ca6312e9d85d5150ba24ad72.mp4"
+HERO_VIDEO ="https://cloud.yardansh.com/2yf0iQ.mp4"
 HERO_POSTER = ""
 OTP_MARKUP_PCT = "15"    # markup persen, mis. "10" = +10%
 OTP_MARKUP_FLAT = "500"
