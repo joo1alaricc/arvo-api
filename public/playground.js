@@ -46,7 +46,7 @@ function card(path, method, d, tag) {
     <div class="need"><span>Data yang diperlukan dari server:</span>${chips.join('')}</div>
     <div><div class="lbl"><span>x-api-key <span style="opacity:.6">(header)</span> <em>*</em></span><button class="ib" data-mine hidden title="Kembalikan ke key akunku" aria-label="Kembalikan ke key akunku" style="width:26px;height:26px">${ico('refresh')}</button></div>
       <input data-k="apikey" data-in="header" placeholder="arvo_xxxxxxxx (wajib)" autocomplete="off" spellcheck="false" value="${esc(savedKey)}"></div>
-    ${params.map((p) => field(p.name, p.name, p.in, p.example ?? p.schema?.default ?? p.schema?.type ?? p.name, p.required, p.in)).join('')}
+    ${params.map((p) => field(p.name, p.name, p.in, p.example ?? p.schema?.example ?? p.schema?.default ?? p.schema?.type ?? p.name, p.required, p.in)).join('')}
     ${bodyKeys.map((k) => field(k, k, 'body', bodyProps.properties[k].example ?? k, bodyReq.includes(k), 'body')).join('')}
     ${d.requestBody && !bodyKeys.length ? `<div><div class="lbl"><span>Body</span><span>JSON</span></div><textarea data-body rows="4" placeholder='{ "key": "value" }' spellcheck="false"></textarea></div>` : ''}
     <div><div class="lbl"><span>Pilih contoh kode</span><button class="ib" data-cc aria-label="Salin kode" hidden>${ico('copy')}</button></div>
