@@ -38,4 +38,36 @@ const show = (r) => {
   $('#token').value = r.token || ''
   $('#copy-token').onclick = () => copy(r.token || '', $('#copy-token'))
 }
-ready.then(({ user }) => { if (!user) return location.href = '/login.html?next=/netflix'; render() })
+const locked = (user, requiredName = 'Premium 2') => {
+  const current = user?.plan_name || 'Free User'
+  el.innerHTML = `<h1>Netflix Token Generator</h1><p class="sub">Generator token untuk akun Netflix milikmu.</p>
+  <div class="card"><div class="card-b">
+    <p style="margin:0 0 6px;font-weight:700">Khusus ${esc(requiredName)} ke atas</p>
+    <p class="sub" style="margin:0 0 12px">Paket saat ini: <b>${esc(current)}</b>. ${user?.expired ? 'Paketmu sudah berakhir. Perpanjang' : 'Upgrade paketmu'} untuk memakai fitur ini.</p>
+    <a class="btn" href="/#paket">Lihat paket</a>
+  </div></div>`
+}
+let booted = false
+const bootError = (message) => {
+  if (booted) return
+  booted = true
+  el.innerHTML = `<h1>Netflix Token Generator</h1><div class="card"><div class="card-b"><p class="msg" style="color:var(--r)">${esc(message)}</p><button class="btn" onclick="location.reload()">Muat ulang</button></div></div>`
+}
+const bootTimer = setTimeout(() => bootError('Halaman terlalu lama memuat data akun. Periksa koneksi lalu muat ulang.'), 12000)
+Promise.all([
+  api('/auth/me').catch((error) => ({ __error: error })),
+  api('/billing/whoami').catch(() => ({ is_admin: false })),
+  api('/billing/plans').catch(() => ({ plans: [] })),
+]).then(([user, who, catalog]) => {
+  if (booted) return
+  booted = true; clearTimeout(bootTimer)
+  if (user?.__error) {
+    if (user.__error.status === 401) return location.href = '/login.html?next=/netflix'
+    return bootError(user.__error.message || 'Gagal memuat data akun. Muat ulang halaman.')
+  }
+  if (!user) return location.href = '/login.html?next=/netflix'
+  const allowed = user.active && ['premium2','premium3','vip1','vip2','vip3'].includes(user.plan)
+  const requiredName = catalog?.plans?.find((p) => p.id === 'premium2')?.name || 'Premium 2'
+  if (allowed || who?.is_admin) render()
+  else locked(user, requiredName)
+}).catch((e) => { clearTimeout(bootTimer); bootError(e?.message || 'Gagal memuat data akun. Muat ulang halaman.') })
