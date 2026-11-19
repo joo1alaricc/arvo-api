@@ -36,6 +36,7 @@ import { bratVidHdRoute as makerBratvidhdRoute, bratVidHdHandler as makerBratvid
 import { codesnapRoute as makerCodesnapRoute, codesnapHandler as makerCodesnapHandler } from './maker/codesnap.js'
 import { iqcRoute as makerIpqcRoute, iqcHandler as makerIpqcHandler } from './maker/ipqc.js'
 import { iqcV2Route as makerIpqcv2Route, iqcV2Handler as makerIpqcv2Handler } from './maker/ipqcv2.js'
+import { quickchatRoute as makerQcRoute, quickchatHandler as makerQcHandler } from './maker/qc.js'
 
 /* Tambah endpoint bawaan baru cukup di sini: otomatis terdaftar, masuk /docs, dan tampil di dashboard admin. */
 const BUILTIN = [
@@ -75,6 +76,7 @@ const BUILTIN = [
     [makerCodesnapRoute, makerCodesnapHandler],
     [makerIpqcRoute, makerIpqcHandler],
     [makerIpqcv2Route, makerIpqcv2Handler],
+    [makerQcRoute, makerQcHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
