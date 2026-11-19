@@ -23,6 +23,12 @@ const createApp = () => {
     /* COOP default Hono = same-origin; itu memutus komunikasi popup Google Sign-In. allow-popups tetap aman. */
     app.use('*', secureHeaders({ crossOriginOpenerPolicy: 'same-origin-allow-popups' }))
     app.use('*', cors())
+    /* Respons mesin (JSON API, webhook, health) tidak boleh masuk indeks Google. Halaman web diatur lewat <meta robots> di public/*.html. */
+    app.use('*', async (c, next) => {
+        const p = c.req.path
+        if (p.startsWith('/api/') || p === '/docs' || p === '/health' || p === '/callback' || p === '/webhook') c.header('X-Robots-Tag', 'noindex, nofollow')
+        await next()
+    })
     app.use('*', logApiRequest)
     app.use('*', rateLimiter())
     app.use('*', prettyPrint)
