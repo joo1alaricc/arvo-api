@@ -18,6 +18,30 @@ const root = document.documentElement
 root.dataset.theme = localStorage.getItem('theme') || 'dark'
 root.classList.add('js')
 
+/* ---------- skala tampilan situs (diatur admin di Dashboard Admin > Tampilan) ----------
+ * HP: lewat meta viewport (seluruh tata letak ikut, termasuk elemen fixed). Desktop: lewat CSS zoom.
+ * Di iframe pratinjau admin, skala dikirim lewat postMessage dan dipakai sebagai zoom. */
+const ZOOM = () => parseFloat(root.style.zoom) || 1
+const IS_MOB = matchMedia('(pointer:coarse)').matches && Math.min(screen.width, screen.height) <= 820
+const clampScale = (v) => { v = Number(v); return Number.isFinite(v) ? Math.min(130, Math.max(70, Math.round(v))) : 100 }
+const applyScale = (cfg) => {
+  const s = clampScale(IS_MOB ? cfg.m : cfg.d) / 100
+  if (IS_MOB) {
+    const vp = document.querySelector('meta[name=viewport]'); if (!vp) return
+    vp.content = s === 1 ? 'width=device-width, initial-scale=1' : `width=${Math.round(Math.min(screen.width, screen.height) / s)}, initial-scale=${s}`
+  } else root.style.zoom = s === 1 ? '' : s
+}
+if (self === top) {
+  try { applyScale(JSON.parse(localStorage.getItem('uiscale')) || {}) } catch {}
+  fetch('/api/ui', { cache: 'no-store' }).then((r) => r.json()).then((c) => {
+    const cfg = { d: clampScale(c.scale), m: clampScale(c.scale_mobile) }
+    try { localStorage.setItem('uiscale', JSON.stringify(cfg)) } catch {}
+    applyScale(cfg)
+  }).catch(() => {})
+} else {
+  addEventListener('message', (e) => { if (e.origin === location.origin && e.data && e.data.arvoScale) root.style.zoom = clampScale(e.data.arvoScale) / 100 === 1 ? '' : clampScale(e.data.arvoScale) / 100 })
+}
+
 /* Logo Arvo (huruf A + R) hasil tracing logo asli ke vektor. Sama dengan /logo.svg; fill=currentColor supaya ikut warna tile. */
 const LOGO_PATH = 'M40.6 0.5L0.1 70.9L14.2 70.9L40.5 25.6L41.7 27.3L56.0 27.3ZM49.3 0.0L56.4 12.5L85.2 12.4L85.5 12.9L72.7 34.9L43.4 34.9L36.3 47.3L53.1 47.4L66.8 70.9L81.1 70.9L67.9 47.5L80.1 47.2L100.0 12.4L92.8 0.0Z'
 /* Versi animasi untuk header: A + R dipecah dua path supaya digambar bergantian (garis -> terisi -> berkilau -> ulang) */
@@ -266,37 +290,45 @@ try { applySvc(JSON.parse(localStorage.getItem('svc'))) } catch {}
 api('/services').then((c) => { try { localStorage.setItem('svc', JSON.stringify(c)) } catch {} ; applySvc(c) }).catch(() => {})
 
 /* ---------- menu profil (klik foto profil di bar atas): kartu identitas + daftar menu, gaya Zireku ---------- */
-const pmAvatar = (u) => `<span class="pm-av">${u.avatar_url ? `<img src="${esc(u.avatar_url)}" alt="" draggable="false">` : ''}<i>${esc((u.username || '?')[0].toUpperCase())}</i></span>`
+/* cincin foto: free = Google, premium = silver & navy, vip = pilihan user (sama seperti di halaman profil) */
+const RING_VIP = ['#f7d774', '#b8860b', '#fff1a8'], RING_PREM = ['#0a2463', '#c9d1dc', '#1e3a8a', '#f1f4f8']
+const ringCss = (c) => `conic-gradient(${[...c, c[0]].join(',')})`
+const ringOf = (u) => (u.role === 'vip' ? ringCss(u.border_colors && u.border_colors.length ? u.border_colors : RING_VIP) : u.role === 'premium' ? ringCss(RING_PREM) : 'conic-gradient(#4285f4 0 25%,#ea4335 0 50%,#fbbc05 0 75%,#34a853 0 100%)')
+const pmAvatar = (u) => `<span class="pm-av" style="--ring:${ringOf(u)}"><span class="pm-in">${u.avatar_url ? `<img src="${esc(u.avatar_url)}" alt="" draggable="false">` : ''}<i>${esc((u.username || '?')[0].toUpperCase())}</i></span></span>`
 const initProfileMenu = (user, who, doLogout) => {
   const st = document.createElement('style'); st.id = 'pm-css'
   st.textContent = `
-.pm-btn{padding:0;border-radius:50%;overflow:hidden}
-.pm-av{position:relative;display:grid;place-items:center;width:100%;height:100%;border-radius:50%;overflow:hidden;background:color-mix(in srgb,var(--tx) 10%,transparent);color:var(--tx);font-weight:800;font-size:.9em}
-.pm-av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
-.pm-av i{font-style:normal}.pm-av img+i{visibility:hidden}.pm-av.no-img img{display:none}.pm-av.no-img i{visibility:visible}
+.pm-btn{padding:0;border:0;border-radius:50%;overflow:hidden;background:none}
+.pm-av{position:relative;display:block;width:100%;height:100%;border-radius:50%;overflow:hidden;padding:2px;box-sizing:border-box}
+.pm-av::before{content:"";position:absolute;inset:-50%;background:var(--ring);animation:pmSpin 3.2s linear infinite;will-change:transform}
+.pm-in{position:relative;z-index:1;display:grid;place-items:center;width:100%;height:100%;border-radius:50%;overflow:hidden;background:var(--bg);color:var(--tx);font-weight:800;font-size:.9em}
+.pm-in::after{content:"";position:absolute;inset:0;border-radius:50%;background:color-mix(in srgb,var(--tx) 10%,transparent)}
+.pm-in img{position:absolute;inset:0;z-index:1;width:100%;height:100%;object-fit:cover;display:block}
+.pm-in i{font-style:normal;position:relative;z-index:1}.pm-in img+i{visibility:hidden}.pm-av.no-img img{display:none}.pm-av.no-img i{visibility:visible}
+@keyframes pmSpin{to{transform:rotate(360deg)}}
 .pm-bd{position:fixed;inset:0;z-index:69;display:none}.pm-bd.open{display:block}
-.pm{position:fixed;z-index:70;top:calc(var(--navh,53px) + 8px);right:12px;width:min(340px,calc(100vw - 24px));max-height:calc(100dvh - var(--navh,53px) - 20px);overflow:auto;overscroll-behavior:contain;background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:18px;box-shadow:0 24px 60px -22px #000c;opacity:0;visibility:hidden;transform:translate3d(0,-8px,0) scale(.97);transform-origin:top right;transition:opacity .22s,transform .35s var(--ease),visibility 0s .35s}
+.pm{position:fixed;z-index:70;top:calc(var(--navh,53px) + 6px);right:10px;width:min(268px,calc(100vw - 20px));max-height:calc(100dvh - var(--navh,53px) - 16px);overflow:auto;overscroll-behavior:contain;background:color-mix(in srgb,var(--bg) 52%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(24px);backdrop-filter:saturate(1.8) blur(24px);color:var(--tx);border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 44px -20px #000b;opacity:0;visibility:hidden;transform:translate3d(0,-8px,0) scale(.97);transform-origin:top right;transition:opacity .22s,transform .35s var(--ease),visibility 0s .35s}
 .pm.open{opacity:1;visibility:visible;transform:none;transition:opacity .22s,transform .35s var(--ease),visibility 0s}
-.pm-h{display:flex;align-items:center;gap:14px;padding:18px 16px 16px;position:relative}
-.pm-h .pm-av{width:60px;height:60px;flex:none;font-size:24px;border:1px solid var(--line)}
-.pm-id{min-width:0;flex:1;display:grid;gap:2px;line-height:1.3}
-.pm-id b{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pm-id span{color:var(--mut);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pm-on{display:inline-flex;align-items:center;gap:7px;color:var(--tx)!important;font-size:13px!important;margin-top:3px}
-.pm-on::before{content:"";width:8px;height:8px;border-radius:50%;background:#34d081;box-shadow:0 0 0 3px color-mix(in srgb,#34d081 22%,transparent)}
-.pm-plan{align-self:flex-end;flex:none;display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:1px solid var(--line);border-radius:9px;font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--mut);background:color-mix(in srgb,var(--tx) 4%,transparent)}
-.pm-plan svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.pm-sec{border-top:1px solid var(--line);padding:6px 0}
-.pm-it{display:flex;align-items:center;gap:14px;width:100%;padding:11px 16px;border:0;background:none;color:var(--tx);font:inherit;text-align:left;text-decoration:none;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color .2s}
+.pm-h{display:flex;align-items:center;gap:11px;padding:13px 12px 11px;position:relative}
+.pm-h .pm-av{width:46px;height:46px;flex:none;font-size:19px;padding:3px}
+.pm-id{min-width:0;flex:1;display:grid;gap:1px;line-height:1.3}
+.pm-id b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pm-id span{color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pm-on{display:inline-flex;align-items:center;gap:6px;color:var(--tx)!important;font-size:11.5px!important;margin-top:2px}
+.pm-on::before{content:"";width:7px;height:7px;border-radius:50%;background:#34d081;box-shadow:0 0 0 3px color-mix(in srgb,#34d081 22%,transparent)}
+.pm-plan{align-self:flex-end;flex:none;display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border:1px solid var(--line);border-radius:8px;font-size:10.5px;font-weight:800;letter-spacing:.04em;color:var(--mut);background:color-mix(in srgb,var(--tx) 4%,transparent)}
+.pm-plan svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pm-sec{border-top:1px solid var(--line);padding:4px 0}
+.pm-it{display:flex;align-items:center;gap:11px;width:100%;padding:8px 12px;border:0;background:none;color:var(--tx);font:inherit;text-align:left;text-decoration:none;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background-color .2s}
 .pm-it:hover,.pm-it:focus-visible{background:color-mix(in srgb,var(--tx) 6%,transparent);outline:0}.pm-it:active{background:color-mix(in srgb,var(--tx) 10%,transparent)}
-.pm-ic{width:22px;height:22px;display:grid;place-items:center;flex:none;color:var(--mut)}
-.pm-ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.pm-tx{display:grid;gap:1px;line-height:1.3;min-width:0;flex:1}.pm-tx b{font-size:15.5px;font-weight:600}.pm-tx small{color:var(--mut);font-size:13.5px}
-.pm-sw{display:flex;align-items:center;gap:9px;border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:0}
-.pm-sw i{position:relative;width:44px;height:26px;border-radius:99px;background:color-mix(in srgb,var(--mut) 35%,transparent);transition:background-color .3s;flex:none}
-.pm-sw i::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 4px #0006;transition:transform .45s cubic-bezier(.34,1.5,.64,1)}
-.pm-sw[aria-checked=true] i{background:var(--tx)}.pm-sw[aria-checked=true] i::after{transform:translateX(18px);background:var(--bg)}
-.pm-sw b{min-width:42px;text-align:left;font-style:italic;font-weight:800;font-size:15px}
+.pm-ic{width:18px;height:18px;display:grid;place-items:center;flex:none;color:var(--mut)}
+.pm-ic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.pm-tx{display:grid;gap:0;line-height:1.3;min-width:0;flex:1}.pm-tx b{font-size:13.5px;font-weight:600}.pm-tx small{color:var(--mut);font-size:11.5px}
+.pm-sw{display:flex;align-items:center;gap:8px;border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:0}
+.pm-sw i{position:relative;width:36px;height:21px;border-radius:99px;background:color-mix(in srgb,var(--mut) 35%,transparent);transition:background-color .3s;flex:none}
+.pm-sw i::after{content:"";position:absolute;top:3px;left:3px;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 4px #0006;transition:transform .45s cubic-bezier(.34,1.5,.64,1)}
+.pm-sw[aria-checked=true] i{background:var(--tx)}.pm-sw[aria-checked=true] i::after{transform:translateX(15px);background:var(--bg)}
+.pm-sw b{min-width:36px;text-align:left;font-style:italic;font-weight:800;font-size:13px}
 .pm-it.out,.pm-it.out .pm-ic{color:#ef4444}.pm-it.out .pm-tx b{font-weight:600}.pm-it.out:hover{background:color-mix(in srgb,#ef4444 10%,transparent)}
 @media(prefers-reduced-motion:reduce){.pm{transition-duration:.01s!important}}`
   document.head.append(st)
@@ -322,7 +354,7 @@ const initProfileMenu = (user, who, doLogout) => {
   </div>
   <div class="pm-sec"><button type="button" class="pm-it out" id="pmout" role="menuitem"><span class="pm-ic">${ni('logout')}</span><span class="pm-tx"><b>Keluar</b></span></button></div>
 </div>`)
-  document.querySelectorAll('.pm-av img').forEach((im) => { const f = () => im.parentElement.classList.add('no-img'); im.addEventListener('error', f); if (im.complete && !im.naturalWidth) f() })
+  document.querySelectorAll('.pm-av img').forEach((im) => { const f = () => im.closest('.pm-av').classList.add('no-img'); im.addEventListener('error', f); if (im.complete && !im.naturalWidth) f() })
   const pm = $('#pm'), bd = $('#pmbd'), btn = $('#pmbtn')
   const open = (o) => {
     if (o === pm.classList.contains('open')) return
@@ -388,9 +420,15 @@ if (!matchMedia('(prefers-reduced-motion:reduce)').matches) {
     /* dialog modal berada di top layer di atas segalanya, jadi efeknya ditaruh di dalam dialog yang sedang terbuka */
     const dlg = document.querySelector('dialog[open]')
     const t = document.createElement('i'); t.className = 'tap'
+    /* letupan: 10 sinar pendek + 8 percikan titik ke segala arah (warna putih, aksen, emas) */
+    const rnd = (a, b) => a + Math.random() * (b - a), cols = ['#fff', '#fff', 'var(--ac)', '#ffd86b']
+    let h = ''
+    for (let i = 0; i < 10; i++) h += `<b class="r" style="--a:${(i * 36 + rnd(-9, 9)).toFixed(1)}deg;--s:${rnd(4, 8).toFixed(1)}px;--d:${rnd(24, 36).toFixed(1)}px;--l:${rnd(8, 14).toFixed(1)}px;--c:${i % 3 === 2 ? 'var(--ac)' : '#fff'}"></b>`
+    for (let i = 0; i < 8; i++) h += `<b class="d" style="--a:${rnd(0, 360).toFixed(1)}deg;--s:${rnd(10, 18).toFixed(1)}px;--d:${rnd(34, 54).toFixed(1)}px;--z:${rnd(2, 4).toFixed(1)}px;--dl:${rnd(0, .08).toFixed(2)}s;--c:${cols[i % 4]}"></b>`
+    t.innerHTML = h
     if (dlg && dlg.contains(e.target)) { const r = dlg.getBoundingClientRect(); t.style.left = e.clientX - r.left + dlg.scrollLeft + 'px'; t.style.top = e.clientY - r.top + dlg.scrollTop + 'px'; dlg.append(t) }
-    else { t.style.left = e.clientX + 'px'; t.style.top = e.clientY + 'px'; layer.append(t) }
-    setTimeout(() => t.remove(), 800)
+    else { t.style.left = e.clientX / ZOOM() + 'px'; t.style.top = e.clientY / ZOOM() + 'px'; layer.append(t) }
+    setTimeout(() => t.remove(), 900)
   }, { passive: true, capture: true })
 }
 
