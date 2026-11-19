@@ -15,6 +15,7 @@ import { dynamicHandler, mergeSpec } from './api/dynamic.js'
 import { BUILTIN_PATHS, builtinInfo } from './api/index.js'
 import { store, currentUser } from './utils/session.js'
 import { getOverrides } from './utils/overrides.js'
+import { services } from './utils/services.js'
 
 const createApp = () => {
     const app = new OpenAPIHono()
@@ -30,6 +31,20 @@ const createApp = () => {
     app.route('/api/auth', auth)
     app.route('/api/admin', admin)
     app.route('/api/tools', tools)
+    /* Status layanan (publik) untuk menyembunyikan menu layanan yang dimatikan admin. */
+    app.get('/api/services', async (c) => { c.header('Cache-Control', 'no-store'); return c.json(await services(c)) })
+
+    /* Halaman /smm, /otp, /am: kalau layanannya dinonaktifkan admin, tampil 404. (wrangler.toml: run_worker_first memastikan Worker yang menjawab, bukan aset statis.) */
+    for (const [key, base] of [['smm', '/smm'], ['otp', '/otp'], ['am', '/am']]) {
+        for (const p of [base, base + '/', base + '.html']) {
+            app.get(p, async (c) => {
+                if ((await services(c))[key]) return c.env.ASSETS.fetch(c.req.raw)
+                const page = await c.env.ASSETS.fetch(new Request(new URL('/errors/404.html', c.req.url)))
+                return page.status === 404 ? c.text('404 Not Found', 404) : new Response(page.body, { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+            })
+        }
+    }
+
     /* Halaman /callback dan /webhook untuk kebutuhan API (payment gateway & pembaca notifikasi pembayaran).
      *  POST /callback?t=BTZPAY_CALLBACK_TOKEN   : callback BTZPay (sama dengan /api/billing/btzpay/callback)
      *  POST /webhook  + Bearer PAYMENT_WEBHOOK_SECRET {amount} : konfirmasi pembayaran (sama dengan /api/billing/webhook)
