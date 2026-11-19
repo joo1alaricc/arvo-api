@@ -832,7 +832,31 @@ export class StoreDO extends DurableObject {
     /* ---------- konten dashboard (Contributor, S&K, Thanks To) ---------- */
     siteContent() {
         const d = this.setting('site_content', null) || {}
-        return { contributors: Array.isArray(d.contributors) ? d.contributors : [], terms: this.cleanTerms(d.terms), thanks: Array.isArray(d.thanks) ? d.thanks : [] }
+        return { contributors: Array.isArray(d.contributors) ? d.contributors : [], terms: this.cleanTerms(d.terms), thanks: Array.isArray(d.thanks) ? d.thanks : [], footer: this.cleanFooter(d.footer) }
+    }
+    /* Footer situs (brand, deskripsi, ikon sosial, kolom tautan). Tiap tautan = { name, value } dengan value = link tujuan.
+     * Belum pernah disimpan admin -> pakai bawaan di bawah. */
+    footerDefault() {
+        return {
+            desc: 'API gateway simpel dan cepat. Coba gratis, upgrade ke Premium atau VIP kapan saja, bayar via QRIS dan key langsung aktif.',
+            social: [{ name: 'WhatsApp', value: 'https://whatsapp.com/channel/0029Vb76SfPDzgTBlh5Tn70I' }, { name: 'Instagram', value: 'https://www.instagram.com/brzee_.sky' }],
+            groups: [
+                { title: 'Layanan', links: [{ name: 'Paket & Harga', value: '/#paket' }, { name: 'Playground', value: '/playground.html' }, { name: 'Dashboard', value: '/dashboard.html' }, { name: 'Cara Kerja', value: '/#cara' }, { name: 'FAQ', value: '/#faq' }] },
+                { title: 'Legal & Bantuan', links: [{ name: 'Ketentuan Layanan', value: '/dashboard.html' }, { name: 'Channel Resmi', value: 'https://whatsapp.com/channel/0029Vb76SfPDzgTBlh5Tn70I' }] },
+            ],
+        }
+    }
+    cleanFooter(f) {
+        if (!f || typeof f !== 'object') return this.footerDefault()
+        const t = (v, n) => String(v ?? '').trim().slice(0, n)
+        /* hanya link aman: http(s), path dalam situs, #anchor, mailto, tel (javascript: dll ditolak) */
+        const link = (v) => { v = t(v, 500); return /^(https?:\/\/|\/|#|mailto:|tel:)/i.test(v) ? v : '' }
+        const items = (a, n) => (Array.isArray(a) ? a : []).slice(0, n).map((x) => ({ name: t(x && x.name, 80), value: link(x && x.value) })).filter((x) => x.name && x.value)
+        return {
+            desc: t(f.desc, 500),
+            social: items(f.social, 10),
+            groups: (Array.isArray(f.groups) ? f.groups : []).slice(0, 6).map((g) => ({ title: t(g && g.title, 60), links: items(g && g.links, 20) })).filter((g) => g.title),
+        }
     }
     cleanTerms(a) {
         const t = (v, n) => String(v ?? '').trim().slice(0, n)
@@ -849,7 +873,7 @@ export class StoreDO extends DurableObject {
         const list = (a, n) => (Array.isArray(a) ? a.map((x) => t(x, 400)).filter(Boolean).slice(0, n) : [])
         const contributors = (Array.isArray(b.contributors) ? b.contributors : []).slice(0, 30)
             .map((x) => ({ name: t(x && x.name, 80), role: t(x && x.role, 120), website: url(x && x.website), avatar: img(x && x.avatar) })).filter((x) => x.name)
-        const v = { contributors, terms: this.cleanTerms(b.terms), thanks: list(b.thanks, 50) }
+        const v = { contributors, terms: this.cleanTerms(b.terms), thanks: list(b.thanks, 50), footer: this.cleanFooter(b.footer || this.setting('site_content', null)?.footer) }
         this.saveSetting('site_content', v)
         return { ok: true, ...v }
     }
