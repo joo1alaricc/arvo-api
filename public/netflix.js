@@ -6,7 +6,7 @@ document.head.append(css)
 const I = (n) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${NI[n] || ''}</svg>`
 const note = (e, t, bad) => { e.textContent = t; e.className = 'msg' + (bad ? ' err' : ''); e.style.color = bad ? 'var(--r)' : t ? 'var(--g)' : '' }
 const safe = (v) => v == null || v === '' ? '—' : esc(String(v))
-const copy = async (v, b) => { try { await navigator.clipboard.writeText(v); const old = b.textContent; b.textContent = 'Tersalin'; setTimeout(() => b.textContent = old, 1200) } catch { note($('#result-msg'), 'Browser tidak mengizinkan akses clipboard.', true) } }
+const copyToken = async (v, b) => { try { await navigator.clipboard.writeText(v); const old = b.textContent; b.textContent = 'Tersalin'; setTimeout(() => b.textContent = old, 1200) } catch { note($('#result-msg'), 'Browser tidak mengizinkan akses clipboard.', true) } }
 const render = () => {
   el.innerHTML = `<h1>Netflix Token Generator</h1><p class="sub">Buat token Netflix untuk akun yang kamu miliki. Cookie bersifat opsional, kosongkan untuk mode auto-generate.</p>
   <div class="card"><div class="card-h">${I('key')}<span>Konfigurasi Token</span></div><div class="card-b">
@@ -36,7 +36,7 @@ const show = (r) => {
     <p class="muted" style="margin:0">Token dan tautan ini dapat memberikan akses ke sesi akun. Simpan secara pribadi. Data harga tidak ditampilkan.</p>
   </div></div>`
   $('#token').value = r.token || ''
-  $('#copy-token').onclick = () => copy(r.token || '', $('#copy-token'))
+  $('#copy-token').onclick = () => copyToken(r.token || '', $('#copy-token'))
 }
 const locked = (user, requiredName = 'Premium 2') => {
   const current = user?.plan_name || 'Free User'
