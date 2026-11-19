@@ -164,6 +164,7 @@ API/
   Konfirmasi otomatis: `POST /api/billing/webhook` + `Authorization: Bearer <PAYMENT_WEBHOOK_SECRET>`, body `{"amount": 5037}`.
   Atau manual dari Admin > Order.
 - Setup: `npm install`, `wrangler secret put PAYMENT_WEBHOOK_SECRET`, `npm run deploy`.
+- Netflix Token Generator: tambahkan secret `wrangler secret put VAMX_API_KEY` (API key VamxAPI). Fitur tersedia di `/netflix`; kunci hanya dibaca Worker dan tidak dikirim ke browser.
 
 
 ---
