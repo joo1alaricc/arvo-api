@@ -15,16 +15,45 @@
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Masuk · Arvo API"><meta name="twitter:description" content="Masuk atau daftar akun Arvo API untuk mendapatkan API key."><meta name="twitter:image" content="https://arvo-api.my.id/og-image.png"><meta name="twitter:image:alt" content="Arvo API: API gateway simpel dengan kuota yang jelas">
 <!-- seo:end -->
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-<style>.gbtn{position:relative;height:40px;border-radius:12px;isolation:isolate}.gface{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;pointer-events:none}.gface svg{width:18px;height:18px;flex:none}.gov{position:absolute;inset:0;z-index:2;overflow:hidden;opacity:.004;cursor:pointer}</style><link rel="stylesheet" href="site.css?v=a2e3a1e8"><link rel="stylesheet" href="motion.css?v=79935f3d"></head>
+<style>.gbtn{position:relative;height:40px;border-radius:12px;isolation:isolate}.gface{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;pointer-events:none}.gface svg{width:18px;height:18px;flex:none}.gov{position:absolute;inset:0;z-index:2;overflow:hidden;opacity:.004;cursor:pointer}
+/* Kekuatan password + checklist + langkah OTP — khusus mode Daftar, tema ikut variabel situs (--ok/--bad/--line/dst), bukan tema vamx. */
+.pwmeter{display:none;margin-top:2px}.pwmeter.show{display:block}
+.pwmeter .row{display:flex;justify-content:space-between;font-size:11.5px;color:var(--mut);margin-bottom:5px}.pwmeter .row b{font-weight:700}
+.pwmeter .bar{height:5px;border-radius:99px;background:var(--line);overflow:hidden}.pwmeter .bar i{display:block;height:100%;width:0;border-radius:99px;background:var(--bad);transition:width .25s,background-color .25s}
+.pwchecks{display:none;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:9px;font-size:12px}.pwchecks.show{display:grid}
+.pwchecks li{list-style:none;display:flex;align-items:center;gap:6px;color:var(--mut);transition:color .2s}.pwchecks li.ok{color:var(--ok)}
+.pwchecks li svg{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.termsrow{display:none;align-items:flex-start;gap:9px;font-size:12.5px;line-height:1.5;color:var(--mut);margin-top:4px}.termsrow.show{display:flex}
+.termsrow input{width:auto;margin:3px 0 0}
+.otpstep{display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.otpstep.show{display:block}
+.otpstep input{letter-spacing:6px;font:600 18px 'JetBrains Mono',monospace;text-align:center}
+.otpback{background:none;border:0;color:var(--mut);font:inherit;font-size:12.5px;cursor:pointer;padding:0;margin-top:8px;text-decoration:underline}
+</style><link rel="stylesheet" href="site.css?v=a2e3a1e8"><link rel="stylesheet" href="motion.css?v=79935f3d"></head>
 <body><main class="wrap"><div class="panel auth">
   <div class="tabs"><button class="on" data-m="login">Masuk</button><button data-m="register">Daftar</button></div>
   <form id="f" style="margin-top:16px">
     <input id="u" placeholder="Username atau email" autocomplete="username" required>
-    <input id="e" type="email" placeholder="Email (opsional)" autocomplete="email" hidden>
+    <input id="e" type="email" placeholder="Email" autocomplete="email" hidden>
     <input id="p" type="password" placeholder="Password (min. 8 karakter)" autocomplete="current-password" required>
+    <div class="pwmeter" id="pwmeter"><div class="row"><span>Kekuatan Password:</span><b id="pwlabel"></b></div><div class="bar"><i id="pwbar"></i></div></div>
+    <ul class="pwchecks" id="pwchecks">
+      <li data-k="len"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> Min. 8 karakter</li>
+      <li data-k="low"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> Huruf kecil (a-z)</li>
+      <li data-k="up"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> Huruf besar (A-Z)</li>
+      <li data-k="num"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> Angka (0-9)</li>
+      <li data-k="sym"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> Simbol (!@#$%^&amp;*)</li>
+    </ul>
+    <label class="termsrow" id="termsrow"><input type="checkbox" id="terms"> <span>Saya menyetujui Ketentuan Layanan dan Kebijakan Privasi Arvo API.</span></label>
     <button class="btn" id="go">Masuk</button>
     <label id="admrow" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px;cursor:pointer"><input type="checkbox" id="adm" style="width:auto;margin:0"> Login sebagai Pengelola</label>
   </form>
+  <div class="otpstep" id="otpstep">
+    <label style="font-size:13px;font-weight:600">Kode verifikasi</label>
+    <p class="msg" style="margin:2px 0 8px" id="otphint"></p>
+    <input id="otpcode" inputmode="numeric" maxlength="6" placeholder="••••••" autocomplete="one-time-code">
+    <button class="btn" id="otpgo" style="margin-top:9px;width:100%">Verifikasi &amp; Buat Akun</button>
+    <button type="button" class="otpback" id="otpback">Ubah email / kirim ulang kode</button>
+  </div>
   <p class="msg" id="m"></p>
   <div id="gwrapbox"><div id="gwrap" hidden><div class="sep">atau</div>
     <div class="gbtn" id="gb"><span class="gface" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="width:18px;height:18px;flex:none"><path fill="#4285F4" d="M22 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.6a4.8 4.8 0 0 1-2.1 3.1v2.6h3.4c2-1.8 3.1-4.5 3.1-7.5z"/><path fill="#34A853" d="M12 22c2.8 0 5.2-.9 6.9-2.5l-3.4-2.6c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.7v2.7A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.2 13.6a6 6 0 0 1 0-3.8V7.1H2.7a10 10 0 0 0 0 9z"/><path fill="#EA4335" d="M12 6.1c1.5 0 2.8.5 3.9 1.5l2.9-2.9A10 10 0 0 0 2.7 7.1l3.5 2.7C7 7.9 9.3 6.1 12 6.1z"/></svg><span>Lanjutkan dengan Google</span></span><div class="gov" id="gbtn"></div></div></div></div>
@@ -48,22 +77,62 @@ const admUi = () => {
   $('#u').placeholder = a ? 'Email' : 'Username atau email'; $('#u').type = a ? 'email' : 'text'; $('#u').autocomplete = a ? 'email' : 'username'
   $('#p').placeholder = a ? 'Access Key' : 'Password (min. 8 karakter)'; $('#p').autocomplete = a ? 'off' : mode === 'login' ? 'current-password' : 'new-password'
   $('#gwrapbox').style.display = a ? 'none' : ''
+  const reg = mode === 'register' && !a
+  $('#pwmeter').classList.toggle('show', reg); $('#pwchecks').classList.toggle('show', reg); $('#termsrow').classList.toggle('show', reg)
+  if (!reg) pwUi()
 }
+/* Kekuatan password + checklist (register saja). Skor dari 5 aturan -> warna & label. */
+const PW_RULES = { len: (v) => v.length >= 8, low: (v) => /[a-z]/.test(v), up: (v) => /[A-Z]/.test(v), num: (v) => /[0-9]/.test(v), sym: (v) => /[^A-Za-z0-9]/.test(v) }
+const PW_LABELS = ['Sangat Lemah', 'Lemah', 'Cukup', 'Kuat', 'Sangat Kuat & Aman']
+const pwUi = () => {
+  const v = $('#p').value, hits = Object.entries(PW_RULES).map(([k, f]) => [k, f(v)])
+  const score = hits.filter(([, ok]) => ok).length
+  hits.forEach(([k, ok]) => $(`#pwchecks li[data-k="${k}"]`).classList.toggle('ok', ok))
+  const pct = v ? Math.max(14, (score / 5) * 100) : 0
+  $('#pwbar').style.width = pct + '%'
+  $('#pwbar').style.background = !v ? 'var(--line)' : score <= 2 ? 'var(--bad)' : score === 3 ? '#e0a63e' : score === 4 ? '#3ecf8e' : 'var(--ok)'
+  $('#pwlabel').textContent = v ? PW_LABELS[Math.max(0, score - 1)] : ''
+}
+$('#p').addEventListener('input', pwUi)
+/* Langkah: 'form' (isi data) -> 'otp' (masukkan kode yang dikirim ke email). */
+let step = 'form', otpToken = null, otpEmail = null
+const stepUi = () => {
+  $('#f').hidden = step === 'otp'
+  $('#otpstep').classList.toggle('show', step === 'otp')
+  if (step === 'otp') $('#otphint').textContent = `Kode dikirim ke ${otpEmail}. Berlaku 10 menit.`
+}
+$('#otpback').onclick = () => { step = 'form'; otpToken = null; stepUi(); say($('#m'), '') }
 document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => {
   if (isAdm() && b.dataset.m !== 'login') return
-  mode = b.dataset.m
+  mode = b.dataset.m; step = 'form'; otpToken = null; stepUi()
   document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b))
-  $('#e').hidden = mode !== 'register'; $('#go').textContent = mode === 'login' ? 'Masuk' : 'Buat akun'
-  $('#admrow').hidden = mode !== 'login'; if (mode !== 'login') $('#adm').checked = false; admUi()
+  $('#e').hidden = mode !== 'register'; $('#e').required = mode === 'register'; $('#go').textContent = mode === 'login' ? 'Masuk' : 'Kirim Kode OTP'
+  $('#admrow').hidden = mode !== 'login'; if (mode !== 'login') $('#adm').checked = false; admUi(); say($('#m'), '')
 }))
 $('#adm').onchange = admUi
 if (qs.get('as') === 'admin') { $('#adm').checked = true; admUi() }
 $('#f').onsubmit = async (ev) => {
   ev.preventDefault()
+  const b = $('#go'); b.disabled = true
   try {
     if (isAdm()) { await put('/auth/admin-login', { email: $('#u').value, access_key: $('#p').value }, 'POST'); location.href = '/admin.html'; return }
-    await put('/auth/' + mode, { username: $('#u').value, password: $('#p').value, email: $('#e').value }, 'POST'); location.href = dest
+    if (mode === 'login') { await put('/auth/login', { username: $('#u').value, password: $('#p').value }, 'POST'); location.href = dest; return }
+    /* Daftar: validasi ringan dulu, lalu minta kode OTP ke email yang diisi. */
+    if (!$('#terms').checked) throw new Error('Setujui Ketentuan Layanan dan Kebijakan Privasi dulu ya.')
+    if ($('#p').value.length < 8) throw new Error('Password minimal 8 karakter.')
+    const r = await put('/auth/send-otp', { email: $('#e').value }, 'POST')
+    otpToken = r.otp_token; otpEmail = $('#e').value.trim()
+    step = 'otp'; stepUi(); say($('#m'), '')
   } catch (e) { say($('#m'), e.message, 1) }
+  b.disabled = false
+}
+$('#otpgo').onclick = async () => {
+  const b = $('#otpgo'); b.disabled = true
+  try {
+    await put('/auth/register', { username: $('#u').value, password: $('#p').value, email: otpEmail, code: $('#otpcode').value.trim(), otp_token: otpToken }, 'POST')
+    location.href = dest
+  } catch (e) { say($('#m'), e.message, 1) }
+  b.disabled = false
 }
 /* Google: mode redirect. Tombol membawa kamu ke Google lalu kembali ke /api/auth/google/callback,
    tanpa popup. Di Google Cloud Console daftarkan origin situs ini dan URI callback tersebut. */
