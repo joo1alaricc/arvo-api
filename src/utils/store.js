@@ -9,6 +9,8 @@ const GRACE = 10 * 60 * 1000
 const fail = (status, error, message) => ({ ok: false, status, error, message })
 /* JSON.parse yang tidak pernah melempar error: data lama/korup (NULL, teks rusak) jatuh ke nilai bawaan, bukan membuat seluruh request 500. */
 const jparse = (v, d) => { try { const x = JSON.parse(v); return x ?? d } catch { return d } }
+/* Perbandingan string waktu-konstan (cegah tebak karakter demi karakter lewat selisih waktu). */
+const tsEq = (a, b) => { let d = a.length ^ b.length; for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0); return d === 0 }
 const hex = (n) => [...crypto.getRandomValues(new Uint8Array(n))].map((b) => b.toString(16).padStart(2, '0')).join('')
 const validIp = (ip) => /^(\d{1,3}\.){3}\d{1,3}$/.test(ip)
     ? ip.split('.').every((n) => +n <= 255)
@@ -289,6 +291,11 @@ export class StoreDO extends DurableObject {
     flag(userId, ip, path, kind, now) {
         this.sql.exec('INSERT INTO violations(user_id,ip,path,kind,at) VALUES(?,?,?,?,?)', userId, ip, String(path).slice(0, 120), kind, now)
         this.sql.exec('DELETE FROM violations WHERE id<(SELECT MAX(id)-499 FROM violations)')
+        /* Auto-blokir: IP yang menumpuk pelanggaran (key salah, IP tak terdaftar, tier) dalam 10 menit. Admin bisa buka blokir di panel. */
+        if (ip && ip !== 'unknown' && !String(this.env?.OWNER_IPS || '').split(',').map((x) => x.trim()).includes(ip)) {
+            const n = this.q('SELECT COUNT(*) c FROM violations WHERE ip=? AND at>?', ip, now - 600000)[0].c
+            if (n >= 40) this.sql.exec("INSERT OR IGNORE INTO blocked_ips(ip,reason,created_at) VALUES(?,?,?)", String(ip).toLowerCase(), 'auto: terlalu banyak pelanggaran', now)
+        }
         return { ok: true }
     }
     adminViolations() {
@@ -819,7 +826,7 @@ export class StoreDO extends DurableObject {
         const bad = fail(401, 'invalid_access_key', 'Access key tidak valid.')
         if (!key) return bad
         const env = this.env?.OWNER_ACCESS_KEY
-        if (env && key === String(env)) return { ok: true, level: 'super', name: 'owner', id: null }
+        if (env && tsEq(key, String(env))) return { ok: true, level: 'super', name: 'owner', id: null }
         const [u] = this.q('SELECT id,username FROM users WHERE access_key=?', key)
         const lv = u && this.adminLevel(u.id)
         return lv ? { ok: true, level: lv, name: u.username, id: u.id } : bad
