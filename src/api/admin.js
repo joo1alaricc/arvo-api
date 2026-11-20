@@ -3,6 +3,7 @@ import { store, send, fail, currentUser } from '../utils/session.js'
 import { refreshBlocked } from '../utils/rateLimit.js'
 import { refreshServices, refreshUi } from '../utils/services.js'
 import { getOverrides, refreshOverrides } from '../utils/overrides.js'
+import { bustCatalog } from '../utils/catalogCache.js'
 import { BUILTIN_PATHS, builtinInfo } from './index.js'
 import { ghStatus, ghTree, ghGet, ghPut, ghDelete, ghRuns, safePath, b64ToText, textToB64 } from '../utils/github.js'
 import { analyze, build, readBack, patchIndex, syncIndex, exportPairs, SYNC_FILE_RE, exportNames, slugFrom, EXAMPLE, STRUCTURE_HELP } from '../utils/endpointGen.js'
@@ -86,13 +87,13 @@ admin.get('/builtin', async (c) => {
     const ov = await getOverrides(c)
     return c.json({ ok: true, endpoints: builtinInfo().map((e) => { const o = ov[e.path]; return { ...e, base: { name: e.name, description: e.description, access: e.access, status: e.status }, overridden: !!o, ...(o ? { name: o.name, description: o.description, access: o.access, status: o.status } : {}) } }) })
 })
-admin.put('/builtin', async (c) => { const r = await store(c).adminSaveBuiltin(await body(c), BUILTIN_PATHS); refreshOverrides(); return send(c, r) })
-admin.delete('/builtin/:path', async (c) => { const r = await store(c).adminResetBuiltin('/api/' + decodeURIComponent(c.req.param('path'))); refreshOverrides(); return send(c, r) })
+admin.put('/builtin', async (c) => { const r = await store(c).adminSaveBuiltin(await body(c), BUILTIN_PATHS); refreshOverrides(); bustCatalog(); return send(c, r) })
+admin.delete('/builtin/:path', async (c) => { const r = await store(c).adminResetBuiltin('/api/' + decodeURIComponent(c.req.param('path'))); refreshOverrides(); bustCatalog(); return send(c, r) })
 admin.get('/violations', async (c) => send(c, await store(c).adminViolations()))
 admin.get('/endpoints', async (c) => send(c, await store(c).listEndpoints()))
-admin.post('/endpoints', async (c) => send(c, await store(c).adminSaveEndpoint(await body(c), null, BUILTIN_PATHS, Date.now())))
-admin.put('/endpoints/:id', async (c) => send(c, await store(c).adminSaveEndpoint(await body(c), +c.req.param('id'), BUILTIN_PATHS, Date.now())))
-admin.delete('/endpoints/:id', async (c) => send(c, await store(c).adminDeleteEndpoint(+c.req.param('id'))))
+admin.post('/endpoints', async (c) => { const r = await store(c).adminSaveEndpoint(await body(c), null, BUILTIN_PATHS, Date.now()); bustCatalog(); return send(c, r) })
+admin.put('/endpoints/:id', async (c) => { const r = await store(c).adminSaveEndpoint(await body(c), +c.req.param('id'), BUILTIN_PATHS, Date.now()); bustCatalog(); return send(c, r) })
+admin.delete('/endpoints/:id', async (c) => { const r = await store(c).adminDeleteEndpoint(+c.req.param('id')); bustCatalog(); return send(c, r) })
 
 /* ---------- tim admin (super admin saja) ---------- */
 admin.get('/admins', async (c) => send(c, await store(c).listAdmins()))
