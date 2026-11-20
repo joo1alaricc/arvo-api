@@ -7,6 +7,8 @@ const BOOT_AT = Date.now()
 const DAY = 864e5
 const GRACE = 10 * 60 * 1000
 const fail = (status, error, message) => ({ ok: false, status, error, message })
+/* JSON.parse yang tidak pernah melempar error: data lama/korup (NULL, teks rusak) jatuh ke nilai bawaan, bukan membuat seluruh request 500. */
+const jparse = (v, d) => { try { const x = JSON.parse(v); return x ?? d } catch { return d } }
 const hex = (n) => [...crypto.getRandomValues(new Uint8Array(n))].map((b) => b.toString(16).padStart(2, '0')).join('')
 const validIp = (ip) => /^(\d{1,3}\.){3}\d{1,3}$/.test(ip)
     ? ip.split('.').every((n) => +n <= 255)
@@ -85,7 +87,7 @@ export class StoreDO extends DurableObject {
             baseDays: r.base_days, basePrice: r.base_price, permanentPrice: r.permanent_price, visible: !!r.visible,
         }]))
     }
-    setting(k, d = null) { const [r] = this.q('SELECT value FROM settings WHERE key=?', k); return r ? JSON.parse(r.value) : d }
+    setting(k, d = null) { const [r] = this.q('SELECT value FROM settings WHERE key=?', k); return r ? jparse(r.value, d) : d }
     saveSetting(k, v) { this.sql.exec('INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', k, JSON.stringify(v)) }
     touchIp(uid, ip, now, src) {
         if (!ip || ip === 'unknown') return
@@ -132,7 +134,7 @@ export class StoreDO extends DurableObject {
             api_key: u.api_key, role: p ? p.tier : 'member', plan: u.plan, plan_name: p ? p.name : u.plan ? this.plans[u.plan]?.name || u.plan : null,
             plan_parts: p ? p.parts : [], active: !!p, expired: !!u.plan && !p, expires_at: u.expires_at, daily_limit: limit, free_limit: this.freeLimit(),
             remaining: limit === null ? null : Math.max(0, limit - used),
-            max_ips: p ? p.maxIps : this.freeIps(), custom_key: !!p?.customKey, ips: JSON.parse(u.ips),
+            max_ips: p ? p.maxIps : this.freeIps(), custom_key: !!p?.customKey, ips: jparse(u.ips, []),
             used_today: used, total_requests: u.total, created_at: u.created_at, border_colors: Array.isArray(border) ? border : null,
             phone: u.phone || null, bio: u.bio || null, avatar_url: u.avatar_data ? `/api/auth/me/avatar?v=${u.avatar_ver || 1}` : (u.avatar_url || null), last_ip: u.last_ip || null }
     }
@@ -144,25 +146,50 @@ export class StoreDO extends DurableObject {
         this.touchIp(id, ip, now, 'web')
         return id
     }
+    /* Email dipakai oleh akun lain (kolom email biasa ATAU email terverifikasi Google), atau dicadangkan untuk admin (ADMIN_EMAILS). */
+    emailTaken(email, exceptId = null) {
+        const e = String(email || '').trim().toLowerCase()
+        if (!e) return false
+        if (this.adminEmails().includes(e)) return true
+        return this.q('SELECT 1 FROM users WHERE (lower(email)=? OR lower(verified_email)=?) AND id<>? LIMIT 1', e, e, exceptId ?? -1).length > 0
+    }
+    /* Username otomatis dari bagian depan email; kalau sudah ada, tambahkan angka acak. Bisa diganti user di Profil. */
+    freeUsername(email) {
+        const base = (String(email || '').split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 14) || 'user').padEnd(3, '0')
+        let name = base
+        for (let i = 0; i < 20 && this.q('SELECT 1 FROM users WHERE username=?', name).length; i++) name = base + Math.floor(Math.random() * 9000 + 1000)
+        return name
+    }
+    /* Daftar = email + password. Username dibuat otomatis (o.username hanya dipakai bila diberikan eksplisit). */
     register(o) {
-        if (this.q('SELECT 1 FROM users WHERE username=?', o.username).length) return fail(409, 'username_taken', 'Username sudah dipakai.')
-        return { ok: true, id: this.insertUser(o) }
+        const email = String(o.email || '').trim().toLowerCase()
+        if (this.emailTaken(email)) return fail(409, 'email_taken', 'Email ini sudah terdaftar. Silakan masuk.')
+        const username = o.username || this.freeUsername(email)
+        if (this.q('SELECT 1 FROM users WHERE username=?', username).length) return fail(409, 'username_taken', 'Username sudah dipakai.')
+        return { ok: true, id: this.insertUser({ ...o, username, email }) }
+    }
+    /* Pembatas percobaan (login, daftar, admin-login) di memori Durable Object: key -> {n, reset}. */
+    throttle(key, max, windowMs, now) {
+        this.thr ??= new Map()
+        if (this.thr.size > 5000) for (const [k, v] of this.thr) if (v.reset <= now) this.thr.delete(k)
+        let e = this.thr.get(key)
+        if (!e || e.reset <= now) e = { n: 0, reset: now + windowMs }
+        e.n++
+        this.thr.set(key, e)
+        return e.n > max ? fail(429, 'too_many_attempts', `Terlalu banyak percobaan. Coba lagi dalam ${Math.max(1, Math.ceil((e.reset - now) / 60000))} menit.`) : { ok: true }
     }
     googleLogin({ sub, email, now, ip }) {
         const [u] = this.q('SELECT id,avatar_data,avatar_url,avatar_ver FROM users WHERE google_sub=?', sub)
         const ve = String(email || '').trim().toLowerCase()
         /* avatar_ver terisi = user pernah mengatur/menghapus foto sendiri, jangan ditimpa foto Google lagi */
         if (u) { this.sql.exec('UPDATE users SET verified_email=? WHERE id=?', ve, u.id); this.touchIp(u.id, ip, now, 'web'); return { ok: true, id: u.id, needAvatar: !u.avatar_data && !u.avatar_url && u.avatar_ver == null } }
-        const base = (email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 14) || 'user').padEnd(3, '0')
-        let name = base
-        while (this.q('SELECT 1 FROM users WHERE username=?', name).length) name = base + Math.floor(Math.random() * 9000 + 1000)
-        const id = this.insertUser({ username: name, email, sub, now, ip })
+        const id = this.insertUser({ username: this.freeUsername(ve), email: ve, sub, now, ip })
         this.sql.exec('UPDATE users SET verified_email=? WHERE id=?', ve, id)
         return { ok: true, id, needAvatar: true }
     }
     authInfo({ username, id }) {
         const [u] = id ? this.q('SELECT * FROM users WHERE id=?', id) : this.q('SELECT * FROM users WHERE username=?', username)
-        return u ? { ok: true, id: u.id, hash: u.pass_hash, salt: u.pass_salt } : fail(401, 'invalid_login', 'Username atau password salah.')
+        return u ? { ok: true, id: u.id, hash: u.pass_hash, salt: u.pass_salt } : fail(401, 'invalid_login', 'Email/username atau password salah.')
     }
     /* login dengan email: kembalikan semua akun yang cocok (email terverifikasi Google didahulukan); password tetap harus cocok. */
     authByEmail(email) {
@@ -320,7 +347,8 @@ export class StoreDO extends DurableObject {
             if ('email' in b) {
                 const e = String(b.email ?? '').trim()
                 if (e && !/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(e)) throw new Error('Format email tidak valid.')
-                out.email = e || null
+                if (e && this.emailTaken(e, id)) throw new Error('Email itu sudah dipakai akun lain.')
+                out.email = e ? e.toLowerCase() : null
             }
             if ('phone' in b) {
                 const ph = String(b.phone ?? '').replace(/[\s-]/g, '')
@@ -340,14 +368,14 @@ export class StoreDO extends DurableObject {
     }
     listIps(id) {
         const u = this.user(id), meta = new Map(this.q('SELECT * FROM ip_meta WHERE user_id=?', id).map((r) => [r.ip, r]))
-        return { ok: true, ips: JSON.parse(u.ips).map((ip) => ({ ip, created_at: meta.get(ip)?.created_at ?? null, last_used: meta.get(ip)?.last_used ?? null, req: meta.get(ip)?.req ?? 0 })) }
+        return { ok: true, ips: jparse(u.ips, []).map((ip) => ({ ip, created_at: meta.get(ip)?.created_at ?? null, last_used: meta.get(ip)?.last_used ?? null, req: meta.get(ip)?.req ?? 0 })) }
     }
     addIp(id, ip, now) {
-        const cur = JSON.parse(this.user(id).ips), v = String(ip || '').trim().toLowerCase()
+        const cur = jparse(this.user(id).ips, []), v = String(ip || '').trim().toLowerCase()
         return cur.includes(v) ? fail(409, 'ip_exists', 'IP itu sudah ada di whitelist.') : this.setIps(id, [...cur, v], now)
     }
     removeIp(id, ip, now) {
-        const cur = JSON.parse(this.user(id).ips), v = String(ip || '').trim().toLowerCase()
+        const cur = jparse(this.user(id).ips, []), v = String(ip || '').trim().toLowerCase()
         return cur.includes(v) ? this.setIps(id, cur.filter((i) => i !== v), now) : fail(404, 'not_found', 'IP tidak ada di whitelist.')
     }
     redeem(id, code, now) {
@@ -364,7 +392,7 @@ export class StoreDO extends DurableObject {
         return { ok: true, plan: r.plan, name: this.plans[r.plan]?.name || r.plan, days: r.days }
     }
     deleteAccount(id) {
-        for (const t of ['sessions', 'usage', 'usage_log', 'ip_meta', 'redeems', 'seen_ips']) this.sql.exec(`DELETE FROM ${t} WHERE user_id=?`, id)
+        for (const t of ['sessions', 'usage', 'usage_log', 'ip_meta', 'redeems', 'seen_ips', 'admins', 'smm_wallet', 'trial_claims']) this.sql.exec(`DELETE FROM ${t} WHERE user_id=?`, id)
         this.sql.exec('DELETE FROM users WHERE id=?', id)
         return { ok: true }
     }
@@ -380,7 +408,7 @@ export class StoreDO extends DurableObject {
         const stack = active ? [...this.stackOf(u), planId] : [planId]
         const expires = add === null ? null : active ? (u.expires_at === null ? null : u.expires_at + add) : now + add
         const e = this.stackEnt(stack)
-        const ips = JSON.stringify(JSON.parse(u.ips).slice(0, e.maxIps))
+        const ips = JSON.stringify(jparse(u.ips, []).slice(0, e.maxIps))
         this.sql.exec('UPDATE users SET plan=?,stack=?,expires_at=?,ips=? WHERE id=?', e.primary, JSON.stringify(stack), expires, ips, u.id)
         return { ok: true, extended: active }
     }
@@ -669,7 +697,7 @@ export class StoreDO extends DurableObject {
     adminResetBuiltin(path) { this.sql.exec('DELETE FROM builtin_overrides WHERE path=?', String(path)); return { ok: true } }
 
     /* ---------- endpoint dinamis ---------- */
-    epRow(r) { return { ...r, path: `/api/${r.category}/${r.slug}`, inputs: JSON.parse(r.inputs || '[]'), headers: JSON.parse(r.headers || '{}') } }
+    epRow(r) { return { ...r, path: `/api/${r.category}/${r.slug}`, inputs: jparse(r.inputs, []), headers: jparse(r.headers, {}) } }
     listEndpoints() { return { ok: true, endpoints: this.q('SELECT * FROM endpoints ORDER BY category,slug').map((r) => this.epRow(r)) } }
     findEndpoint(category, slug) { const [r] = this.q('SELECT * FROM endpoints WHERE category=? AND slug=?', category, slug); return r ? { ok: true, endpoint: this.epRow(r) } : fail(404, 'not_found', 'Endpoint tidak ada.') }
     cleanEndpoint(b, builtin) {
@@ -763,13 +791,10 @@ export class StoreDO extends DurableObject {
         }
         /* secret owner */
         if (!this.adminEmails().includes(e)) { this.flag(null, ip, '/api/auth/admin-login', 'key', now); return bad }
-        let [u] = this.q('SELECT id FROM users WHERE verified_email=? OR lower(email)=? ORDER BY (verified_email=?) DESC LIMIT 1', e, e, e)
+        let [u] = this.q('SELECT id FROM users WHERE lower(verified_email)=? LIMIT 1', e) /* hanya email terverifikasi: email biasa bisa didaftarkan siapa saja */
         let id = u && u.id
         if (!id) {
-            const base = (e.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 14) || 'admin').padEnd(3, '0')
-            let name = base
-            while (this.q('SELECT 1 FROM users WHERE username=?', name).length) name = base + Math.floor(Math.random() * 9000 + 1000)
-            id = this.insertUser({ username: name, email: e, now, ip })
+            id = this.insertUser({ username: this.freeUsername(e), email: e, now, ip })
         }
         this.sql.exec('UPDATE users SET verified_email=? WHERE id=?', e, id)
         this.touchIp(id, ip, now, 'web')
