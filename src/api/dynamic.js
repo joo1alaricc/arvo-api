@@ -42,7 +42,11 @@ export const dynamicHandler = (builtin) => async (c) => {
     }
     if (missing.length) return err(c, 400, 'Bad Request', `Parameter wajib: ${missing.join(', ')}`)
 
-    if (ep.mode === 'json') return c.json(deep(JSON.parse(ep.code), vals))
+    if (ep.mode === 'json') {
+        let tpl
+        try { tpl = JSON.parse(ep.code) } catch { return err(c, 500, 'Internal Server Error', 'Template JSON endpoint ini rusak. Hubungi admin.') }
+        return c.json(deep(tpl, vals))
+    }
 
     try {
         const headers = Object.fromEntries(Object.entries(ep.headers).map(([k, v]) => [k, fill(v, vals)]))
