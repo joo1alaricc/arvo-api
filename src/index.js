@@ -2,6 +2,7 @@ import { setUpstreamUA } from './utils/upstream.js'   /* harus paling atas: mema
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
+import { shield, limitBody, CSP, PRIVATE_RE } from './utils/shield.js'
 
 import { setupRoutes } from './api/index.js'
 import { logApiRequest } from './utils/logApiRequest.js'
@@ -17,12 +18,24 @@ import { store, currentUser } from './utils/session.js'
 import { getOverrides } from './utils/overrides.js'
 import { services, uiCfg } from './utils/services.js'
 
+const openCors = cors()
+
 const createApp = () => {
     const app = new OpenAPIHono()
 
     /* COOP default Hono = same-origin; itu memutus komunikasi popup Google Sign-In. allow-popups tetap aman. */
-    app.use('*', secureHeaders({ crossOriginOpenerPolicy: 'same-origin-allow-popups' }))
-    app.use('*', cors())
+    app.use('*', secureHeaders({
+        crossOriginOpenerPolicy: 'same-origin-allow-popups',
+        contentSecurityPolicy: { ...CSP, upgradeInsecureRequests: [] },
+        strictTransportSecurity: 'max-age=31536000',
+        referrerPolicy: 'strict-origin-when-cross-origin',
+        permissionsPolicy: { camera: [], microphone: [], geolocation: [], payment: [] },
+    }))
+    /* Shield paling awal: flood / scanner / CSRF / body raksasa ditolak sebelum menyentuh DB. */
+    app.use('*', shield())
+    app.use('/api/*', limitBody())
+    /* CORS terbuka hanya untuk API publik. Rute akun/admin/billing/tools memakai cookie sesi, jadi tidak boleh dibaca lintas-origin. */
+    app.use('*', (c, next) => (PRIVATE_RE.test(c.req.path) ? next() : openCors(c, next)))
     /* Respons mesin (JSON API, webhook, health) tidak boleh masuk indeks Google. Halaman web diatur lewat <meta robots> di public/*.html. */
     app.use('*', async (c, next) => {
         const p = c.req.path
