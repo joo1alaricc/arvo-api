@@ -41,7 +41,9 @@ const RULES = [
     [/^\/api\/auth\/(login|register|admin-login|google)/, 'auth', 20],
     [/^\/api\/(admin|billing|tools)(\/|$)/, 'priv', 150],
     [/^\/api\//, 'api', 300],
-    [/./, 'web', 240],
+    /* Worker kini menjawab SEMUA halaman & aset (anti-scrape), jadi 1 kunjungan = 1 halaman + ~12 aset. Halaman diperketat, aset dilonggarkan (IP bersama/CGNAT seluler). */
+    [/(^\/[^.]*$)|(\.html$)/, 'page', 90],
+    [/./, 'asset', 1200],
 ]
 const WINDOW = 60e3, STRIKE_WINDOW = 10 * 60e3, STRIKES_TO_BAN = 3, BAN_MS = 15 * 60e3
 
@@ -53,6 +55,8 @@ const bump = (map, key, windowMs, now) => {
     map.set(key, e)
     return e
 }
+/* Dipakai webguard.js (honeypot): ban IP langsung tanpa menunggu limit. */
+export const banIp = (ip, ms = BAN_MS) => { if (ip) bans.set(ip, Date.now() + ms) }
 const sweep = (now) => {
     for (const m of [buckets, strikes]) if (m.size > 20000) for (const [k, v] of m) if (v.reset <= now) m.delete(k)
     if (bans.size > 5000) for (const [k, t] of bans) if (t <= now) bans.delete(k)
