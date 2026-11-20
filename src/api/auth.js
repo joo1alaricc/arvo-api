@@ -4,7 +4,15 @@ import { store, send, fail, hashPw, sameHash, startSession, endSession, requireU
 export const auth = new Hono()
 const body = (c) => c.req.json().catch(() => ({}))
 const USER_RE = /^[A-Za-z0-9_]{3,20}$/
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/
 const PW_MSG = fail(400, 'bad_password', 'Password minimal 8 karakter.')
+const PW_LONG = fail(400, 'bad_password', 'Password maksimal 200 karakter.')
+/* Batasi percobaan per IP supaya tebak-password / tebak-access-key tidak bisa dipakai brute force. IP owner dikecualikan. */
+const limited = async (c, scope, max, windowMs, extra = '') => {
+    if (c.get('isOwner')) return null
+    const r = await store(c).throttle(`${scope}:${c.get('ip')}${extra}`, max, windowMs, Date.now())
+    return r.ok === false ? send(c, r) : null
+}
 
 auth.get('/config', (c) => c.json({
     google_client_id: c.env.GOOGLE_CLIENT_ID || null,
@@ -13,12 +21,15 @@ auth.get('/config', (c) => c.json({
     hero_poster: c.env.HERO_POSTER || null,
 }))
 
+/* Daftar = email + password. Username dibuat otomatis dari email (bisa diganti di Profil). */
 auth.post('/register', async (c) => {
-    const b = await body(c), username = String(b.username || '').trim(), email = String(b.email || '').trim().toLowerCase() || null
-    if (!USER_RE.test(username)) return send(c, fail(400, 'bad_username', 'Username 3-20 karakter: huruf, angka, atau _'))
-    if (String(b.password || '').length < 8) return send(c, PW_MSG)
-    const { salt, hash } = await hashPw(b.password)
-    const r = await store(c).register({ username, email, hash, salt, now: Date.now(), ip: c.get('ip') })
+    const b = await body(c), email = String(b.email || b.username || '').trim().toLowerCase(), pw = String(b.password ?? '')
+    const lim = await limited(c, 'reg', 8, 3600e3); if (lim) return lim
+    if (!EMAIL_RE.test(email) || email.length > 254) return send(c, fail(400, 'bad_email', 'Masukkan email yang valid.'))
+    if (pw.length < 8) return send(c, PW_MSG)
+    if (pw.length > 200) return send(c, PW_LONG)
+    const { salt, hash } = await hashPw(pw)
+    const r = await store(c).register({ email, hash, salt, now: Date.now(), ip: c.get('ip') })
     if (r.ok) await startSession(c, r.id)
     return send(c, r)
 })
@@ -26,8 +37,10 @@ auth.post('/register', async (c) => {
 /* Login: kolom username boleh berisi username ATAU email (email terverifikasi Google / email akun).
  * Pengelola masuk lewat POST /admin-login (email + access key, tanpa password). */
 auth.post('/login', async (c) => {
-    const b = await body(c), ident = String(b.username || b.email || '').trim(), pw = String(b.password || '')
-    const bad = fail(401, 'invalid_login', 'Username/email atau password salah.')
+    const b = await body(c), ident = String(b.username || b.email || '').trim().slice(0, 254), pw = String(b.password ?? '').slice(0, 200)
+    const bad = fail(401, 'invalid_login', 'Email/username atau password salah.')
+    if (!ident || !pw) return send(c, bad)
+    const lim = (await limited(c, 'login', 20, 600e3)) || (await limited(c, 'loginid', 10, 600e3, ':' + ident.toLowerCase())); if (lim) return lim
     const cands = ident.includes('@') ? await store(c).authByEmail(ident) : [await store(c).authInfo({ username: ident })]
     let hit = null
     for (const info of cands) {
@@ -44,6 +57,7 @@ auth.post('/login', async (c) => {
 /* Login sebagai Pengelola: email + Access Key, tanpa password. Sesinya sama seperti user biasa; panel admin hanya bisa dibuka dengan sesi ini. */
 auth.post('/admin-login', async (c) => {
     const b = await body(c)
+    const lim = await limited(c, 'admin', 8, 600e3); if (lim) return lim
     const r = await store(c).adminKeyLogin(b.email, b.access_key, c.get('ip'), Date.now())
     if (r.ok === false) return send(c, r)
     await startSession(c, r.id)
