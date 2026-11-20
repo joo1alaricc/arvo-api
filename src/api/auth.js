@@ -14,7 +14,21 @@ const limited = async (c, scope, max, windowMs, extra = '') => {
     return r.ok === false ? send(c, r) : null
 }
 
+/* Cloudflare Turnstile (opsional): aktif otomatis bila TURNSTILE_SECRET diisi (wrangler secret put) DAN TURNSTILE_SITE_KEY ada di [vars].
+ * Mencegah bot mengisi form login/daftar/admin. Kalau gagal menghubungi Cloudflare, request ditolak (fail-closed). IP owner dikecualikan. */
+const human = async (c, token) => {
+    if (!c.env.TURNSTILE_SECRET || !c.env.TURNSTILE_SITE_KEY || c.get('isOwner')) return null
+    try {
+        const fd = new FormData()
+        fd.append('secret', c.env.TURNSTILE_SECRET); fd.append('response', String(token || '').slice(0, 2048)); fd.append('remoteip', c.get('ip') || '')
+        const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: fd, signal: AbortSignal.timeout(5000) })
+        if ((await r.json().catch(() => ({}))).success === true) return null
+    } catch (e) { console.error('[Turnstile]', e?.message || e) }
+    return send(c, fail(400, 'captcha_failed', 'Verifikasi keamanan gagal. Selesaikan verifikasi lalu coba lagi.'))
+}
+
 auth.get('/config', (c) => c.json({
+    turnstile_site_key: c.env.TURNSTILE_SECRET && c.env.TURNSTILE_SITE_KEY ? c.env.TURNSTILE_SITE_KEY : null,
     google_client_id: c.env.GOOGLE_CLIENT_ID || null,
     google_callback: new URL('/api/auth/google/callback', c.req.url).href,
     hero_video: c.env.HERO_VIDEO || null,
@@ -24,7 +38,7 @@ auth.get('/config', (c) => c.json({
 /* Daftar = email + password. Username dibuat otomatis dari email (bisa diganti di Profil). */
 auth.post('/register', async (c) => {
     const b = await body(c), email = String(b.email || b.username || '').trim().toLowerCase(), pw = String(b.password ?? '')
-    const lim = await limited(c, 'reg', 8, 3600e3); if (lim) return lim
+    const lim = (await limited(c, 'reg', 8, 3600e3)) || (await human(c, b.cf_token)); if (lim) return lim
     if (!EMAIL_RE.test(email) || email.length > 254) return send(c, fail(400, 'bad_email', 'Masukkan email yang valid.'))
     if (pw.length < 8) return send(c, PW_MSG)
     if (pw.length > 200) return send(c, PW_LONG)
@@ -40,7 +54,7 @@ auth.post('/login', async (c) => {
     const b = await body(c), ident = String(b.username || b.email || '').trim().slice(0, 254), pw = String(b.password ?? '').slice(0, 200)
     const bad = fail(401, 'invalid_login', 'Email/username atau password salah.')
     if (!ident || !pw) return send(c, bad)
-    const lim = (await limited(c, 'login', 20, 600e3)) || (await limited(c, 'loginid', 10, 600e3, ':' + ident.toLowerCase())); if (lim) return lim
+    const lim = (await limited(c, 'login', 20, 600e3)) || (await limited(c, 'loginid', 10, 600e3, ':' + ident.toLowerCase())) || (await human(c, b.cf_token)); if (lim) return lim
     const cands = ident.includes('@') ? await store(c).authByEmail(ident) : [await store(c).authInfo({ username: ident })]
     let hit = null
     for (const info of cands) {
@@ -57,7 +71,7 @@ auth.post('/login', async (c) => {
 /* Login sebagai Pengelola: email + Access Key, tanpa password. Sesinya sama seperti user biasa; panel admin hanya bisa dibuka dengan sesi ini. */
 auth.post('/admin-login', async (c) => {
     const b = await body(c)
-    const lim = await limited(c, 'admin', 8, 600e3); if (lim) return lim
+    const lim = (await limited(c, 'admin', 8, 600e3)) || (await human(c, b.cf_token)); if (lim) return lim
     const r = await store(c).adminKeyLogin(b.email, b.access_key, c.get('ip'), Date.now())
     if (r.ok === false) return send(c, r)
     await startSession(c, r.id)
