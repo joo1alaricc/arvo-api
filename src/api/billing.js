@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { MIN_DAYS, MAX_DAYS } from '../utils/plans.js'
 import { peekQuota } from '../utils/rateLimit.js'
 import { makeQris } from '../utils/payment.js'
-import { store, send, requireUser, currentUser } from '../utils/session.js'
+import { store, send, requireUser, currentUser, sameHash } from '../utils/session.js'
 import { tokenOk, settleBtzDeposit } from '../utils/btzpay.js'
 
 export const billing = new Hono()
@@ -28,7 +28,7 @@ billing.get('/whoami', async (c) => {
 /* Dipanggil pembaca mutasi/notifikasi pembayaran: POST {amount} + Bearer PAYMENT_WEBHOOK_SECRET */
 export const paymentWebhook = async (c) => {
     const secret = c.env.PAYMENT_WEBHOOK_SECRET
-    if (!secret || c.req.header('authorization') !== `Bearer ${secret}`) return c.json({ error: 'Unauthorized', status: 401 }, 401)
+    if (!secret || !sameHash(String(c.req.header('authorization') || ''), `Bearer ${secret}`)) return c.json({ error: 'Unauthorized', status: 401 }, 401)
     return send(c, await store(c).confirmByAmount(Number((await body(c)).amount), Date.now()))
 }
 billing.post('/webhook', paymentWebhook)
