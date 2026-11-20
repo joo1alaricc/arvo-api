@@ -28,6 +28,8 @@
 .otpstep{display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.otpstep.show{display:block}
 .otpstep input{letter-spacing:6px;font:600 18px 'JetBrains Mono',monospace;text-align:center}
 .otpback{background:none;border:0;color:var(--mut);font:inherit;font-size:12.5px;cursor:pointer;padding:0;margin-top:8px;text-decoration:underline}
+.userstep{display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.userstep.show{display:block}
+.uhint{font-size:12px;margin-top:5px;min-height:15px}.uhint.ok{color:var(--ok)}.uhint.bad{color:var(--bad)}
 </style><link rel="stylesheet" href="site.css?v=a2e3a1e8"><link rel="stylesheet" href="motion.css?v=79935f3d"></head>
 <body><main class="wrap"><div class="panel auth">
   <div class="tabs"><button class="on" data-m="login">Masuk</button><button data-m="register">Daftar</button></div>
@@ -51,8 +53,14 @@
     <label style="font-size:13px;font-weight:600">Kode verifikasi</label>
     <p class="msg" style="margin:2px 0 8px" id="otphint"></p>
     <input id="otpcode" inputmode="numeric" maxlength="6" placeholder="••••••" autocomplete="one-time-code">
-    <button class="btn" id="otpgo" style="margin-top:9px;width:100%">Verifikasi &amp; Buat Akun</button>
+    <button class="btn" id="otpgo" style="margin-top:9px;width:100%">Verifikasi</button>
     <button type="button" class="otpback" id="otpback">Ubah email / kirim ulang kode</button>
+  </div>
+  <div class="userstep" id="userstep">
+    <label style="font-size:13px;font-weight:600">Pilih username</label>
+    <input id="reguser" placeholder="Username (3-20 karakter)" autocomplete="username" style="margin-top:7px">
+    <p class="uhint" id="uhint"></p>
+    <button class="btn" id="usergo" style="margin-top:4px;width:100%">Buat Akun</button>
   </div>
   <p class="msg" id="m"></p>
   <div id="gwrapbox"><div id="gwrap" hidden><div class="sep">atau</div>
@@ -78,6 +86,8 @@ const admUi = () => {
   $('#p').placeholder = a ? 'Access Key' : 'Password (min. 8 karakter)'; $('#p').autocomplete = a ? 'off' : mode === 'login' ? 'current-password' : 'new-password'
   $('#gwrapbox').style.display = a ? 'none' : ''
   const reg = mode === 'register' && !a
+  /* Mode Daftar: cukup Email + Password, username ditanya belakangan (langkah ke-3) biar gak dobel sama field Email. */
+  $('#u').hidden = reg; $('#u').required = !reg
   $('#pwmeter').classList.toggle('show', reg); $('#pwchecks').classList.toggle('show', reg); $('#termsrow').classList.toggle('show', reg)
   if (!reg) pwUi()
 }
@@ -94,17 +104,19 @@ const pwUi = () => {
   $('#pwlabel').textContent = v ? PW_LABELS[Math.max(0, score - 1)] : ''
 }
 $('#p').addEventListener('input', pwUi)
-/* Langkah: 'form' (isi data) -> 'otp' (masukkan kode yang dikirim ke email). */
-let step = 'form', otpToken = null, otpEmail = null
+/* Langkah daftar: 'form' (email+password) -> 'otp' (kode dari email) -> 'user' (pilih username, baru akun dibuat). */
+let step = 'form', otpToken = null, otpEmail = null, verifiedToken = null
 const stepUi = () => {
-  $('#f').hidden = step === 'otp'
+  $('#f').hidden = step !== 'form'
   $('#otpstep').classList.toggle('show', step === 'otp')
+  $('#userstep').classList.toggle('show', step === 'user')
   if (step === 'otp') $('#otphint').textContent = `Kode dikirim ke ${otpEmail}. Berlaku 10 menit.`
+  if (step === 'user') { $('#reguser').value = ''; $('#uhint').textContent = ''; $('#uhint').className = 'uhint'; $('#usergo').disabled = true; setTimeout(() => $('#reguser').focus(), 50) }
 }
 $('#otpback').onclick = () => { step = 'form'; otpToken = null; stepUi(); say($('#m'), '') }
 document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => {
   if (isAdm() && b.dataset.m !== 'login') return
-  mode = b.dataset.m; step = 'form'; otpToken = null; stepUi()
+  mode = b.dataset.m; step = 'form'; otpToken = null; verifiedToken = null; stepUi()
   document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b))
   $('#e').hidden = mode !== 'register'; $('#e').required = mode === 'register'; $('#go').textContent = mode === 'login' ? 'Masuk' : 'Kirim Kode OTP'
   $('#admrow').hidden = mode !== 'login'; if (mode !== 'login') $('#adm').checked = false; admUi(); say($('#m'), '')
@@ -129,10 +141,36 @@ $('#f').onsubmit = async (ev) => {
 $('#otpgo').onclick = async () => {
   const b = $('#otpgo'); b.disabled = true
   try {
-    await put('/auth/register', { username: $('#u').value, password: $('#p').value, email: otpEmail, code: $('#otpcode').value.trim(), otp_token: otpToken }, 'POST')
-    location.href = dest
+    const r = await put('/auth/verify-otp', { email: otpEmail, code: $('#otpcode').value.trim(), otp_token: otpToken }, 'POST')
+    verifiedToken = r.verified_token
+    step = 'user'; stepUi(); say($('#m'), '')
   } catch (e) { say($('#m'), e.message, 1) }
   b.disabled = false
+}
+/* Cek ketersediaan username sambil ngetik (debounce), biar gak nabrak punya orang lain. */
+let uTimer = null
+$('#reguser').addEventListener('input', () => {
+  const v = $('#reguser').value.trim(), hint = $('#uhint')
+  clearTimeout(uTimer); $('#usergo').disabled = true
+  if (!v) { hint.textContent = ''; hint.className = 'uhint'; return }
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(v)) { hint.textContent = 'Username 3-20 karakter: huruf, angka, atau _'; hint.className = 'uhint bad'; return }
+  hint.textContent = 'Mengecek…'; hint.className = 'uhint'
+  uTimer = setTimeout(async () => {
+    try {
+      const r = await api('/auth/check-username?u=' + encodeURIComponent(v))
+      if ($('#reguser').value.trim() !== v) return
+      hint.textContent = r.available ? 'Username tersedia' : 'Username sudah dipakai'
+      hint.className = 'uhint ' + (r.available ? 'ok' : 'bad')
+      $('#usergo').disabled = !r.available
+    } catch { hint.textContent = ''; hint.className = 'uhint' }
+  }, 400)
+})
+$('#usergo').onclick = async () => {
+  const b = $('#usergo'); b.disabled = true
+  try {
+    await put('/auth/register', { username: $('#reguser').value.trim(), password: $('#p').value, email: otpEmail, verified_token: verifiedToken }, 'POST')
+    location.href = dest
+  } catch (e) { say($('#m'), e.message, 1); b.disabled = false }
 }
 /* Google: mode redirect. Tombol membawa kamu ke Google lalu kembali ke /api/auth/google/callback,
    tanpa popup. Di Google Cloud Console daftarkan origin situs ini dan URI callback tersebut. */
