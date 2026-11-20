@@ -3,6 +3,8 @@ import { OpenAPIHono } from '@hono/zod-openapi'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
 import { shield, limitBody, CSP, PRIVATE_RE } from './utils/shield.js'
+import { webGuard, INTERNAL_RE } from './utils/webguard.js'
+import { cachedCatalog } from './utils/catalogCache.js'
 
 import { setupRoutes } from './api/index.js'
 import { logApiRequest } from './utils/logApiRequest.js'
@@ -33,9 +35,11 @@ const createApp = () => {
     }))
     /* Shield paling awal: flood / scanner / CSRF / body raksasa ditolak sebelum menyentuh DB. */
     app.use('*', shield())
+    /* Anti-scrape: halaman & file statis hanya untuk browser sungguhan, endpoint internal situs hanya dari halaman sendiri, file statis dijawab lewat jalur cepat + cache (lihat utils/webguard.js). API publik tidak disentuh. */
+    app.use('*', webGuard())
     app.use('/api/*', limitBody())
     /* CORS terbuka hanya untuk API publik. Rute akun/admin/billing/tools memakai cookie sesi, jadi tidak boleh dibaca lintas-origin. */
-    app.use('*', (c, next) => (PRIVATE_RE.test(c.req.path) ? next() : openCors(c, next)))
+    app.use('*', (c, next) => (PRIVATE_RE.test(c.req.path) || INTERNAL_RE.test(c.req.path) ? next() : openCors(c, next)))
     /* Respons mesin (JSON API, webhook, health) tidak boleh masuk indeks Google. Halaman web diatur lewat <meta robots> di public/*.html. */
     app.use('*', async (c, next) => {
         const p = c.req.path
@@ -83,19 +87,11 @@ const createApp = () => {
     setupRoutes(app)
 
     /* Katalog untuk Playground: hanya info yang perlu untuk memanggil endpoint (path, method, input, akses). Tidak ada skema respons,
-     * kode, atau URL upstream. Endpoint di atas tier si peminta (free/premium/vip) tidak ditampilkan sama sekali. Tidak mengurangi limit. */
-    app.get('/api/catalog', async (c) => {
-        const RANK = { free: 0, premium: 1, vip: 2, owner: 3 }, warn = []
-        let rank = c.get('isOwner') ? 3 : 0
-        const ak = c.req.header('x-access-key') || c.req.query('accesskey') || c.req.header('x-api-key')
-        if (!rank && ak) { try { if ((await store(c).verifyAccess(ak)).ok !== false) rank = 3 } catch {} }
-        if (!rank) {
-            try {
-                const u = await currentUser(c)
-                if (u) rank = (await store(c).adminLevel(u.id)) ? 3 : RANK[u.role === 'member' ? 'free' : u.role] ?? 0
-            } catch (e) { warn.push('sesi: ' + (e.message || e)) }
-        }
-        /* Tiap sumber dipisah: kalau database/override bermasalah, endpoint bawaan TETAP tampil (tidak pernah kosong gara-gara satu error). */
+     * kode, atau URL upstream. Endpoint di atas tier si peminta (free/premium/vip) tidak ditampilkan sama sekali. Tidak mengurangi limit.
+     * Dokumen per tingkat akses (free/premium/vip) di-cache singkat per isolate (utils/catalogCache.js); owner/admin selalu segar. */
+    const RANK = { free: 0, premium: 1, vip: 2, owner: 3 }
+    /* Tiap sumber dipisah: kalau database/override bermasalah, endpoint bawaan TETAP tampil (tidak pernah kosong gara-gara satu error). */
+    const buildCatalog = async (c, rank, warn) => {
         let ov = {}
         try { ov = (await getOverrides(c)) || {} } catch (e) { warn.push('override: ' + (e.message || e)) }
         const list = builtinInfo().map((e) => {
@@ -108,9 +104,30 @@ const createApp = () => {
             if ((RANK[e.access] ?? 9) > rank) continue
             try { mergeSpec(doc, [e], rank === 3) } catch (e2) { warn.push(`${e.path}: ${e2.message || e2}`) }
         }
-        if (warn.length) console.error('[catalog]', warn.join(' | '))
+        return doc
+    }
+    app.get('/api/catalog', async (c) => {
+        /* 1. Siapa yang meminta? (murah: tanpa cookie/key = free, tanpa menyentuh database) */
+        const warn = []
+        let rank = c.get('isOwner') ? 3 : 0
+        const ak = c.req.header('x-access-key') || c.req.query('accesskey') || c.req.header('x-api-key')
+        if (!rank && ak) { try { if ((await store(c).verifyAccess(ak)).ok !== false) rank = 3 } catch {} }
+        if (!rank) {
+            try {
+                const u = await currentUser(c)
+                if (u) rank = (await store(c).adminLevel(u.id)) ? 3 : RANK[u.role === 'member' ? 'free' : u.role] ?? 0
+            } catch (e) { warn.push('sesi: ' + (e.message || e)) }
+        }
         c.header('Cache-Control', 'no-store')
-        return c.json(rank === 3 && warn.length ? { ...doc, warnings: warn } : doc)
+        /* 2. Owner/admin: selalu disusun segar (+ peringatan). */
+        if (rank === 3) {
+            const doc = await buildCatalog(c, rank, warn)
+            if (warn.length) console.error('[catalog]', warn.join(' | '))
+            return c.json(warn.length ? { ...doc, warnings: warn } : doc)
+        }
+        if (warn.length) console.error('[catalog]', warn.join(' | '))
+        /* 3. Pengguna biasa: pakai dokumen cache untuk tingkatnya. */
+        return c.json(await cachedCatalog(c, rank, (w) => buildCatalog(c, rank, w)))
     })
 
     /* Cek API key / Access key (publik, tidak mengurangi limit). Body: { type: 'apikey' | 'accesskey', key } */
