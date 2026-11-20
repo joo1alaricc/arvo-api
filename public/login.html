@@ -20,19 +20,24 @@
 .pwmeter{display:none;margin-top:2px}.pwmeter.show{display:block}
 .pwmeter .row{display:flex;justify-content:space-between;font-size:11.5px;color:var(--mut);margin-bottom:5px}.pwmeter .row b{font-weight:700}
 .pwmeter .bar{height:5px;border-radius:99px;background:var(--line);overflow:hidden}.pwmeter .bar i{display:block;height:100%;width:0;border-radius:99px;background:var(--bad);transition:width .25s,background-color .25s}
-.pwchecks{display:none;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:9px;font-size:12px}.pwchecks.show{display:grid}
+.pwchecks{display:none;grid-template-columns:1fr 1fr;gap:4px 10px;margin:9px 0 0;padding:0;font-size:12px}.pwchecks.show{display:grid}
 .pwchecks li{list-style:none;display:flex;align-items:center;gap:6px;color:var(--mut);transition:color .2s}.pwchecks li.ok{color:var(--ok)}
 .pwchecks li svg{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .termsrow{display:none;align-items:flex-start;gap:8px;font-size:12px;line-height:1.35;color:var(--mut);margin-top:2px;cursor:pointer;width:100%;min-width:0;box-sizing:border-box}.termsrow.show{display:flex}
-.termsrow input{width:15px;height:15px;margin:0;flex:none;position:relative;top:1.5px}
-.termsrow span{flex:1;min-width:0}
+/* .auth input{width:100%} (site.css) mengalahkan lebar checkbox sehingga teks terdorong keluar layar; kunci ukurannya dengan spesifisitas lebih tinggi. */
+.auth .termsrow{margin:2px 0 0;line-height:1.4}
+.auth .termsrow input[type=checkbox]{width:16px;height:16px;min-width:16px;max-width:16px;margin:1px 0 0;flex:0 0 16px}
+.termsrow span{flex:1 1 0;min-width:0;overflow-wrap:anywhere}
+.termsrow a{color:var(--ac);text-decoration:underline;text-underline-offset:2px}
+/* atribut hidden kalah oleh display inline/flex; paksa tersembunyi */
+.admrow{display:flex;align-items:center;gap:8px;font-size:13px;margin:10px 0 0;cursor:pointer;color:var(--tx)}.admrow[hidden]{display:none}
+.auth .admrow input[type=checkbox]{width:16px;height:16px;margin:0;flex:none}
 </style><link rel="stylesheet" href="site.css?v=a2e3a1e8"><link rel="stylesheet" href="motion.css?v=79935f3d"></head>
 <body><main class="wrap"><div class="panel auth">
   <div class="tabs"><button class="on" data-m="login">Masuk</button><button data-m="register">Daftar</button></div>
   <form id="f" style="margin-top:16px">
-    <input id="u" placeholder="Username atau email" autocomplete="username" required>
-    <input id="e" type="email" placeholder="Email (opsional)" autocomplete="email" hidden>
-    <input id="p" type="password" placeholder="Password (min. 8 karakter)" autocomplete="current-password" required>
+    <input id="u" placeholder="Email atau username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+    <input id="p" type="password" placeholder="Password" autocomplete="current-password" maxlength="200" required>
     <div class="pwmeter" id="pwmeter"><div class="row"><span>Kekuatan Password:</span><b id="pwlabel"></b></div><div class="bar"><i id="pwbar"></i></div></div>
     <ul class="pwchecks" id="pwchecks">
       <li data-k="len"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> Min. 8 karakter</li>
@@ -43,7 +48,7 @@
     </ul>
     <label class="termsrow" id="termsrow"><input type="checkbox" id="terms"><span>Saya menyetujui Ketentuan Layanan dan Kebijakan Privasi Arvo API.</span></label>
     <button class="btn" id="go">Masuk</button>
-    <label id="admrow" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px;cursor:pointer"><input type="checkbox" id="adm" style="width:auto;margin:0"> Login sebagai Pengelola</label>
+    <label id="admrow" class="admrow"><input type="checkbox" id="adm"> Login sebagai Pengelola</label>
   </form>
   <p class="msg" id="m"></p>
   <div id="gwrapbox"><div id="gwrap" hidden><div class="sep">atau</div>
@@ -61,22 +66,31 @@ ready.then(({ user, who }) => { if (user) { sessionStorage.removeItem('arvo_next
 if (qs.get('err') === 'google') say($('#m'), 'Masuk dengan Google gagal. Coba lagi.', 1)
 /* Login sebagai Pengelola: hanya "Masuk", input Email + Access Key (tanpa password). Berhasil = masuk ke dashboard admin. */
 const isAdm = () => $('#adm').checked
+/* Satu fungsi yang mengatur tampilan form sesuai mode: Masuk / Daftar (email + password) / Pengelola (email + access key). */
 const admUi = () => {
   const a = isAdm()
-  if (a) { mode = 'login'; document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x.dataset.m === 'login')); $('#e').hidden = true; $('#go').textContent = 'Masuk' }
-  document.querySelector('.tabs [data-m="register"]').disabled = a
-  $('#u').placeholder = a ? 'Email' : 'Username atau email'; $('#u').type = a ? 'email' : 'text'; $('#u').autocomplete = a ? 'email' : 'username'
-  $('#p').placeholder = a ? 'Access Key' : 'Password (min. 8 karakter)'; $('#p').autocomplete = a ? 'off' : mode === 'login' ? 'current-password' : 'new-password'
-  $('#gwrapbox').style.display = a ? 'none' : ''
+  if (a) mode = 'login'
   const reg = mode === 'register' && !a
+  document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x.dataset.m === mode))
+  document.querySelector('.tabs [data-m="register"]').disabled = a
+  $('#go').textContent = reg ? 'Buat akun' : 'Masuk'
+  const mail = a || reg
+  $('#u').placeholder = mail ? 'Email' : 'Email atau username'
+  $('#u').type = mail ? 'email' : 'text'
+  $('#u').autocomplete = mail ? 'email' : 'username'
+  $('#u').inputMode = mail ? 'email' : 'text'
+  $('#p').placeholder = a ? 'Access Key' : reg ? 'Password (min. 8 karakter)' : 'Password'
+  $('#p').autocomplete = a ? 'off' : reg ? 'new-password' : 'current-password'
+  $('#admrow').hidden = mode !== 'login'
+  $('#gwrapbox').style.display = a ? 'none' : ''
   $('#pwmeter').classList.toggle('show', reg); $('#pwchecks').classList.toggle('show', reg); $('#termsrow').classList.toggle('show', reg)
-  if (!reg) pwUi()
+  pwUi()
 }
 /* Kekuatan password + checklist (register saja). Skor dari 5 aturan -> warna & label. */
 const PW_RULES = { len: (v) => v.length >= 8, low: (v) => /[a-z]/.test(v), up: (v) => /[A-Z]/.test(v), num: (v) => /[0-9]/.test(v), sym: (v) => /[^A-Za-z0-9]/.test(v) }
 const PW_LABELS = ['Sangat Lemah', 'Lemah', 'Cukup', 'Kuat', 'Sangat Kuat & Aman']
 const pwUi = () => {
-  const v = $('#p').value, hits = Object.entries(PW_RULES).map(([k, f]) => [k, f(v)])
+  const v = mode === 'register' && !isAdm() ? $('#p').value : '', hits = Object.entries(PW_RULES).map(([k, f]) => [k, f(v)])
   const score = hits.filter(([, ok]) => ok).length
   hits.forEach(([k, ok]) => $(`#pwchecks li[data-k="${k}"]`).classList.toggle('ok', ok))
   const pct = v ? Math.max(14, (score / 5) * 100) : 0
@@ -88,9 +102,8 @@ $('#p').addEventListener('input', pwUi)
 document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => {
   if (isAdm() && b.dataset.m !== 'login') return
   mode = b.dataset.m
-  document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b))
-  $('#e').hidden = mode !== 'register'; $('#go').textContent = mode === 'login' ? 'Masuk' : 'Buat akun'
-  $('#admrow').hidden = mode !== 'login'; if (mode !== 'login') $('#adm').checked = false; admUi(); say($('#m'), '')
+  if (mode !== 'login') $('#adm').checked = false
+  admUi(); say($('#m'), '')
 }))
 $('#adm').onchange = admUi
 if (qs.get('as') === 'admin') { $('#adm').checked = true; admUi() }
@@ -98,10 +111,10 @@ $('#f').onsubmit = async (ev) => {
   ev.preventDefault()
   const b = $('#go'); b.disabled = true
   try {
-    if (isAdm()) { await put('/auth/admin-login', { email: $('#u').value, access_key: $('#p').value }, 'POST'); location.href = '/admin.html'; return }
-    if (mode === 'login') { await put('/auth/login', { username: $('#u').value, password: $('#p').value }, 'POST'); location.href = dest; return }
+    if (isAdm()) { await put('/auth/admin-login', { email: $('#u').value.trim(), access_key: $('#p').value.trim() }, 'POST'); location.href = '/admin.html'; return }
+    if (mode === 'login') { await put('/auth/login', { username: $('#u').value.trim(), password: $('#p').value }, 'POST'); location.href = dest; return }
     if (!$('#terms').checked) throw new Error('Setujui Ketentuan Layanan dan Kebijakan Privasi dulu ya.')
-    await put('/auth/register', { username: $('#u').value, password: $('#p').value, email: $('#e').value }, 'POST'); location.href = dest
+    await put('/auth/register', { email: $('#u').value.trim(), password: $('#p').value }, 'POST'); location.href = dest
   } catch (e) { say($('#m'), e.message, 1) }
   b.disabled = false
 }
