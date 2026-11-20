@@ -47,6 +47,7 @@
       <li data-k="sym"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> Simbol (!@#$%^&amp;*)</li>
     </ul>
     <label class="termsrow" id="termsrow"><input type="checkbox" id="terms"><span>Saya menyetujui Ketentuan Layanan dan Kebijakan Privasi Arvo API.</span></label>
+    <div id="tsbox" hidden></div>
     <button class="btn" id="go">Masuk</button>
     <label id="admrow" class="admrow"><input type="checkbox" id="adm"> Login sebagai Pengelola</label>
   </form>
@@ -107,20 +108,32 @@ document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => {
 }))
 $('#adm').onchange = admUi
 if (qs.get('as') === 'admin') { $('#adm').checked = true; admUi() }
+/* Cloudflare Turnstile: hanya muncul bila server mengaktifkannya (TURNSTILE_SECRET + TURNSTILE_SITE_KEY). */
+let tsId = null
+const tsToken = () => (tsId !== null && window.turnstile ? turnstile.getResponse(tsId) || '' : '')
+const tsReset = () => { if (tsId !== null && window.turnstile) try { turnstile.reset(tsId) } catch {} }
+const tsInit = (key) => {
+  if (!key) return
+  window.onTsLoad = () => { $('#tsbox').hidden = false; tsId = turnstile.render('#tsbox', { sitekey: key, theme: document.documentElement.dataset.theme === 'light' ? 'light' : 'dark' }) }
+  const s = document.createElement('script'); s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTsLoad'; s.async = true; document.head.append(s)
+}
 $('#f').onsubmit = async (ev) => {
   ev.preventDefault()
   const b = $('#go'); b.disabled = true
   try {
-    if (isAdm()) { await put('/auth/admin-login', { email: $('#u').value.trim(), access_key: $('#p').value.trim() }, 'POST'); location.href = '/admin.html'; return }
-    if (mode === 'login') { await put('/auth/login', { username: $('#u').value.trim(), password: $('#p').value }, 'POST'); location.href = dest; return }
+    if (tsId !== null && !tsToken()) throw new Error('Selesaikan verifikasi keamanan dulu ya.')
+    const cf_token = tsToken()
+    if (isAdm()) { await put('/auth/admin-login', { email: $('#u').value.trim(), access_key: $('#p').value.trim(), cf_token }, 'POST'); location.href = '/admin.html'; return }
+    if (mode === 'login') { await put('/auth/login', { username: $('#u').value.trim(), password: $('#p').value, cf_token }, 'POST'); location.href = dest; return }
     if (!$('#terms').checked) throw new Error('Setujui Ketentuan Layanan dan Kebijakan Privasi dulu ya.')
-    await put('/auth/register', { email: $('#u').value.trim(), password: $('#p').value }, 'POST'); location.href = dest
-  } catch (e) { say($('#m'), e.message, 1) }
+    await put('/auth/register', { email: $('#u').value.trim(), password: $('#p').value, cf_token }, 'POST'); location.href = dest
+  } catch (e) { say($('#m'), e.message, 1); tsReset() }
   b.disabled = false
 }
 /* Google: mode redirect. Tombol membawa kamu ke Google lalu kembali ke /api/auth/google/callback,
    tanpa popup. Di Google Cloud Console daftarkan origin situs ini dan URI callback tersebut. */
-api('/auth/config').then(({ google_client_id }) => {
+api('/auth/config').then(({ google_client_id, turnstile_site_key }) => {
+  tsInit(turnstile_site_key)
   if (!google_client_id) return
   const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true
   s.onload = () => {
