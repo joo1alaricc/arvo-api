@@ -1,11 +1,28 @@
 import { Hono } from 'hono'
 import { getCookie } from 'hono/cookie'
 import { store, send, fail, hashPw, sameHash, startSession, endSession, requireUser } from '../utils/session.js'
+import { createOtp, verifyOtp, sendOtpEmail } from '../utils/otp.js'
 
 export const auth = new Hono()
 const body = (c) => c.req.json().catch(() => ({}))
 const USER_RE = /^[A-Za-z0-9_]{3,20}$/
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/
 const PW_MSG = fail(400, 'bad_password', 'Password minimal 8 karakter.')
+
+/* Daftar manual (dengan email) wajib verifikasi kode OTP dulu.
+ * 1) POST /auth/send-otp {email}                     -> kirim kode, balas {ok, otp_token}
+ * 2) POST /auth/register {..., email, code, otp_token} -> cek kode cocok, baru buat akun */
+auth.post('/send-otp', async (c) => {
+    const email = String((await body(c)).email || '').trim().toLowerCase()
+    if (!EMAIL_RE.test(email)) return send(c, fail(400, 'bad_email', 'Email tidak valid.'))
+    if (!c.env.OTP_SECRET) return send(c, fail(503, 'otp_off', 'Verifikasi email belum dikonfigurasi di server.'))
+    const already = await store(c).authByEmail(email)
+    if (already.some((x) => x && x.ok !== false)) return send(c, fail(409, 'email_used', 'Email ini sudah terdaftar. Coba masuk.'))
+    const otp = await createOtp(c.env, email)
+    try { await sendOtpEmail(c.env, email, otp.code) }
+    catch { return send(c, fail(502, 'email_send_failed', 'Gagal mengirim email verifikasi. Coba lagi beberapa saat.')) }
+    return c.json({ ok: true, otp_token: otp.otp_token, expires_in: 600 })
+})
 
 auth.get('/config', (c) => c.json({
     google_client_id: c.env.GOOGLE_CLIENT_ID || null,
@@ -15,11 +32,17 @@ auth.get('/config', (c) => c.json({
 }))
 
 auth.post('/register', async (c) => {
-    const b = await body(c), username = String(b.username || '').trim()
+    const b = await body(c), username = String(b.username || '').trim(), email = String(b.email || '').trim().toLowerCase() || null
     if (!USER_RE.test(username)) return send(c, fail(400, 'bad_username', 'Username 3-20 karakter: huruf, angka, atau _'))
     if (String(b.password || '').length < 8) return send(c, PW_MSG)
+    /* Daftar dengan email manual wajib sudah verifikasi OTP (lewat /auth/send-otp). Daftar tanpa email
+     * (mis. dari mode admin lama) tetap jalan seperti biasa, tidak butuh OTP. */
+    if (email) {
+        const ok = await verifyOtp(c.env, { email, code: b.code, otp_token: b.otp_token })
+        if (!ok) return send(c, fail(401, 'bad_otp', 'Kode verifikasi salah atau sudah kedaluwarsa.'))
+    }
     const { salt, hash } = await hashPw(b.password)
-    const r = await store(c).register({ username, email: String(b.email || '').trim() || null, hash, salt, now: Date.now(), ip: c.get('ip') })
+    const r = await store(c).register({ username, email, hash, salt, now: Date.now(), ip: c.get('ip') })
     if (r.ok) await startSession(c, r.id)
     return send(c, r)
 })
