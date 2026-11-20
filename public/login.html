@@ -23,8 +23,8 @@
 .pwchecks{display:none;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:9px;font-size:12px}.pwchecks.show{display:grid}
 .pwchecks li{list-style:none;display:flex;align-items:center;gap:6px;color:var(--mut);transition:color .2s}.pwchecks li.ok{color:var(--ok)}
 .pwchecks li svg{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
-.termsrow{display:none;align-items:flex-start;gap:9px;font-size:12.5px;line-height:1.5;color:var(--mut);margin-top:4px}.termsrow.show{display:flex}
-.termsrow input{width:auto;margin:3px 0 0}
+.termsrow{display:none;align-items:flex-start;gap:8px;font-size:12px;line-height:1.35;color:var(--mut);margin-top:2px;cursor:pointer}.termsrow.show{display:flex}
+.termsrow input{width:15px;height:15px;margin:0;flex:none;position:relative;top:1.5px}
 .otpstep{display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.otpstep.show{display:block}
 .otpstep input{letter-spacing:6px;font:600 18px 'JetBrains Mono',monospace;text-align:center}
 .otpback{background:none;border:0;color:var(--mut);font:inherit;font-size:12.5px;cursor:pointer;padding:0;margin-top:8px;text-decoration:underline}
@@ -45,7 +45,7 @@
       <li data-k="num"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> Angka (0-9)</li>
       <li data-k="sym"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> Simbol (!@#$%^&amp;*)</li>
     </ul>
-    <label class="termsrow" id="termsrow"><input type="checkbox" id="terms"> <span>Saya menyetujui Ketentuan Layanan dan Kebijakan Privasi Arvo API.</span></label>
+    <label class="termsrow" id="termsrow"><input type="checkbox" id="terms"><span>Saya menyetujui Ketentuan Layanan dan Kebijakan Privasi Arvo API.</span></label>
     <button class="btn" id="go">Masuk</button>
     <label id="admrow" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px;cursor:pointer"><input type="checkbox" id="adm" style="width:auto;margin:0"> Login sebagai Pengelola</label>
   </form>
