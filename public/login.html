@@ -23,7 +23,7 @@
 .pwchecks{display:none;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:9px;font-size:12px}.pwchecks.show{display:grid}
 .pwchecks li{list-style:none;display:flex;align-items:center;gap:6px;color:var(--mut);transition:color .2s}.pwchecks li.ok{color:var(--ok)}
 .pwchecks li svg{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
-.termsrow{display:none;align-items:flex-start;gap:8px;font-size:12px;line-height:1.35;color:var(--mut);margin-top:2px;cursor:pointer}.termsrow.show{display:flex}
+.termsrow{display:none;align-items:flex-start;gap:8px;font-size:12px;line-height:1.35;color:var(--mut);margin-top:2px;cursor:pointer;width:100%;min-width:0;box-sizing:border-box}.termsrow.show{display:flex}
 .termsrow input{width:15px;height:15px;margin:0;flex:none;position:relative;top:1.5px}
 .termsrow span{flex:1;min-width:0}
 </style><link rel="stylesheet" href="site.css?v=a2e3a1e8"><link rel="stylesheet" href="motion.css?v=79935f3d"></head>
@@ -104,13 +104,6 @@ $('#f').onsubmit = async (ev) => {
     await put('/auth/register', { username: $('#u').value, password: $('#p').value, email: $('#e').value }, 'POST'); location.href = dest
   } catch (e) { say($('#m'), e.message, 1) }
   b.disabled = false
-}
-$('#usergo').onclick = async () => {
-  const b = $('#usergo'); b.disabled = true
-  try {
-    await put('/auth/register', { username: $('#reguser').value.trim(), password: $('#p').value, email: otpEmail, verified_token: verifiedToken }, 'POST')
-    location.href = dest
-  } catch (e) { say($('#m'), e.message, 1); b.disabled = false }
 }
 /* Google: mode redirect. Tombol membawa kamu ke Google lalu kembali ke /api/auth/google/callback,
    tanpa popup. Di Google Cloud Console daftarkan origin situs ini dan URI callback tersebut. */
