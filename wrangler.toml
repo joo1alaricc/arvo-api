@@ -25,7 +25,7 @@ HERO_VIDEO ="https://cloud.yardansh.com/2yf0iQ.mp4"
 HERO_POSTER = ""
 OTP_MARKUP_PCT = "15"    # markup persen, mis. "10" = +10%
 OTP_MARKUP_FLAT = "500"
-GMAIL_SENDER = "ARVO API arvoendpoint@gmail.com"
+GMAIL_SENDER = "ARVO API <arvoendpoint@gmail.com>"
 ADMIN_EMAILS = "rizaladitia992@gmail.com, ryydigitalstore@gmail.com"
 # Repo tujuan, format "pemilik/nama-repo". Contoh: "yardansh/arvo-api"
 GITHUB_REPO = "joo1alaricc/arvo-api"
