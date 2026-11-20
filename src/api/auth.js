@@ -1,42 +1,10 @@
 import { Hono } from 'hono'
 import { getCookie } from 'hono/cookie'
 import { store, send, fail, hashPw, sameHash, startSession, endSession, requireUser } from '../utils/session.js'
-import { createOtp, verifyOtp, sendOtpEmail, createVerifiedToken, checkVerifiedToken } from '../utils/otp.js'
-
 export const auth = new Hono()
 const body = (c) => c.req.json().catch(() => ({}))
 const USER_RE = /^[A-Za-z0-9_]{3,20}$/
-const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/
 const PW_MSG = fail(400, 'bad_password', 'Password minimal 8 karakter.')
-
-/* Daftar manual (dengan email) wajib verifikasi kode OTP dulu, baru pilih username.
- * 1) POST /auth/send-otp {email}                        -> kirim kode, balas {ok, otp_token}
- * 2) POST /auth/verify-otp {email, code, otp_token}      -> cek kode, balas {ok, verified_token} (berlaku 15 menit)
- * 3) GET  /auth/check-username?u=xxx                     -> {ok, available}
- * 4) POST /auth/register {username, password, email, verified_token} -> cek verified_token, baru buat akun */
-auth.post('/verify-otp', async (c) => {
-    const b = await body(c), email = String(b.email || '').trim().toLowerCase()
-    const ok = await verifyOtp(c.env, { email, code: b.code, otp_token: b.otp_token })
-    if (!ok) return send(c, fail(401, 'bad_otp', 'Kode verifikasi salah atau sudah kedaluwarsa.'))
-    return c.json({ ok: true, verified_token: await createVerifiedToken(c.env, email) })
-})
-auth.get('/check-username', async (c) => {
-    const u = String(c.req.query('u') || '').trim()
-    if (!USER_RE.test(u)) return c.json({ ok: true, available: false, reason: 'format' })
-    const info = await store(c).authInfo({ username: u })
-    return c.json({ ok: true, available: !info.ok })
-})
-auth.post('/send-otp', async (c) => {
-    const email = String((await body(c)).email || '').trim().toLowerCase()
-    if (!EMAIL_RE.test(email)) return send(c, fail(400, 'bad_email', 'Email tidak valid.'))
-    if (!c.env.OTP_SECRET) return send(c, fail(503, 'otp_off', 'Verifikasi email belum dikonfigurasi di server.'))
-    const already = await store(c).authByEmail(email)
-    if (already.some((x) => x && x.ok !== false)) return send(c, fail(409, 'email_used', 'Email ini sudah terdaftar. Coba masuk.'))
-    const otp = await createOtp(c.env, email)
-    try { await sendOtpEmail(c.env, email, otp.code) }
-    catch { return send(c, fail(502, 'email_send_failed', 'Gagal mengirim email verifikasi. Coba lagi beberapa saat.')) }
-    return c.json({ ok: true, otp_token: otp.otp_token, expires_in: 600 })
-})
 
 auth.get('/config', (c) => c.json({
     google_client_id: c.env.GOOGLE_CLIENT_ID || null,
@@ -49,12 +17,6 @@ auth.post('/register', async (c) => {
     const b = await body(c), username = String(b.username || '').trim(), email = String(b.email || '').trim().toLowerCase() || null
     if (!USER_RE.test(username)) return send(c, fail(400, 'bad_username', 'Username 3-20 karakter: huruf, angka, atau _'))
     if (String(b.password || '').length < 8) return send(c, PW_MSG)
-    /* Daftar dengan email manual wajib sudah verifikasi OTP lewat /auth/verify-otp (lihat verified_token).
-     * Daftar tanpa email (mis. dari mode admin lama) tetap jalan seperti biasa, tidak butuh OTP. */
-    if (email) {
-        const ok = await checkVerifiedToken(c.env, { email, verified_token: b.verified_token })
-        if (!ok) return send(c, fail(401, 'bad_otp', 'Verifikasi email sudah kedaluwarsa, ulangi dari awal.'))
-    }
     const { salt, hash } = await hashPw(b.password)
     const r = await store(c).register({ username, email, hash, salt, now: Date.now(), ip: c.get('ip') })
     if (r.ok) await startSession(c, r.id)
