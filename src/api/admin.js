@@ -22,6 +22,7 @@ admin.use('*', async (c, next) => {
     if (ak) {
         const v = await store(c).verifyAccess(ak).catch(() => null)
         if (v && v.ok !== false) { c.set('adminLevel', v.level); c.set('adminName', v.name); return next() }
+        await store(c).flag(null, c.get('ip'), '/api/admin', 'key', Date.now()).catch(() => {})
         return c.json({ error: 'invalid_access_key', message: 'Access key tidak valid.', status: 401 }, 401)
     }
     const u = await currentUser(c).catch(() => null)
