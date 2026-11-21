@@ -41,3 +41,11 @@ export const requireUser = async (c, next) => {
     c.set('user', u)
     await next()
 }
+
+/* Sesi dari Request mentah (tanpa konteks Hono): dipakai jembatan WebSocket konsol Pterodactyl, yang dijawab sebelum Hono. */
+export const userFromRequest = async (request, env, ip) => {
+    const m = /(?:^|;\s*)arvo_session=([^;]+)/.exec(request.headers.get('cookie') || '')
+    if (!m) return null
+    const r = await env.STORE.get(env.STORE.idFromName('main')).getSession(await sha(decodeURIComponent(m[1])), Date.now(), ip)
+    return r.ok === false ? null : r
+}
