@@ -5,6 +5,8 @@ import { secureHeaders } from 'hono/secure-headers'
 import { shield, limitBody, CSP, PRIVATE_RE } from './utils/shield.js'
 import { webGuard, INTERNAL_RE } from './utils/webguard.js'
 import { cachedCatalog } from './utils/catalogCache.js'
+import { PTERO_WS_RE, pteroWs } from './api/pteroWs.js'
+import { sweep as pteroSweep } from './utils/pterodactyl.js'
 
 import { setupRoutes } from './api/index.js'
 import { logApiRequest } from './utils/logApiRequest.js'
@@ -59,8 +61,8 @@ const createApp = () => {
     app.get('/api/ui', async (c) => { c.header('Cache-Control', 'no-store'); return c.json({ ok: true, ...(await uiCfg(c)) }) })
     app.get('/api/services', async (c) => { c.header('Cache-Control', 'no-store'); return c.json(await services(c)) })
 
-    /* Halaman /smm, /otp, /am: kalau layanannya dinonaktifkan admin, tampil 404. (wrangler.toml: run_worker_first memastikan Worker yang menjawab, bukan aset statis.) */
-    for (const [key, base] of [['smm', '/smm'], ['otp', '/otp'], ['am', '/am'], ['netflix', '/netflix']]) {
+    /* Halaman /smm, /otp, /am, /pterodactyl: kalau layanannya dinonaktifkan admin, tampil 404. (wrangler.toml: run_worker_first memastikan Worker yang menjawab, bukan aset statis.) */
+    for (const [key, base] of [['smm', '/smm'], ['otp', '/otp'], ['am', '/am'], ['netflix', '/netflix'], ['ptero', '/pterodactyl']]) {
         for (const p of [base, base + '/', base + '.html']) {
             app.get(p, async (c) => {
                 if (key === 'netflix' || (await services(c))[key]) return c.env.ASSETS.fetch(c.req.raw)
@@ -221,7 +223,13 @@ const app = createApp()
 export default {
     fetch(request, env, ctx) {
         setUpstreamUA(env.UPSTREAM_UA)
+        /* Konsol live Pterodactyl (WebSocket) dijawab sebelum Hono: respons 101 tidak boleh dibungkus middleware. Auth & kepemilikan dicek di dalamnya. */
+        if (request.headers.get('upgrade') === 'websocket' && PTERO_WS_RE.test(new URL(request.url).pathname)) return pteroWs(request, env)
         return app.fetch(request, env, ctx)
+    },
+    /* Cron (wrangler.toml > triggers): suspend server yang habis masa aktif, hapus setelah masa tenggang, ulangi pembuatan yang gagal. */
+    async scheduled(event, env, ctx) {
+        ctx.waitUntil(pteroSweep(env).then((r) => console.log('[ptero] sweep', JSON.stringify(r))).catch((e) => console.error('[ptero] sweep gagal', e)))
     },
 }
 
