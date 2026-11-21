@@ -77,10 +77,10 @@ Object.assign(MENU, { layanan: ['Layanan', 'grid'] })
 SUPER_ONLY.push('layanan')
 V.layanan = async function () {
   const d = await api('/admin/services')
-  const ROWS = [['smm', 'Layanan SMM', '/smm', 'Pesan layanan sosmed dan deposit saldo.'], ['otp', 'Layanan OTP', '/otp', 'Nomor virtual untuk menerima kode OTP.'], ['am', 'Aktivasi AM', '/am', 'Aktivasi Alight Motion (khusus Premium ke atas).']]
+  const ROWS = [['smm', 'Layanan SMM', '/smm', 'Pesan layanan sosmed dan deposit saldo.'], ['otp', 'Layanan OTP', '/otp', 'Nomor virtual untuk menerima kode OTP.'], ['am', 'Aktivasi AM', '/am', 'Aktivasi Alight Motion (khusus Premium ke atas).'], ['ptero', 'Panel Pterodactyl', '/pterodactyl', 'Sewa panel server otomatis. Default mati; nyalakan setelah menu Pterodactyl selesai diatur.']]
   out().innerHTML = `<h1>Layanan</h1><p class="sub">Matikan layanan untuk menyembunyikannya dari menu dan sidebar. Halamannya jadi 404 dan endpoint-nya ditolak. Transaksi yang sudah berjalan (cek deposit, batal atau refund OTP) tetap bisa diselesaikan supaya saldo user tidak tersangkut.</p>
   <div class="panel">${ROWS.map(([k, t, p, s]) => `<div class="cx-r" style="align-items:center"><div style="flex:1;min-width:0"><b>${t}</b> <code>${p}</code><div class="sub" style="font-size:12px;margin:2px 0 0">${s}</div></div>
-    <label class="sw"><input type="checkbox" data-sv="${k}" ${d[k] !== false ? 'checked' : ''}><i></i></label></div>`).join('')}</div>`
+    <label class="sw"><input type="checkbox" data-sv="${k}" ${(k === 'ptero' ? d[k] === true : d[k] !== false) ? 'checked' : ''}><i></i></label></div>`).join('')}</div>`
   out().querySelectorAll('[data-sv]').forEach((cb) => (cb.onchange = async () => {
     cb.disabled = true
     try { await put('/admin/services', { [cb.dataset.sv]: cb.checked }); toast(cb.checked ? 'Layanan diaktifkan' : 'Layanan dinonaktifkan') }
