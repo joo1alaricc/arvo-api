@@ -15,6 +15,7 @@ const PAGES = {
     'profile.html': { path: '/profile', title: 'Profil · Arvo API', desc: 'Kelola API key, whitelist IP, dan riwayat pemakaian akun Arvo API.', index: false },
     'admin.html': { path: '/admin', title: 'Admin · Arvo API', desc: 'Panel pengelola Arvo API.', index: false },
     'smm.html': { path: '/smm', title: 'Layanan SMM · Arvo API', desc: 'Layanan SMM di Arvo API.', index: false },
+    'pterodactyl.html': { path: '/pterodactyl', title: 'Panel Pterodactyl · Arvo API', desc: 'Sewa panel Pterodactyl otomatis di Arvo API.', index: false },
     'otp.html': { path: '/otp', title: 'Layanan OTP · Arvo API', desc: 'Layanan nomor OTP di Arvo API.', index: false },
     'am.html': { path: '/am', title: 'Aktivasi AM · Arvo API', desc: 'Aktivasi AM di Arvo API.', index: false },
 }
