@@ -4,6 +4,7 @@ import { peekQuota } from '../utils/rateLimit.js'
 import { makeQris } from '../utils/payment.js'
 import { store, send, requireUser, currentUser, sameHash } from '../utils/session.js'
 import { tokenOk, settleBtzDeposit } from '../utils/btzpay.js'
+import { settlePteroOrder } from '../utils/pterodactyl.js'
 
 export const billing = new Hono()
 const body = (c) => c.req.json().catch(() => ({}))
@@ -57,6 +58,13 @@ export const btzCallback = async (c) => {
         if (d && d.provider === 'btzpay') {
             matched = true
             try { const r = await settleBtzDeposit(c, d); result = r.err ? 'error: ' + r.err.message : r.status } catch (e) { result = 'error: ' + (e.message || e); console.error('[btzpay] callback', e) }
+        } else if (!d) {
+            /* bukan deposit saldo: mungkin pembayaran Panel Pterodactyl. Server dibuat/diperpanjang otomatis begitu lunas. */
+            const po = await store(c).pteroOrder(id)
+            if (po) {
+                matched = true
+                try { const r = await settlePteroOrder(c.env, store(c), po); result = r.err ? 'error: ' + r.err.message : 'ptero:' + r.status } catch (e) { result = 'error: ' + (e.message || e); console.error('[ptero] callback', e) }
+            }
         }
     }
     await store(c).setBtzCb({ at: Date.now(), pay_id: id.slice(0, 80), status: String(b.status || '').slice(0, 20), matched, result: result && String(result).slice(0, 120) }).catch(() => {})
