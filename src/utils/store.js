@@ -54,7 +54,16 @@ export class StoreDO extends DurableObject {
             CREATE INDEX IF NOT EXISTS smm_dep_u ON smm_deposits(user_id,status);
             CREATE TABLE IF NOT EXISTS otp_orders(id INTEGER PRIMARY KEY AUTOINCREMENT, order_id TEXT UNIQUE, user_id INTEGER, country TEXT, dial TEXT, service TEXT, svc_code TEXT,
                 server_no INTEGER, product_id INTEGER, phone TEXT, cost INTEGER, status TEXT, otp_code TEXT, otp_message TEXT, refunded INTEGER DEFAULT 0, expires_at INTEGER, created_at INTEGER);
-            CREATE INDEX IF NOT EXISTS otp_orders_u ON otp_orders(user_id,id);`)
+            CREATE INDEX IF NOT EXISTS otp_orders_u ON otp_orders(user_id,id);
+            CREATE TABLE IF NOT EXISTS ptero_users(user_id INTEGER PRIMARY KEY, panel_user_id INTEGER, username TEXT);
+            CREATE TABLE IF NOT EXISTS ptero_orders(id TEXT PRIMARY KEY, user_id INTEGER, kind TEXT DEFAULT 'new', plan TEXT, days INTEGER, amount INTEGER, total INTEGER,
+                status TEXT DEFAULT 'pending', access_key TEXT, pay_url TEXT, expired_at INTEGER, fee INTEGER, qr_data TEXT, server_ref INTEGER,
+                created_at INTEGER, paid_at INTEGER, tries INTEGER DEFAULT 0, last_try INTEGER, error TEXT);
+            CREATE INDEX IF NOT EXISTS ptero_orders_u ON ptero_orders(user_id,created_at);
+            CREATE TABLE IF NOT EXISTS ptero_servers(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, plan TEXT, name TEXT, panel_user_id INTEGER, server_id INTEGER,
+                uuid TEXT, identifier TEXT, status TEXT DEFAULT 'active', created_at INTEGER, expires_at INTEGER, order_id TEXT);
+            CREATE UNIQUE INDEX IF NOT EXISTS ptero_servers_o ON ptero_servers(order_id);
+            CREATE INDEX IF NOT EXISTS ptero_servers_u ON ptero_servers(user_id,status);`)
         /* DB lama bisa punya tabel orders dengan skema berbeda (CREATE IF NOT EXISTS tidak mengubahnya): lengkapi kolom yang kurang */
         this.ensureCols('orders', { user_id: 'INTEGER', plan: 'TEXT', days: 'INTEGER', amount: 'INTEGER', code: 'INTEGER', total: 'INTEGER', status: 'TEXT', ip: 'TEXT',
             created_at: 'INTEGER', expires_at: 'INTEGER', paid_at: 'INTEGER' },
@@ -857,6 +866,86 @@ export class StoreDO extends DurableObject {
                 createdAt: new Date(r.first_at).toISOString(), lastUsed: new Date(r.last_at).toISOString() })) } }
     }
 
+    /* ---------- Panel Pterodactyl ----------
+     * Pengaturan (domain, apikey, capikey, egg, dst.) disimpan di tabel settings dan hanya dibaca kode server. */
+    pteroCfg() { return this.setting('ptero', null) }
+    setPteroCfg(v) { this.saveSetting('ptero', v); return { ok: true } }
+    pteroOwner(uid) { const u = this.user(uid); return u ? { id: u.id, username: u.username } : null }
+    pteroPanelUser(uid) { const [r] = this.q('SELECT panel_user_id,username FROM ptero_users WHERE user_id=?', uid); return r || null }
+    pteroSetPanelUser(uid, pid, name) {
+        this.sql.exec('INSERT INTO ptero_users VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET panel_user_id=excluded.panel_user_id,username=excluded.username', uid, pid, name)
+        return { ok: true }
+    }
+    pteroOrderNew(o) {
+        this.sql.exec('INSERT OR IGNORE INTO ptero_orders(id,user_id,kind,plan,days,amount,total,status,access_key,pay_url,expired_at,fee,qr_data,server_ref,created_at,tries) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)',
+            o.id, o.uid, o.kind || 'new', o.plan, o.days, o.amount, o.total, 'pending', o.access_key || null, o.pay_url || null, o.expired_at || null, o.fee || 0, o.qr_data || null, o.server_ref || null, o.now)
+        return { ok: true }
+    }
+    pteroOrder(id) { const [o] = this.q('SELECT * FROM ptero_orders WHERE id=?', id); return o || null }
+    pteroPending(uid, now) { return this.q("SELECT id,expired_at FROM ptero_orders WHERE user_id=? AND status='pending' AND created_at>?", uid, now - DAY) }
+    /* hanya order yang masih pending yang boleh dibatalkan/kedaluwarsa/ditandai review (yang sudah dibayar tidak disentuh) */
+    pteroOrderStatus(id, status) { this.sql.exec("UPDATE ptero_orders SET status=? WHERE id=? AND status='pending'", status, id); return { ok: true } }
+    /* Klaim ATOMIK hak membuat server: hanya SATU pemanggil yang menang (callback BTZPay, polling user, dan cron bisa datang bersamaan).
+     * Boleh diklaim dari: pending (baru lunas) | failed (coba ulang setelah jeda, maks 6x, atau paksa oleh admin) | provisioning yang macet > 2 menit. */
+    pteroClaim(id, now, force = false) {
+        const r = this.sql.exec(`UPDATE ptero_orders SET status='provisioning',last_try=?,tries=tries+1,paid_at=COALESCE(paid_at,?),error=NULL
+            WHERE id=? AND (status='pending' OR (status='failed' AND (?=1 OR (tries<6 AND COALESCE(last_try,0)<?))) OR (status='provisioning' AND COALESCE(last_try,0)<?))`,
+            now, now, id, force ? 1 : 0, now - 20000, now - 120000)
+        return r.rowsWritten > 0 ? this.pteroOrder(id) : null
+    }
+    pteroOrderFail(id, msg) { this.sql.exec("UPDATE ptero_orders SET status='failed',error=? WHERE id=? AND status='provisioning'", String(msg || '').slice(0, 300), id); return { ok: true } }
+    /* Server baru jadi + order selesai dalam SATU langkah atomik (idempotent lewat order_id unik). */
+    pteroNewDone(orderId, s, now) {
+        const o = this.pteroOrder(orderId); if (!o) return fail(404, 'not_found', 'Order tidak ditemukan.')
+        if (o.status === 'active' && o.server_ref) return { ok: true, server: o.server_ref }
+        this.sql.exec("INSERT OR IGNORE INTO ptero_servers(user_id,plan,name,panel_user_id,server_id,uuid,identifier,status,created_at,expires_at,order_id) VALUES(?,?,?,?,?,?,?,'active',?,?,?)",
+            o.user_id, s.plan, s.name, s.panel_user_id, s.server_id, s.uuid, s.identifier, now, now + o.days * DAY, orderId)
+        const [r] = this.q('SELECT id FROM ptero_servers WHERE order_id=?', orderId)
+        this.sql.exec("UPDATE ptero_orders SET status='active',server_ref=?,error=NULL WHERE id=?", r.id, orderId)
+        return { ok: true, server: r.id }
+    }
+    /* Perpanjang + order selesai, atomik. Hanya jalan kalau order sedang 'provisioning' (hasil klaim), jadi tidak bisa menambah hari dua kali. */
+    pteroRenewDone(orderId, now) {
+        const o = this.pteroOrder(orderId); if (!o) return fail(404, 'not_found', 'Order tidak ditemukan.')
+        if (o.status === 'active') return { ok: true, server: o.server_ref }
+        if (o.status !== 'provisioning') return fail(409, 'bad_state', 'Order belum siap diproses.')
+        const s = this.pteroServer(o.server_ref); if (!s || s.status === 'deleted') return fail(410, 'gone', 'Server sudah dihapus.')
+        const exp = Math.max(now, s.expires_at || 0) + o.days * DAY
+        this.sql.exec("UPDATE ptero_servers SET expires_at=?,status='active' WHERE id=?", exp, s.id)
+        this.sql.exec("UPDATE ptero_orders SET status='active',error=NULL WHERE id=?", orderId)
+        return { ok: true, server: s.id, expires_at: exp }
+    }
+    pteroUserOrders(uid) { return this.q('SELECT id,kind,plan,days,amount,total,status,created_at,paid_at,server_ref FROM ptero_orders WHERE user_id=? ORDER BY created_at DESC LIMIT 15', uid) }
+    pteroServer(id) { const [s] = this.q('SELECT * FROM ptero_servers WHERE id=?', id); return s || null }
+    pteroServersOf(uid) { return this.q("SELECT id,plan,name,status,created_at,expires_at FROM ptero_servers WHERE user_id=? AND status!='deleted' ORDER BY id DESC", uid) }
+    pteroServerStatus(id, status) { this.sql.exec('UPDATE ptero_servers SET status=? WHERE id=?', status, id); return { ok: true } }
+    pteroServerRename(id, name) { this.sql.exec('UPDATE ptero_servers SET name=? WHERE id=?', String(name).slice(0, 60), id); return { ok: true } }
+    pteroAdminExtend(id, days, now) {
+        const s = this.pteroServer(id); if (!s) return fail(404, 'not_found', 'Server tidak ditemukan.')
+        const exp = Math.max(now, s.expires_at || 0) + days * DAY
+        this.sql.exec('UPDATE ptero_servers SET expires_at=? WHERE id=?', exp, id)
+        return { ok: true, expires_at: exp }
+    }
+    /* Pekerjaan untuk cron: yang harus disuspend / dihapus / dicoba ulang. Sekaligus merapikan order pending yang sudah lewat batas bayar. */
+    pteroDue(now, graceDays) {
+        this.sql.exec("UPDATE ptero_orders SET status='expired' WHERE status='pending' AND expired_at IS NOT NULL AND expired_at<?", now - 5 * 60000)
+        return {
+            suspend: this.q("SELECT id,server_id FROM ptero_servers WHERE status='active' AND expires_at<? LIMIT 20", now),
+            remove: this.q("SELECT id,server_id FROM ptero_servers WHERE status='suspended' AND expires_at<? LIMIT 20", now - Math.max(0, graceDays) * DAY),
+            retry: this.q("SELECT * FROM ptero_orders WHERE status='failed' AND tries<6 LIMIT 10"),
+        }
+    }
+    adminPtero() {
+        const one = (sql, ...a) => this.q(sql, ...a)[0]
+        const paid = one("SELECT COALESCE(SUM(amount),0) s,COUNT(*) n FROM ptero_orders WHERE paid_at IS NOT NULL")
+        return {
+            ok: true, paid_sum: paid.s, paid_count: paid.n,
+            active: one("SELECT COUNT(*) n FROM ptero_servers WHERE status='active'").n, failed: one("SELECT COUNT(*) n FROM ptero_orders WHERE status='failed'").n,
+            orders: this.q('SELECT o.id,o.kind,o.plan,o.days,o.amount,o.total,o.status,o.tries,o.error,o.created_at,o.paid_at,u.username FROM ptero_orders o LEFT JOIN users u ON u.id=o.user_id ORDER BY o.created_at DESC LIMIT 40'),
+            servers: this.q('SELECT s.id,s.plan,s.name,s.status,s.server_id,s.created_at,s.expires_at,u.username FROM ptero_servers s LEFT JOIN users u ON u.id=s.user_id ORDER BY s.id DESC LIMIT 60'),
+        }
+    }
+
     /* ---------- QRIS statis (payload teks hasil baca gambar QR) ---------- */
     getQrisStatic() { return this.setting('qris_static', null) }
     setQrisStatic(payload) { this.saveSetting('qris_static', payload); return { ok: true } }
@@ -874,10 +963,11 @@ export class StoreDO extends DurableObject {
     }
 
     /* ---------- layanan aktif/nonaktif (diatur admin): smm, otp, am ---------- */
-    servicesCfg() { const d = this.setting('services', null) || {}; return { smm: d.smm !== false, otp: d.otp !== false, am: d.am !== false } }
+    /* ptero (Panel Pterodactyl) default MATI: baru muncul setelah admin melengkapi pengaturannya lalu menyalakannya. */
+    servicesCfg() { const d = this.setting('services', null) || {}; return { smm: d.smm !== false, otp: d.otp !== false, am: d.am !== false, ptero: d.ptero === true } }
     adminSaveServices(b) {
         const cur = this.servicesCfg(), v = {}
-        for (const k of ['smm', 'otp', 'am']) v[k] = b && k in b ? !!b[k] : cur[k]
+        for (const k of ['smm', 'otp', 'am', 'ptero']) v[k] = b && k in b ? !!b[k] : cur[k]
         this.saveSetting('services', v)
         return { ok: true, ...v }
     }
