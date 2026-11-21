@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { store, requireUser } from '../utils/session.js'
 import { services } from '../utils/services.js'
 import { loadCfg, btzCreate, btzCancel, btzQr, httpsOnly, settleBtzDeposit } from '../utils/btzpay.js'
+import { ptero } from './pterodactyl.js'
 
 /* Tools: fitur tambahan khusus member berbayar. Saat ini: Aktivasi AM (/api/tools/am/*).
  * Kunci layanan (CUPZ_API_KEY) hanya ada di server (wrangler secret), tidak pernah dikirim ke browser. */
@@ -24,6 +25,8 @@ const gate = (key, label, allow = []) => async (c, next) => {
 tools.use('/smm/*', gate('smm', 'Layanan SMM', ['balance', 'orders', 'status', 'deposit-status', 'deposit-cancel', 'deposit-qr']))
 tools.use('/otp/*', gate('otp', 'Layanan OTP', ['orders', 'status', 'cancel', 'finish']))
 tools.use('/am/*', gate('am', 'Aktivasi AM'))
+/* Panel Pterodactyl: saat dimatikan admin, hanya penyelesaian pembayaran yang masih boleh (supaya uang user tidak tersangkut). */
+tools.use('/ptero/*', gate('ptero', 'Panel Pterodactyl', ['order-status', 'order-cancel', 'order-qr']))
 
 /* Aktivasi AM: Premium 1 ke atas. Paket aktif ditentukan dari plan ID, bukan sekadar label role. */
 const PLAN_RANK = { premium1: 1, premium2: 2, premium3: 3, vip1: 4, vip2: 5, vip3: 6 }
@@ -43,6 +46,7 @@ const adminOrPlan = (minimum) => async (c, next) => {
 }
 tools.use('/am/*', adminOrPlan(1))
 tools.use('/netflix-token/*', adminOrPlan(2))
+tools.route('/ptero', ptero)   /* harus SETELAH requireUser & gate di atas */
 
 const cupz = async (c, path, payload) => {
     const key = c.env.CUPZ_API_KEY
