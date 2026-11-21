@@ -94,7 +94,8 @@ export const btzQr = async (env, data) => {
 export const httpsOnly = (u) => { try { return new URL(u).protocol === 'https:' ? String(u) : null } catch { return null } }
 export const tokenOk = (env, given) => !!env.BTZPAY_CALLBACK_TOKEN && sameHash(String(given || ''), String(env.BTZPAY_CALLBACK_TOKEN))
 
-const OK = /^(sukses|success|paid)$/i, DEAD = /^(gagal|expired|cancel|canceled|cancelled|failed)$/i
+export const OK = /^(sukses|success|paid)$/i
+export const DEAD = /^(gagal|expired|cancel|canceled|cancelled|failed)$/i
 
 /* Cocokkan satu deposit BTZPay: status SELALU diambil ulang dari BTZPay (isi callback tidak dipercaya), saldo dikredit sekali. */
 export const settleBtzDeposit = async (c, d) => {
