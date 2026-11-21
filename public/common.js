@@ -82,6 +82,7 @@ const NI = {
   tool: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>', msg: '<path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-5.4A8 8 0 1 1 21 12z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01"/>', trend: '<path d="m3 17 6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
 }
 Object.assign(NI, {
+  server: '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/>',
   key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m11.5 11.5 9-9 2 2-2 2 2 2-3 3-2-2-4 4"/>',
   cog: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   userc: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19.5 8v6M16.5 11h6"/>',
@@ -95,7 +96,7 @@ const ni = (n) => `<svg viewBox="0 0 24 24" aria-hidden="true">${NI[n]}</svg>`
 const DR_GROUPS = [   /* [judul grup, ikon, [[href, label, ikon], ...]] */
   ['Utama', 'compass', [['/', 'Beranda', 'home'], ['/dashboard.html', 'Dashboard', 'grid'], ['/#paket', 'Paket', 'bag'], ['/#cara', 'Cara kerja', 'list'], ['/#faq', 'FAQ', 'help']]],
   ['Developer', 'code', [['/playground.html', 'Playground', 'play']]],
-  ['Tools', 'tool', [['/am', 'Aktivasi AM', 'bolt'], ['/netflix', 'Netflix Token Generator', 'key'], ['/smm', 'Layanan SMM', 'trend'], ['/otp', 'Layanan OTP', 'msg']]],
+  ['Tools', 'tool', [['/am', 'Aktivasi AM', 'bolt'], ['/netflix', 'Netflix Token Generator', 'key'], ['/smm', 'Layanan SMM', 'trend'], ['/otp', 'Layanan OTP', 'msg'], ['/pterodactyl', 'Panel Pterodactyl', 'server']]],
 ]
 const LINKS = [['/dashboard.html', 'Dashboard', 'grid'], ['/#paket', 'Paket', 'bag'], ['/#cara', 'Cara kerja', 'list'], ['/playground.html', 'Playground', 'play'], ['/am', 'Aktivasi AM', 'bolt'], ['/netflix', 'Netflix Token', 'key'], ['/smm', 'Layanan SMM', 'trend'], ['/otp', 'Layanan OTP', 'msg'], ['/#faq', 'FAQ', 'help']]
 
@@ -281,7 +282,7 @@ document.querySelectorAll('.dr-g').forEach((g) => {
 drActive()
 
 /* layanan yang dimatikan admin (Admin > Layanan) disembunyikan dari menu atas & sidebar. Status terakhir disimpan supaya tidak berkedip. */
-const SVC_PATH = { '/smm': 'smm', '/otp': 'otp', '/am': 'am' }
+const SVC_PATH = { '/smm': 'smm', '/otp': 'otp', '/am': 'am', '/pterodactyl': 'ptero' }
 const applySvc = (cfg) => {
   if (!cfg) return
   document.querySelectorAll('.links a, #drnav a.dr-it').forEach((a) => {
