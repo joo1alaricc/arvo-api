@@ -7,12 +7,18 @@ compatibility_date = "2026-11-15"
 routes = [{ pattern = "arvo-api.my.id", custom_domain = true }]
 keep_vars = true   # jangan hapus variabel yang diisi lewat dashboard saat deploy
 
+# Jalan otomatis tiap `wrangler deploy`/`dev`: isi ?v=hash di HTML. Wajib karena file ber-?v= di-cache browser 1 tahun (anti-lambat);
+# kalau isi file berubah, hash ikut berubah, jadi pengguna selalu dapat versi terbaru.
+[build]
+command = "node scripts/seo-head.mjs && node scripts/bump-version.mjs"
+
 [assets]
 directory = "./public"
 binding = "ASSETS"
 not_found_handling = "none"
-# Halaman layanan dijawab Worker dulu supaya bisa dimatikan admin (Admin > Layanan)
-run_worker_first = ["/smm", "/smm/", "/smm.html", "/otp", "/otp/", "/otp.html", "/am", "/am/", "/am.html", "/netflix", "/netflix/", "/netflix.html"]
+# Worker menjawab SEMUA halaman & file statis lebih dulu (wajib untuk anti-scrape: lihat src/utils/webguard.js).
+# Hanya file publik murni (ikon, og-image, robots, sitemap) yang dilewatkan langsung ke aset supaya hemat kuota request Worker.
+run_worker_first = ["/*", "!/favicon.ico", "!/favicon.svg", "!/icon-192.png", "!/icon-512.png", "!/apple-touch-icon.png", "!/og-image.png", "!/logo.svg", "!/logo-white.svg", "!/robots.txt", "!/sitemap.xml"]
 
 [vars]
 API_NAME = "Arvo"
@@ -21,11 +27,10 @@ RATE_LIMIT_WINDOW_MS = "900000"
 RATE_LIMIT_MAX = "100"
 RATE_LIMIT_WHITELIST = "127.0.0.1"
 RATE_LIMIT_BAN_LIST = ""
-HERO_VIDEO = "/media/30d28e07ca6312e9d85d5150ba24ad72.mp4"
+HERO_VIDEO ="https://cloud.yardansh.com/2yf0iQ.mp4"
 HERO_POSTER = ""
 OTP_MARKUP_PCT = "15"    # markup persen, mis. "10" = +10%
 OTP_MARKUP_FLAT = "500"
-GMAIL_SENDER = "ARVO API <arvoendpoint@gmail.com>"
 ADMIN_EMAILS = "rizaladitia992@gmail.com, ryydigitalstore@gmail.com"
 # Repo tujuan, format "pemilik/nama-repo". Contoh: "yardansh/arvo-api"
 GITHUB_REPO = "joo1alaricc/arvo-api"
@@ -35,15 +40,17 @@ OWNER_IPS = "103.150.16.3,2400:9800:265:7f87:18e8:67d6:e897:74ad,2400:9800:20c:c
 QRIS_IMAGE_URL = "https://cloud.yardansh.com/EhofMy.jpg"
 ORDER_TTL_MIN = "30"
 FREE_DAILY_LIMIT = "100"
-OWNER_ACCESS_KEY = "admin123"
+# OWNER_ACCESS_KEY JANGAN ditulis di sini (file ini ikut ke GitHub). Isi lewat: npx wrangler secret put OWNER_ACCESS_KEY (pakai kunci panjang & acak)
 GOOGLE_CLIENT_ID = "978603752308-2crtqbtdjangppler9i9qf70bmvchacn.apps.googleusercontent.com"
+# Anti-bot Cloudflare Turnstile (opsional, sangat disarankan): buat widget di dash.cloudflare.com > Turnstile, isi site key di bawah (publik),
+# lalu `npx wrangler secret put TURNSTILE_SECRET`. Kosong = fitur mati, login/daftar tetap jalan seperti biasa.
+TURNSTILE_SITE_KEY = ""
 # Secret (wrangler secret put, JANGAN ditulis di file ini): VAMX_API_KEY, GITHUB_API, PAYMENT_WEBHOOK_SECRET, dan opsional QRIS_STATIC
-# Secret OTP email verifikasi daftar akun (kirim lewat Gmail API, akun Gmail biasa, tanpa verifikasi domain):
-#   OTP_SECRET          string acak bebas, mis. hasil `openssl rand -hex 32`
-#   GOOGLE_CLIENT_SECRET client secret dari OAuth client yang sama dengan GOOGLE_CLIENT_ID (Google Cloud Console > Credentials)
-#   GMAIL_REFRESH_TOKEN  sekali ambil lewat Google OAuth Playground, scope https://www.googleapis.com/auth/gmail.send
-# Opsional di [vars]: GMAIL_SENDER (mis. "Arvo API <akunmu@gmail.com>"), default "Arvo API <noreply@gmail.com>" kalau kosong
 # Secret BTZPay (deposit): BTZPAY_APIKEY, BTZPAY_CALLBACK_TOKEN, dan opsional BTZPAY_SANDBOX_APIKEY. Opsional di [vars]: BTZPAY_BASE_URL (default https://web.btzpay.my.id)
+
+# Cron Panel Pterodactyl: tiap 15 menit suspend server yang habis masa aktif, hapus yang lewat masa tenggang, ulangi pembuatan server yang gagal.
+[triggers]
+crons = ["*/15 * * * *"]
 
 # Waktu deploy versi aktif, dipakai untuk "Server Uptime" di Dashboard.
 [version_metadata]
