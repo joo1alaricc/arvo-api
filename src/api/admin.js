@@ -4,6 +4,7 @@ import { refreshBlocked } from '../utils/rateLimit.js'
 import { refreshServices, refreshUi } from '../utils/services.js'
 import { getOverrides, refreshOverrides } from '../utils/overrides.js'
 import { bustCatalog } from '../utils/catalogCache.js'
+import { PLANS, loadPteroCfg, cleanCfg as cleanPteroCfg, publicCfg as publicPteroCfg, cfgReady, testConnection, settlePteroOrder, suspendServer, unsuspendServer, deleteServer } from '../utils/pterodactyl.js'
 import { BUILTIN_PATHS, builtinInfo } from './index.js'
 import { ghStatus, ghTree, ghGet, ghPut, ghDelete, ghRuns, safePath, b64ToText, textToB64 } from '../utils/github.js'
 import { analyze, build, readBack, patchIndex, syncIndex, exportPairs, SYNC_FILE_RE, exportNames, slugFrom, EXAMPLE, STRUCTURE_HELP } from '../utils/endpointGen.js'
@@ -33,7 +34,7 @@ admin.use('*', async (c, next) => {
 })
 const superOnly = async (c, next) => c.get('adminLevel') === 'super' ? next()
     : c.json({ error: 'Forbidden', message: 'Hanya super admin (owner) yang boleh melakukan ini.', status: 403 }, 403)
-for (const p of ['/endpoints', '/endpoints/*', '/builtin', '/builtin/*', '/admins', '/admins/*', '/github', '/github/*', '/deploy', '/deploy/*', '/code-endpoints', '/code-endpoints/*', '/media/hero', '/services', '/ui']) admin.use(p, superOnly)
+for (const p of ['/endpoints', '/endpoints/*', '/builtin', '/builtin/*', '/admins', '/admins/*', '/github', '/github/*', '/deploy', '/deploy/*', '/code-endpoints', '/code-endpoints/*', '/media/hero', '/services', '/ui', '/ptero', '/ptero/*']) admin.use(p, superOnly)
 const who = (c) => `[Arvo:${c.get('adminName')}]`
 admin.get('/stats', async (c) => send(c, await store(c).adminStats(Date.now())))
 admin.get('/users', async (c) => send(c, await store(c).adminUsers(c.req.query('q'), Date.now())))
@@ -68,6 +69,46 @@ admin.delete('/plans/:id', async (c) => send(c, await store(c).adminDeletePlan(c
 /* ---- layanan aktif/nonaktif: smm, otp, am (hanya super admin) ---- */
 admin.get('/services', async (c) => c.json({ ok: true, ...(await store(c).servicesCfg()) }))
 admin.put('/services', async (c) => { const r = await store(c).adminSaveServices(await body(c)); refreshServices(); return send(c, r) })
+
+/* ---- Panel Pterodactyl (hanya super admin). Kunci API TIDAK pernah dikirim balik: hanya status terisi + petunjuk 5 huruf awal & 4 akhir. ---- */
+admin.get('/ptero', async (c) => {
+    const st = store(c), cfg = await loadPteroCfg(st)
+    return c.json({ ...(await st.adminPtero()), config: publicPteroCfg(cfg), plans: PLANS, btz: { apikey: !!c.env.BTZPAY_APIKEY, callback_token: !!c.env.BTZPAY_CALLBACK_TOKEN } })
+})
+admin.put('/ptero', async (c) => {
+    const st = store(c), r = cleanPteroCfg(await body(c), await loadPteroCfg(st))
+    if (r.error) return send(c, fail(400, 'bad_config', r.error))
+    await st.setPteroCfg(r.cfg)
+    return c.json({ ok: true, config: publicPteroCfg(r.cfg) })
+})
+/* Tes koneksi: boleh memakai nilai yang BELUM disimpan (domain/key dari form) supaya admin bisa mencoba sebelum menyimpan. Hasilnya memuat daftar nest/egg/lokasi untuk dipilih. */
+admin.post('/ptero/test', async (c) => {
+    const st = store(c), r = cleanPteroCfg(await body(c), await loadPteroCfg(st))
+    if (r.error) return send(c, fail(400, 'bad_config', r.error))
+    return c.json({ ok: true, ...(await testConnection(r.cfg)) })
+})
+admin.post('/ptero/orders/:id/retry', async (c) => {
+    const st = store(c), o = await st.pteroOrder(String(c.req.param('id')))
+    if (!o) return send(c, fail(404, 'not_found', 'Order tidak ditemukan.'))
+    if (!['failed', 'provisioning'].includes(o.status)) return send(c, fail(409, 'bad_state', 'Hanya order yang gagal/macet yang bisa diulang.'))
+    const r = await settlePteroOrder(c.env, st, o, { force: true })
+    return c.json({ ok: r.status === 'active', ...r })
+})
+admin.post('/ptero/servers/:id/:action', async (c) => {
+    const st = store(c), cfg = await loadPteroCfg(st), a = c.req.param('action'), s = await st.pteroServer(Number(c.req.param('id')))
+    if (!s) return send(c, fail(404, 'not_found', 'Server tidak ditemukan.'))
+    if (a === 'extend') {
+        const days = Math.floor(Number((await body(c)).days))
+        if (!(days >= 1 && days <= 3650)) return send(c, fail(400, 'bad_days', 'Jumlah hari 1 sampai 3650.'))
+        return send(c, await st.pteroAdminExtend(s.id, days, Date.now()))
+    }
+    if (!['suspend', 'unsuspend', 'delete'].includes(a)) return send(c, fail(400, 'bad_action', 'Aksi tidak dikenal.'))
+    if (!cfgReady(cfg)) return send(c, fail(503, 'not_configured', 'Pengaturan panel belum lengkap.'))
+    const r = await (a === 'suspend' ? suspendServer : a === 'unsuspend' ? unsuspendServer : deleteServer)(cfg, s.server_id)
+    if (!r.ok && r.status !== 404) return send(c, fail(502, 'panel_error', r.message))
+    await st.pteroServerStatus(s.id, a === 'suspend' ? 'suspended' : a === 'unsuspend' ? 'active' : 'deleted')
+    return c.json({ ok: true, status: a === 'suspend' ? 'suspended' : a === 'unsuspend' ? 'active' : 'deleted' })
+})
 
 /* ---- skala tampilan situs (hanya super admin) ---- */
 admin.get('/ui', async (c) => c.json({ ok: true, ...(await store(c).uiCfg()) }))
