@@ -32,6 +32,8 @@ const parseList = (v = '') => String(v).split(',').map((x) => x.trim()).filter(B
 const METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
 
 /* Rute yang memakai cookie sesi / data akun: tanpa CORS terbuka dan wajib same-origin untuk method yang mengubah data. */
+export const UPLOAD_MAX = 25 * 1024 * 1024
+export const UPLOAD_RE = /^\/api\/tools\/ptero\/s\/\d{1,9}\/upload$/
 export const PRIVATE_RE = /^\/api\/(auth|admin|billing|tools)(\/|$)/
 /* Dipanggil server lain (Google, payment gateway): bukan dari browser kita, jangan diblokir cek Origin / limit. */
 const MACHINE_RE = /^(\/callback|\/webhook|\/api\/billing\/webhook|\/api\/billing\/btzpay\/callback|\/api\/auth\/google\/callback)\/?$/
@@ -78,7 +80,7 @@ export const shield = () => async (c, next) => {
     if (c.req.url.length > 4096) return deny(c, 414, 'URI Too Long', 'URL terlalu panjang.')
     if (/[\u0000-\u001f]|%00/.test(path) || path.includes('..')) return deny(c, 400, 'Bad Request', 'Path tidak valid.')
     const len = Number(c.req.header('content-length') || 0)
-    if (len > 1024 * 1024) return deny(c, 413, 'Payload Too Large', 'Body terlalu besar.')
+    if (len > (UPLOAD_RE.test(path) ? UPLOAD_MAX : 1024 * 1024)) return deny(c, 413, 'Payload Too Large', 'Body terlalu besar.')
 
     const machine = MACHINE_RE.test(path)
     if (!owner && !machine) {
@@ -113,7 +115,13 @@ export const shield = () => async (c, next) => {
 }
 
 /* Batas ukuran body untuk semua API (cek ke Content-Length DAN ke stream tanpa Content-Length). */
-export const limitBody = () => bodyLimit({
+const small = bodyLimit({
     maxSize: 1024 * 1024,
     onError: (c) => c.json({ error: 'Payload Too Large', message: 'Body terlalu besar (maks 1 MB).', status: 413 }, 413),
 })
+/* Satu-satunya pengecualian: unggah file ke server Pterodactyl milik user (maks 25 MB, diteruskan streaming, tidak disimpan di Arvo). */
+const big = bodyLimit({
+    maxSize: UPLOAD_MAX,
+    onError: (c) => c.json({ error: 'Payload Too Large', message: `File terlalu besar (maks ${UPLOAD_MAX / 1048576} MB).`, status: 413 }, 413),
+})
+export const limitBody = () => (c, next) => (UPLOAD_RE.test(c.req.path) ? big(c, next) : small(c, next))
