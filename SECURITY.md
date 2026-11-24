@@ -3,20 +3,14 @@
 ## Yang sudah aktif di kode
 | Lapisan | Perlindungan |
 |---|---|
-| `src/utils/shield.js` (paling awal) | Limit per IP/menit: login/daftar 20, admin/billing/tools 150, API 300, web 240. Lewat batas 3 menit berbeda atau banjir >4x limit = ban 15 menit (balasan murah, tanpa DB). Tolak method aneh, URL >4 KB, path `..`/null byte, body >1 MB. Anti-CSRF (Origin harus sama untuk POST/PUT/DELETE ke rute akun). IP owner dikecualikan. |
-| Anti-scrape (`src/utils/webguard.js`) | Worker kini menjawab SEMUA halaman & file statis (`run_worker_first`). Halaman HTML hanya untuk navigasi browser (curl/python/scrapy/headless/crawler AI = 403). File JS/CSS/media hanya bisa dimuat dari halaman sendiri (diketik langsung / hotlink = 404), dijawab lewat jalur cepat dan di-cache browser 1 tahun (URL ber-`?v=hash`). Endpoint internal situs (`/api/catalog`, `dashboard`, `site-content`, `services`, `ui`, `pv`) hanya dari halaman sendiri (Sec-Fetch-Site: same-origin); curl/skrip/situs lain = 403. Honeypot `/export-data` (link tersembunyi): yang membukanya di-ban 6 jam. Googlebot/Bing/Apple diverifikasi lewat ASN (UA palsu ditolak); bot preview link (WhatsApp, IG, Telegram, X, dll.) hanya boleh HTML + gambar. **API publik (`/api/maker/*`, `/api/downloader/*`, dst.), webhook, dan `/health` tidak disentuh.** IP owner dikecualikan. |
+| `src/utils/shield.js` (paling awal) | Limit per IP/menit (default: login/daftar 20, admin/billing/tools 150, API 300, web 240, file statis 1200). IP yang melewati batas beberapa kali atau banjir = **diblokir otomatis** dan masuk daftar di Admin > Blokir IP. Tolak method aneh, URL >4 KB, path `..`/null byte, body >1 MB. Anti-CSRF (Origin harus sama untuk POST/PUT/DELETE ke rute akun). **IP owner dan IP/akun admin tidak pernah kena limit atau auto-blokir.** |
 | Login/daftar/admin-login | Throttle per IP + per akun, PBKDF2 100k, Turnstile opsional. |
-| Auto-blokir | IP dengan ≥40 pelanggaran (key salah, IP tak terdaftar, tier) dalam 10 menit masuk daftar blokir (bisa dibuka di Admin). |
+| Auto-blokir | Dua pemicu: (1) melewati limit permintaan (lihat di atas), (2) IP menumpuk pelanggaran akses (key salah, IP tak terdaftar, tier). Semua angka (limit, jumlah pelanggaran, pengali banjir, lama blokir, 0 = permanen) **diatur di Dashboard Admin > Blokir IP > Auto-blokir** (simpan hanya super admin). Daftar blokir bisa dibuka satu per satu dari tab yang sama. |
 | Header | CSP, HSTS, nosniff, frame-ancestors, Referrer-Policy, Permissions-Policy (Worker + `public/_headers` untuk file statis). |
 | CORS | Terbuka hanya untuk API publik. `/api/auth|admin|billing|tools` tidak bisa dibaca lintas-origin. |
 | Rahasia | Webhook & access key dibandingkan waktu-konstan. `OWNER_ACCESS_KEY` hanya lewat `wrangler secret`. |
 
 Catatan jujur: pembatas di Worker hidup di memori tiap isolate, jadi bukan pengganti aturan di edge Cloudflare. DDoS volumetrik diserap Cloudflare; yang di atas menahan serangan level aplikasi.
-
-## Catatan deploy (anti-scrape)
-- Tidak ada secret baru yang perlu diisi. `[build]` di `wrangler.toml` menjalankan `bump-version` otomatis tiap deploy, jadi cache 1 tahun aman.
-- Monitor uptime (UptimeRobot dsb.) pakai UA tool sehingga akan kena 403 di halaman: arahkan ke `/health` (dikecualikan) atau masukkan IP-nya ke `OWNER_IPS`.
-- Batasan jujur: browser sungguhan yang dikendalikan skrip (Playwright/Puppeteer dengan stealth) masih bisa lolos. Itu sebabnya lapisan edge di bawah tetap dianjurkan.
 
 ## Panel Pterodactyl (Tools > Panel Pterodactyl, `/pterodactyl`)
 Setup (sekali):
