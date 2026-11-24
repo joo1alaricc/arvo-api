@@ -162,11 +162,33 @@ const V = {
 
   /* ---------- blokir IP ---------- */
   async blokir() {
-    const { blocked } = await api('/admin/blocked')
-    out().innerHTML = `<h1>Blokir IP</h1><div class="panel"><h3>Blokir IP baru</h3><div class="row"><input id="bi" placeholder="Contoh: 203.0.113.9" style="flex:1;min-width:150px"><input id="br" placeholder="Alasan (opsional)" style="flex:2;min-width:150px"><button class="btn red" id="bb">Blokir</button></div>
+    const [{ blocked }, sc] = await Promise.all([api('/admin/blocked'), api('/admin/security')])
+    const ro = LEVEL === 'super' ? '' : 'disabled'
+    const fld = (id, label, hint = '') => `<label style="display:block;font-size:12.5px">${label}<input id="${id}" type="number" min="0" value="${sc[id.slice(3)]}" ${ro} style="width:100%;margin-top:4px">${hint ? `<span class="sub" style="font-size:11px">${hint}</span>` : ''}</label>`
+    const exp = (b) => (b.expires_at ? fmtDT(b.expires_at) : 'Permanen')
+    out().innerHTML = `<h1>Blokir IP</h1>
+      <div class="panel"><h3>Auto-blokir IP</h3>
+        <p class="sub" style="font-size:12.5px">IP yang melewati batas permintaan atau menumpuk pelanggaran akan diblokir otomatis dan muncul di daftar bawah. <b>IP admin (akun admin/super admin yang sedang/baru login) dan IP owner tidak pernah diblokir otomatis.</b>${LEVEL === 'super' ? '' : ' Hanya super admin yang bisa mengubah pengaturan ini.'}</p>
+        <label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input id="sc_enabled" type="checkbox" ${sc.enabled ? 'checked' : ''} ${ro}> Aktifkan auto-blokir &amp; pembatas permintaan</label>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px">
+          ${fld('sc_limit_auth', 'Login/daftar', 'permintaan / menit / IP')}${fld('sc_limit_priv', 'Admin/billing/tools', 'permintaan / menit / IP')}${fld('sc_limit_api', 'API publik', 'permintaan / menit / IP')}
+          ${fld('sc_limit_page', 'Halaman web', 'permintaan / menit / IP')}${fld('sc_limit_asset', 'File statis (lewat Worker)', 'permintaan / menit / IP')}
+          ${fld('sc_strikes', 'Jumlah pelanggaran limit', 'dalam 10 menit sebelum diblokir')}${fld('sc_flood_mult', 'Pengali banjir', 'lewat N× limit = langsung diblokir')}
+          ${fld('sc_ban_minutes', 'Lama blokir (menit)', '0 = permanen sampai dibuka admin')}
+          ${fld('sc_viol_threshold', 'Ambang pelanggaran akses', 'key salah / IP tak terdaftar / tier')}${fld('sc_viol_window_min', 'Jendela pelanggaran (menit)', '')}
+        </div>
+        ${LEVEL === 'super' ? '<div class="row" style="margin-top:12px"><button class="btn" id="sc_save">Simpan pengaturan</button></div>' : ''}
+        <p class="msg" id="sc_m">IP admin yang dikenali saat ini: ${sc.admin_ips}. Perubahan berlaku maksimal ±30 detik.</p></div>
+      <div class="panel"><h3>Blokir IP manual</h3><div class="row"><input id="bi" placeholder="Contoh: 203.0.113.9" style="flex:1;min-width:150px"><input id="br" placeholder="Alasan (opsional)" style="flex:2;min-width:150px"><button class="btn red" id="bb">Blokir</button></div>
       <p class="msg" id="bm">IP terblokir ditolak di semua halaman dan endpoint. Perubahan berlaku maksimal ±15 detik. IP owner tidak bisa diblokir.</p></div>
-      <div class="panel tw"><table><tr><th>IP</th><th>Alasan</th><th>User terkait</th><th>Sejak</th><th></th></tr>${blocked.map((b) => `<tr><td class="ipc">${esc(b.ip)}</td><td>${esc(b.reason || '–')}</td><td>${esc(b.users || '–')}</td><td>${fmtDT(b.created_at)}</td>
-        <td><button class="btn ghost" data-u="${esc(b.ip)}">Buka blokir</button></td></tr>`).join('') || '<tr><td class="sub" colspan="5">Tidak ada IP yang diblokir.</td></tr>'}</table></div>`
+      <div class="panel tw"><table><tr><th>IP</th><th>Alasan</th><th>User terkait</th><th>Sejak</th><th>Berakhir</th><th></th></tr>${blocked.map((b) => `<tr><td class="ipc">${esc(b.ip)}</td><td>${esc(b.reason || '–')}</td><td>${esc(b.users || '–')}</td><td>${fmtDT(b.created_at)}</td><td>${exp(b)}</td>
+        <td><button class="btn ghost" data-u="${esc(b.ip)}">Buka blokir</button></td></tr>`).join('') || '<tr><td class="sub" colspan="6">Tidak ada IP yang diblokir.</td></tr>'}</table></div>`
+    const sv = $('#sc_save')
+    if (sv) sv.onclick = async () => {
+      const body = { enabled: $('#sc_enabled').checked }
+      for (const k of ['limit_auth', 'limit_priv', 'limit_api', 'limit_page', 'limit_asset', 'strikes', 'flood_mult', 'ban_minutes', 'viol_threshold', 'viol_window_min']) body[k] = Number($('#sc_' + k).value)
+      try { await put('/admin/security', body); toast('Pengaturan keamanan disimpan'); V.blokir() } catch (e) { say($('#sc_m'), e.message, 1) }
+    }
     $('#bb').onclick = async () => { try { await put('/admin/blocked', { ip: val('bi'), reason: val('br') }, 'POST'); toast('IP diblokir'); V.blokir() } catch (e) { say($('#bm'), e.message, 1) } }
     out().querySelectorAll('[data-u]').forEach((b) => (b.onclick = async () => { await api('/admin/blocked/' + encodeURIComponent(b.dataset.u), { method: 'DELETE' }); toast('Blokir dibuka'); V.blokir() }))
   },
