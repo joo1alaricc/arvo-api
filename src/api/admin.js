@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { store, send, fail, currentUser } from '../utils/session.js'
 import { refreshBlocked } from '../utils/rateLimit.js'
+import { refreshSecurity } from '../utils/shield.js'
 import { refreshServices, refreshUi } from '../utils/services.js'
 import { getOverrides, refreshOverrides } from '../utils/overrides.js'
 import { bustCatalog } from '../utils/catalogCache.js'
@@ -58,6 +59,9 @@ admin.post('/blocked', async (c) => {
     if (String(c.env.OWNER_IPS || '').split(',').map((x) => x.trim()).includes(String(b.ip || '').trim())) return send(c, fail(400, 'owner_ip', 'IP owner tidak boleh diblokir.'))
     const r = await store(c).adminBlock(b.ip, b.reason, Date.now()); refreshBlocked(); return send(c, r)
 })
+/* Auto-blokir IP: semua batas bisa diedit di Dashboard Admin (simpan hanya super admin; admin tambahan hanya melihat). */
+admin.get('/security', async (c) => { const st = store(c); return c.json({ ok: true, ...(await st.secCfg()), admin_ips: (await st.adminIps()).ips.length }) })
+admin.put('/security', superOnly, async (c) => { const r = await store(c).adminSaveSec(await body(c)); refreshSecurity(); return send(c, r) })
 admin.delete('/blocked/:ip', async (c) => { const r = await store(c).adminUnblock(decodeURIComponent(c.req.param('ip'))); refreshBlocked(); return send(c, r) })
 
 /* ---- paket ---- */
