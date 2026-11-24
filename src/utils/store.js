@@ -72,6 +72,7 @@ export class StoreDO extends DurableObject {
         this.ensureCols('smm_deposits', { provider: 'TEXT', access_key: 'TEXT', pay_url: 'TEXT', expired_at: 'INTEGER', fee: 'INTEGER', qr_data: 'TEXT' })
         for (const col of ['phone', 'bio', 'avatar_url', 'banner_url', 'reg_ip', 'last_ip', 'avatar_data', 'avatar_ver', 'stack', 'border_colors']) { try { this.sql.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`) } catch {} }
         try { this.sql.exec('ALTER TABLE users ADD COLUMN last_seen INTEGER') } catch {}
+        try { this.sql.exec('ALTER TABLE blocked_ips ADD COLUMN expires_at INTEGER') } catch {}   /* kosong = permanen */
         try { this.sql.exec('ALTER TABLE users ADD COLUMN access_key TEXT') } catch {}
         /* email yang sudah diverifikasi Google. Dipakai untuk status admin lewat email; kolom email biasa bisa diubah user sendiri sehingga tidak dipercaya. */
         try { this.sql.exec('ALTER TABLE users ADD COLUMN verified_email TEXT') } catch {}
@@ -300,10 +301,11 @@ export class StoreDO extends DurableObject {
     flag(userId, ip, path, kind, now) {
         this.sql.exec('INSERT INTO violations(user_id,ip,path,kind,at) VALUES(?,?,?,?,?)', userId, ip, String(path).slice(0, 120), kind, now)
         this.sql.exec('DELETE FROM violations WHERE id<(SELECT MAX(id)-499 FROM violations)')
-        /* Auto-blokir: IP yang menumpuk pelanggaran (key salah, IP tak terdaftar, tier) dalam 10 menit. Admin bisa buka blokir di panel. */
-        if (ip && ip !== 'unknown' && !String(this.env?.OWNER_IPS || '').split(',').map((x) => x.trim()).includes(ip)) {
-            const n = this.q('SELECT COUNT(*) c FROM violations WHERE ip=? AND at>?', ip, now - 600000)[0].c
-            if (n >= 40) this.sql.exec("INSERT OR IGNORE INTO blocked_ips(ip,reason,created_at) VALUES(?,?,?)", String(ip).toLowerCase(), 'auto: terlalu banyak pelanggaran', now)
+        /* Auto-blokir: IP yang menumpuk pelanggaran (key salah, IP tak terdaftar, tier) dalam jendela waktu yang diatur admin (tab Blokir IP). */
+        const cfg = this.secCfg()
+        if (cfg.enabled && ip && ip !== 'unknown' && !String(this.env?.OWNER_IPS || '').split(',').map((x) => x.trim()).includes(ip)) {
+            const n = this.q('SELECT COUNT(*) c FROM violations WHERE ip=? AND at>?', ip, now - cfg.viol_window_min * 60000)[0].c
+            if (n >= cfg.viol_threshold && !(userId && this.isAdmin(userId))) this.autoBlock(ip, 'auto: terlalu banyak pelanggaran', cfg.ban_minutes * 60000, now)
         }
         return { ok: true }
     }
@@ -494,7 +496,7 @@ export class StoreDO extends DurableObject {
         const one = (q, ...b) => this.q(q, ...b)[0]
         return { ok: true, boot_at: BOOT_AT, users: one('SELECT COUNT(*) n FROM users').n,
             requests: one('SELECT COALESCE(SUM(total),0) n FROM users').n,
-            page_views: this.setting('page_views', 0), blocked: one('SELECT COUNT(*) n FROM blocked_ips').n,
+            page_views: this.setting('page_views', 0), blocked: one('SELECT COUNT(*) n FROM blocked_ips WHERE expires_at IS NULL OR expires_at>?', Date.now()).n,
             days: this.q('SELECT day,SUM(count) n FROM usage WHERE day>=? GROUP BY day ORDER BY day', jakartaDay(now - 13 * 864e5)) }
     }
     adminUsers(search, now) {
@@ -685,16 +687,62 @@ export class StoreDO extends DurableObject {
     adminResetClaim(uid) { this.sql.exec('DELETE FROM trial_claims WHERE user_id=?', uid); return { ok: true } }
 
     /* ---------- blokir IP ---------- */
-    blockedList() { return { ok: true, ips: this.q('SELECT ip FROM blocked_ips').map((r) => r.ip) } }
+    purgeBlocked(now = Date.now()) { this.sql.exec('DELETE FROM blocked_ips WHERE expires_at IS NOT NULL AND expires_at<=?', now) }
+    blockedList() { this.purgeBlocked(); return { ok: true, ips: this.q('SELECT ip FROM blocked_ips').map((r) => r.ip) } }
     adminBlocked() {
-        return { ok: true, blocked: this.q(`SELECT b.ip,b.reason,b.created_at,(SELECT GROUP_CONCAT(DISTINCT u.username) FROM seen_ips s JOIN users u ON u.id=s.user_id WHERE s.ip=b.ip) users
+        this.purgeBlocked()
+        return { ok: true, blocked: this.q(`SELECT b.ip,b.reason,b.created_at,b.expires_at,(SELECT GROUP_CONCAT(DISTINCT u.username) FROM seen_ips s JOIN users u ON u.id=s.user_id WHERE s.ip=b.ip) users
             FROM blocked_ips b ORDER BY b.created_at DESC LIMIT 200`) }
     }
     adminBlock(ip, reason, now) {
         const v = String(ip || '').trim().toLowerCase()
         if (!validIp(v)) return fail(400, 'bad_ip', 'Format IP salah.')
-        this.sql.exec('INSERT INTO blocked_ips VALUES(?,?,?) ON CONFLICT(ip) DO UPDATE SET reason=excluded.reason', v, String(reason || '').slice(0, 200), now)
+        this.sql.exec('INSERT INTO blocked_ips(ip,reason,created_at,expires_at) VALUES(?,?,?,NULL) ON CONFLICT(ip) DO UPDATE SET reason=excluded.reason,expires_at=NULL', v, String(reason || '').slice(0, 200), now)
         return { ok: true, ip: v }
+    }
+
+    /* ---------- auto-blokir IP (diatur admin) ----------
+     * Semua batas bisa diubah di Dashboard Admin > Blokir IP. ban_minutes = 0 berarti permanen sampai dibuka admin.
+     * IP milik admin (akun admin/super admin yang pernah login) dan IP owner TIDAK PERNAH diblokir otomatis. */
+    secCfg() {
+        const d = this.setting('security', null) || {}
+        const n = (v, def, lo, hi) => { v = Number(v); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : def }
+        return {
+            enabled: d.enabled !== false,
+            limit_auth: n(d.limit_auth, 20, 1, 100000), limit_priv: n(d.limit_priv, 150, 1, 100000), limit_api: n(d.limit_api, 300, 1, 100000),
+            limit_page: n(d.limit_page, 240, 1, 100000), limit_asset: n(d.limit_asset, 1200, 1, 100000),
+            strikes: n(d.strikes, 3, 1, 20), flood_mult: n(d.flood_mult, 4, 2, 100),
+            ban_minutes: n(d.ban_minutes, 15, 0, 525600),
+            viol_threshold: n(d.viol_threshold, 40, 1, 100000), viol_window_min: n(d.viol_window_min, 10, 1, 1440),
+        }
+    }
+    adminSaveSec(b) {
+        const cur = this.secCfg(), v = { ...cur }
+        for (const k of Object.keys(cur)) if (b && k in b) v[k] = k === 'enabled' ? !!b[k] : b[k]
+        this.saveSetting('security', v)
+        return { ok: true, ...this.secCfg() }
+    }
+    /* IP yang dipakai admin (7 hari terakhir): dikecualikan dari batas & auto-blokir. */
+    adminIps() {
+        const ids = new Set(this.q('SELECT user_id id FROM admins').map((r) => r.id))
+        const em = this.adminEmails()
+        if (em.length) for (const r of this.q(`SELECT id FROM users WHERE lower(verified_email) IN (${em.map(() => '?').join(',')})`, ...em)) ids.add(r.id)
+        const ips = new Set(), since = Date.now() - 7 * 864e5
+        for (const id of ids) {
+            for (const r of this.q('SELECT ip FROM seen_ips WHERE user_id=? AND last_at>?', id, since)) ips.add(r.ip)
+            const u = this.user(id); if (u?.last_ip) ips.add(u.last_ip)
+        }
+        return { ok: true, ips: [...ips] }
+    }
+    /* ms = 0 permanen. Menolak IP owner & IP admin. */
+    autoBlock(ip, reason, ms, now) {
+        const v = String(ip || '').trim().toLowerCase()
+        if (!v || v === 'unknown') return { ok: false, skipped: 'no_ip' }
+        if (String(this.env?.OWNER_IPS || '').split(',').map((x) => x.trim().toLowerCase()).includes(v)) return { ok: false, skipped: 'owner' }
+        if (this.adminIps().ips.map((x) => String(x).toLowerCase()).includes(v)) return { ok: false, skipped: 'admin' }
+        this.purgeBlocked(now)
+        this.sql.exec('INSERT INTO blocked_ips(ip,reason,created_at,expires_at) VALUES(?,?,?,?) ON CONFLICT(ip) DO NOTHING', v, String(reason || '').slice(0, 200), now, ms > 0 ? now + ms : null)
+        return { ok: true }
     }
     adminUnblock(ip) { this.sql.exec('DELETE FROM blocked_ips WHERE ip=?', String(ip).toLowerCase()); return { ok: true } }
 
