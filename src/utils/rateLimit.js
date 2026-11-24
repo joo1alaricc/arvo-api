@@ -1,3 +1,5 @@
+import { fetchAsset } from './assets.js'
+
 const DEFAULT_WINDOW_MS = 15 * 60 * 1000
 const DEFAULT_MAX = 100
 
@@ -6,7 +8,7 @@ const parseList = (value = '') => value.split(',').map((item) => item.trim()).fi
 const errorPage = async (c, status, fallback, replacements = {}) => {
     const path = `/errors/${status}.html`
     try {
-        const response = await c.env.ASSETS.fetch(new Request(new URL(path, c.req.url)))
+        const response = await fetchAsset(c.env, new URL(path, c.req.url))
         if (response.ok) {
             let html = await response.text()
             for (const [key, value] of Object.entries(replacements)) {
