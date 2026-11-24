@@ -3,7 +3,6 @@ Allow: /
 Disallow: /api/
 Disallow: /callback
 Disallow: /webhook
-Disallow: /export-data
 
 # Crawler AI & scraper data: dilarang. (Server juga menolaknya secara teknis, ini hanya penegasan.)
 User-agent: GPTBot
