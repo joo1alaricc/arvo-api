@@ -16,9 +16,9 @@ command = "node scripts/seo-head.mjs && node scripts/bump-version.mjs"
 directory = "./public"
 binding = "ASSETS"
 not_found_handling = "none"
-# Worker menjawab SEMUA halaman & file statis lebih dulu (wajib untuk anti-scrape: lihat src/utils/webguard.js).
-# Hanya file publik murni (ikon, og-image, robots, sitemap) yang dilewatkan langsung ke aset supaya hemat kuota request Worker.
-run_worker_first = ["/*", "!/favicon.ico", "!/favicon.svg", "!/icon-192.png", "!/icon-512.png", "!/apple-touch-icon.png", "!/og-image.png", "!/logo.svg", "!/logo-white.svg", "!/robots.txt", "!/sitemap.xml"]
+# Halaman statis dijawab langsung oleh Cloudflare (CSS/JS/gambar selalu termuat). Worker hanya didahulukan untuk halaman layanan
+# yang bisa dimatikan admin (/smm, /otp, /am, /netflix, /pterodactyl): kalau dimatikan, tampil 404.
+run_worker_first = ["/smm", "/smm/", "/smm.html", "/otp", "/otp/", "/otp.html", "/am", "/am/", "/am.html", "/netflix", "/netflix/", "/netflix.html", "/pterodactyl", "/pterodactyl/", "/pterodactyl.html"]
 
 [vars]
 API_NAME = "Arvo"
