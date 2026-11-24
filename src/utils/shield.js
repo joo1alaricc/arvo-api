@@ -1,4 +1,5 @@
 import { bodyLimit } from 'hono/body-limit'
+import { store, currentUser } from './session.js'
 
 /* ============================================================================
  * SHIELD: lapisan pertahanan pertama, jalan SEBELUM route/DB apa pun.
@@ -38,16 +39,49 @@ export const PRIVATE_RE = /^\/api\/(auth|admin|billing|tools)(\/|$)/
 /* Dipanggil server lain (Google, payment gateway): bukan dari browser kita, jangan diblokir cek Origin / limit. */
 const MACHINE_RE = /^(\/callback|\/webhook|\/api\/billing\/webhook|\/api\/billing\/btzpay\/callback|\/api\/auth\/google\/callback)\/?$/
 
-/* Aturan limit per IP per menit (urutan penting: yang pertama cocok dipakai). */
+/* Aturan limit per IP per menit (urutan penting: yang pertama cocok dipakai). Angkanya diatur admin (Dashboard Admin > Blokir IP > Auto-blokir). */
 const RULES = [
-    [/^\/api\/auth\/(login|register|admin-login|google)/, 'auth', 20],
-    [/^\/api\/(admin|billing|tools)(\/|$)/, 'priv', 150],
-    [/^\/api\//, 'api', 300],
-    /* Worker kini menjawab SEMUA halaman & aset (anti-scrape), jadi 1 kunjungan = 1 halaman + ~12 aset. Halaman diperketat, aset dilonggarkan (IP bersama/CGNAT seluler). */
-    [/(^\/[^.]*$)|(\.html$)/, 'page', 90],
-    [/./, 'asset', 1200],
+    [/^\/api\/auth\/(login|register|admin-login|google)/, 'auth', 'limit_auth'],
+    [/^\/api\/(admin|billing|tools)(\/|$)/, 'priv', 'limit_priv'],
+    [/^\/api\//, 'api', 'limit_api'],
+    [/(^\/[^.]*$)|(\.html$)/, 'page', 'limit_page'],
+    [/./, 'asset', 'limit_asset'],
 ]
-const WINDOW = 60e3, STRIKE_WINDOW = 10 * 60e3, STRIKES_TO_BAN = 3, BAN_MS = 15 * 60e3
+const WINDOW = 60e3, STRIKE_WINDOW = 10 * 60e3
+const DEFAULT_CFG = { enabled: true, limit_auth: 20, limit_priv: 150, limit_api: 300, limit_page: 240, limit_asset: 1200, strikes: 3, flood_mult: 4, ban_minutes: 15 }
+
+/* Pengaturan dari database, di-cache 30 detik per isolate (tidak memanggil DO tiap request). Dibaca ulang segera setelah admin menyimpan. */
+let cfgCache = { at: 0, v: DEFAULT_CFG }
+export const refreshSecurity = () => { cfgCache.at = 0; adminIpCache.at = 0; adminChecked.clear() }
+const getCfg = async (c, now) => {
+    if (c.env.STORE && now - cfgCache.at > 30000) {
+        cfgCache.at = now
+        try { cfgCache.v = { ...DEFAULT_CFG, ...(await store(c).secCfg()) } } catch (e) { console.error('[Shield] cfg', e) }
+    }
+    return cfgCache.v
+}
+
+/* Admin tidak pernah kena limit / auto-blokir: dikenali dari IP yang dipakai admin (7 hari terakhir) atau dari sesi login admin. */
+const adminIpCache = { at: 0, set: new Set() }
+const adminChecked = new Map()
+const isAdminReq = async (c, ip, now) => {
+    if (!c.env.STORE) return false
+    if (now - adminIpCache.at > 30000) {
+        adminIpCache.at = now
+        try { adminIpCache.set = new Set((await store(c).adminIps()).ips.map((x) => String(x).toLowerCase())) } catch (e) { console.error('[Shield] adminIps', e) }
+    }
+    if (adminIpCache.set.has(ip.toLowerCase())) return true
+    const hit = adminChecked.get(ip)
+    if (hit && hit.until > now) return hit.ok
+    let ok = false
+    if (/arvo_session=/.test(c.req.header('cookie') || '')) {
+        try { c.set('ip', ip); const u = await currentUser(c); ok = !!(u && await store(c).adminLevel(u.id)) } catch {}
+    }
+    if (adminChecked.size > 2000) adminChecked.clear()
+    adminChecked.set(ip, { ok, until: now + (ok ? 300e3 : 10e3) })
+    if (ok) adminIpCache.set.add(ip.toLowerCase())
+    return ok
+}
 
 const buckets = new Map(), strikes = new Map(), bans = new Map()
 const bump = (map, key, windowMs, now) => {
@@ -57,8 +91,6 @@ const bump = (map, key, windowMs, now) => {
     map.set(key, e)
     return e
 }
-/* Dipakai webguard.js (honeypot): ban IP langsung tanpa menunggu limit. */
-export const banIp = (ip, ms = BAN_MS) => { if (ip) bans.set(ip, Date.now() + ms) }
 const sweep = (now) => {
     for (const m of [buckets, strikes]) if (m.size > 20000) for (const [k, v] of m) if (v.reset <= now) m.delete(k)
     if (bans.size > 5000) for (const [k, t] of bans) if (t <= now) bans.delete(k)
@@ -83,22 +115,29 @@ export const shield = () => async (c, next) => {
     if (len > (UPLOAD_RE.test(path) ? UPLOAD_MAX : 1024 * 1024)) return deny(c, 413, 'Payload Too Large', 'Body terlalu besar.')
 
     const machine = MACHINE_RE.test(path)
-    if (!owner && !machine) {
+    const cfg = await getCfg(c, now)
+    if (!owner && !machine && cfg.enabled) {
         const ip = cfIp || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
         sweep(now)
 
-        /* 2. IP yang sedang di-ban sementara: tolak murah, tanpa hitung apa pun. */
+        /* 2. IP yang sedang di-ban: tolak murah, tanpa hitung apa pun. */
         const until = bans.get(ip)
-        if (until && until > now) return deny(c, 429, 'Too Many Requests', 'Terlalu banyak permintaan. Kamu diblokir sementara.', Math.ceil((until - now) / 1000))
+        if (until && until > now) return deny(c, 429, 'Too Many Requests', 'Terlalu banyak permintaan. IP kamu diblokir otomatis.', Math.ceil((until - now) / 1000))
 
-        /* 3. Limit per IP per menit. Lewat batas = 1 strike; 5 strike dalam 10 menit = ban 15 menit. */
-        const [, scope, max] = RULES.find(([re]) => re.test(path))
+        /* 3. Limit per IP per menit. Lewat batas = 1 strike; sejumlah strike dalam 10 menit (atau banjir) = auto-blokir. */
+        const [, scope, key] = RULES.find(([re]) => re.test(path)), max = cfg[key]
         const b = bump(buckets, `${scope}:${ip}`, WINDOW, now)
-        if (b.n > max) {
-            /* ban langsung bila banjir (>4x limit dalam semenit), atau bila melewati limit di 3 jendela menit berbeda dalam 10 menit */
-            let ban = b.n > max * 4
-            if (b.n === max + 1) ban = bump(strikes, ip, STRIKE_WINDOW, now).n >= STRIKES_TO_BAN || ban
-            if (ban && !(bans.get(ip) > now)) { bans.set(ip, now + BAN_MS); console.error('[Shield] ban', ip, scope) }
+        if (b.n > max && !(await isAdminReq(c, ip, now))) {
+            let ban = b.n > max * cfg.flood_mult
+            if (b.n === max + 1) ban = bump(strikes, ip, STRIKE_WINDOW, now).n >= cfg.strikes || ban
+            if (ban && !(bans.get(ip) > now)) {
+                /* ban memori hanya 1 menit pertama (langsung efektif); selanjutnya daftar blokir di database yang berlaku, jadi buka-blokir dari Admin tidak tertahan */
+                bans.set(ip, now + Math.min(60e3, (cfg.ban_minutes || 1) * 60e3))
+                console.error('[Shield] auto-blokir', ip, scope)
+                /* simpan ke daftar blokir (terlihat & bisa dibuka di Admin, berlaku di semua isolate) */
+                const p = store(c).autoBlock(ip, `auto: melewati limit ${scope} (${max}/menit)`, cfg.ban_minutes * 60e3, now).catch(() => {})
+                try { c.executionCtx.waitUntil(p) } catch {}
+            }
             return deny(c, 429, 'Too Many Requests', 'Terlalu banyak permintaan. Coba lagi sebentar.', Math.max(1, Math.ceil((b.reset - now) / 1000)))
         }
     }
