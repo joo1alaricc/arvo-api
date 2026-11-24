@@ -5,6 +5,7 @@ import { secureHeaders } from 'hono/secure-headers'
 import { shield, limitBody, CSP, PRIVATE_RE } from './utils/shield.js'
 import { webGuard, INTERNAL_RE } from './utils/webguard.js'
 import { cachedCatalog } from './utils/catalogCache.js'
+import { serveStatic, errorPage } from './utils/assets.js'
 import { PTERO_WS_RE, pteroWs } from './api/pteroWs.js'
 import { sweep as pteroSweep } from './utils/pterodactyl.js'
 
@@ -66,8 +67,7 @@ const createApp = () => {
         for (const p of [base, base + '/', base + '.html']) {
             app.get(p, async (c) => {
                 if (key === 'netflix' || (await services(c))[key]) return c.env.ASSETS.fetch(c.req.raw)
-                const page = await c.env.ASSETS.fetch(new Request(new URL('/errors/404.html', c.req.url)))
-                return page.status === 404 ? c.text('404 Not Found', 404) : new Response(page.body, { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+                return errorPage(c, 404, '404 Not Found')
             })
         }
     }
@@ -183,17 +183,8 @@ const createApp = () => {
             }, 404)
         }
 
-        const assetPath = c.req.path === '/' ? '/index.html' : c.req.path
-        const assetRequest = new Request(new URL(assetPath, c.req.url), c.req.raw)
-        const asset = await c.env.ASSETS.fetch(assetRequest)
-        if (asset.status !== 404) return asset
-
-        const errorRequest = new Request(new URL('/errors/404.html', c.req.url))
-        const errorPage = await c.env.ASSETS.fetch(errorRequest)
-        return errorPage.status === 404 ? c.text('404 Not Found', 404) : new Response(errorPage.body, {
-            status: 404,
-            headers: { 'Content-Type': 'text/html; charset=utf-8' },
-        })
+        /* Path TIDAK ditulis ulang ('/' tetap '/'): lihat utils/assets.js (menulis ulang ke /index.html menyebabkan loop redirect). */
+        return (await serveStatic(c)) || errorPage(c, 404, '404 Not Found')
     })
 
     app.onError(async (err, c) => {
@@ -208,11 +199,7 @@ const createApp = () => {
             }, 500)
         }
 
-        const page = await c.env.ASSETS.fetch(new Request(new URL('/errors/500.html', c.req.url)))
-        return page.status === 404 ? c.text('Internal Server Error', 500) : new Response(page.body, {
-            status: 500,
-            headers: { 'Content-Type': 'text/html; charset=utf-8' },
-        })
+        return errorPage(c, 500, 'Internal Server Error')
     })
 
     return app
