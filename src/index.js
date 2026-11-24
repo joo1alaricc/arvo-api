@@ -3,7 +3,6 @@ import { OpenAPIHono } from '@hono/zod-openapi'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
 import { shield, limitBody, CSP, PRIVATE_RE } from './utils/shield.js'
-import { webGuard, INTERNAL_RE } from './utils/webguard.js'
 import { cachedCatalog } from './utils/catalogCache.js'
 import { serveStatic, errorPage } from './utils/assets.js'
 import { PTERO_WS_RE, pteroWs } from './api/pteroWs.js'
@@ -24,6 +23,8 @@ import { getOverrides } from './utils/overrides.js'
 import { services, uiCfg } from './utils/services.js'
 
 const openCors = cors()
+/* Endpoint internal situs (cookie sesi / data akun): tanpa CORS terbuka. */
+const INTERNAL_RE = /^\/api\/(catalog|dashboard|site-content|services|ui|pv)\/?$/
 
 const createApp = () => {
     const app = new OpenAPIHono()
@@ -38,8 +39,6 @@ const createApp = () => {
     }))
     /* Shield paling awal: flood / scanner / CSRF / body raksasa ditolak sebelum menyentuh DB. */
     app.use('*', shield())
-    /* Anti-scrape: halaman & file statis hanya untuk browser sungguhan, endpoint internal situs hanya dari halaman sendiri, file statis dijawab lewat jalur cepat + cache (lihat utils/webguard.js). API publik tidak disentuh. */
-    app.use('*', webGuard())
     app.use('/api/*', limitBody())
     /* CORS terbuka hanya untuk API publik. Rute akun/admin/billing/tools memakai cookie sesi, jadi tidak boleh dibaca lintas-origin. */
     app.use('*', (c, next) => (PRIVATE_RE.test(c.req.path) || INTERNAL_RE.test(c.req.path) ? next() : openCors(c, next)))
