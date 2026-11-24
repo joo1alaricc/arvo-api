@@ -1,4 +1,5 @@
 import { banIp } from './shield.js'
+import { fetchAsset } from './assets.js'
 
 /* ============================================================================
  * WEB GUARD: anti-scrape untuk halaman web & endpoint internal situs.
@@ -103,7 +104,7 @@ const jsonDeny = (c, message) => c.json({ error: 'Forbidden', message, status: 4
 const notFound = (c) => c.text('404 Not Found', 404)
 const denyPage = async (c) => {
     try {
-        const r = await c.env.ASSETS.fetch(new Request(new URL('/errors/403.html', c.req.url)))
+        const r = await fetchAsset(c.env, new URL('/errors/403.html', c.req.url))
         if (r.ok) return new Response(r.body, { status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } })
     } catch {}
     return new Response('403 Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } })
