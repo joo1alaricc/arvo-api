@@ -67,14 +67,15 @@ export const dynamicHandler = (builtin) => async (c) => {
 export const mergeSpec = (doc, endpoints, isOwner) => {
     for (const e of endpoints) {
         if (e.access === 'owner' && !isOwner) continue
-        const q = e.inputs.filter((i) => i.in === 'query'), b = e.inputs.filter((i) => i.in === 'body')
+        const q = e.inputs.filter((i) => i.in === 'query'), b = e.inputs.filter((i) => i.in === 'body'), fm = e.inputs.filter((i) => i.in === 'form')
         const op = {
             tags: [e.category], summary: e.name, description: e.description || undefined,
             'x-status': e.status === 'offline' ? 'OFFLINE' : 'ONLINE', 'x-access': e.access, 'x-premium': e.access !== 'free',
             parameters: q.map((i) => ({ name: i.name, in: 'query', required: i.required, example: i.example || undefined, schema: { type: 'string', ...(i.example ? { example: i.example } : {}) } })),
             responses: { 200: { description: 'OK' } },
         }
-        if (b.length) op.requestBody = { content: { 'application/json': { schema: { type: 'object', properties: Object.fromEntries(b.map((i) => [i.name, { type: 'string', example: i.example || undefined }])), required: b.filter((i) => i.required).map((i) => i.name) } } } }
+        if (fm.length) op.requestBody = { content: { 'multipart/form-data': { schema: { type: 'object', properties: Object.fromEntries(fm.map((i) => [i.name, i.type === 'file' ? { type: 'string', format: 'binary' } : { type: 'string', example: i.example || undefined }])), required: fm.filter((i) => i.required).map((i) => i.name) } } } }
+        else if (b.length) op.requestBody = { content: { 'application/json': { schema: { type: 'object', properties: Object.fromEntries(b.map((i) => [i.name, { type: 'string', example: i.example || undefined }])), required: b.filter((i) => i.required).map((i) => i.name) } } } }
         ;(doc.paths[e.path] ||= {})[e.method.toLowerCase()] = op
     }
     return doc
