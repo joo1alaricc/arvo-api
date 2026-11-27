@@ -9,3 +9,16 @@
 5. Tes: buka /uploader (Premium 1+/admin), pilih masa berlaku, unggah file.
 
 Batas KV gratis: 1 GB total, 1.000 tulis/hari (1 upload atau 1 ubah-expired = 1 tulis), 100.000 baca/hari, 25 MB per file.
+
+## Endpoint API: POST /api/upload (Premium ke atas, wajib API key)
+Respons sukses:
+{ "status": true, "author": "Arvo - Endpoint", "result": { "id", "key", "name", "size", "mime", "url", "expires_at" }, "timestamp": "...", "response_time": "123ms" }
+
+ttl: detik atau 30m, 12h, 7d, 2w, 1y; 0 = permanen; tanpa ttl = 30 hari.
+
+# 1) Kirim file (multipart)
+curl -X POST "https://arvo-api.my.id/api/upload" -H "x-api-key: KEY_KAMU" -F "file=@foto.jpg" -F "ttl=7d"
+# 2) Body mentah
+curl -X POST "https://arvo-api.my.id/api/upload?name=foto.jpg&ttl=0" -H "x-api-key: KEY_KAMU" --data-binary @foto.jpg
+# 3) Unggah ulang dari URL
+curl -X POST "https://arvo-api.my.id/api/upload" -H "x-api-key: KEY_KAMU" -H "Content-Type: application/json" -d '{"url":"https://example.com/a.jpg","ttl":"30d"}'
