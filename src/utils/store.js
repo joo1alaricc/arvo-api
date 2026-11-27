@@ -1072,6 +1072,7 @@ export class StoreDO extends DurableObject {
         return { ok: true, ...v }
     }
     /* Tools › Uploader (isi file ada di KV, di sini hanya metadata; expires_at kosong = permanen) */
+    uidByKey(key) { return this.q('SELECT id FROM users WHERE api_key=?', key)[0]?.id || 0 }
     uploadUsage(uid, now) { const r = this.q('SELECT COUNT(*) n, COALESCE(SUM(size),0) bytes FROM uploads WHERE user_id=? AND (expires_at IS NULL OR expires_at>?)', uid, now)[0]; return { n: r.n, bytes: r.bytes } }
     addUpload(uid, key, name, size, mime, now, exp) { return this.sql.exec('INSERT INTO uploads(user_id,key,name,size,mime,created_at,expires_at) VALUES(?,?,?,?,?,?,?) RETURNING id', uid, key, name, size, mime, now, exp).one().id }
     listUploads(uid, now) { return this.q('SELECT id,key,name,size,mime,created_at,expires_at FROM uploads WHERE user_id=? AND (expires_at IS NULL OR expires_at>?) ORDER BY id DESC LIMIT 500', uid, now) }
