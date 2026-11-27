@@ -323,11 +323,12 @@ async function codePanel(host) {
 }
 
 /* Sinkronisasi src/api/index.js <-> file di src/api/<kategori>/ : cek dulu (tanpa commit), tampilkan rencana, baru commit setelah dikonfirmasi. */
+const syncCall = (apply) => api('/admin/code-endpoints/sync', { method: 'POST', body: JSON.stringify({ apply }), signal: AbortSignal.timeout(60000) })
 async function syncEndpoints(btn) {
   const label = btn.textContent
   btn.disabled = true; btn.textContent = 'Memeriksa…'
   try {
-    const r = await put('/admin/code-endpoints/sync', { apply: false }, 'POST')
+    const r = await syncCall(false)
     if (!r.changed && !r.skipped.length) { toast(`Sudah sinkron: ${r.total} file endpoint cocok dengan src/api/index.js.`); return }
     syncDialog(r)
   } catch (e) { toast(e.message) } finally { btn.disabled = false; btn.textContent = label }
@@ -349,7 +350,7 @@ function syncDialog(r) {
   go.onclick = async () => {
     go.disabled = true; say($('#smsg', d), 'Commit src/api/index.js ke GitHub…')
     try {
-      const x = await put('/admin/code-endpoints/sync', { apply: true }, 'POST')
+      const x = await syncCall(true)
       d.close(); toast(x.applied ? `index.js disinkronkan${x.commit ? ' (commit ' + x.commit + ')' : ''}. Aktif setelah deploy.` : 'Sudah sinkron, tidak ada yang perlu di-commit.'); V.endpoint()
     } catch (e) { say($('#smsg', d), e.message, 1); go.disabled = false }
   }
