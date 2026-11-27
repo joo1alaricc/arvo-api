@@ -17,7 +17,8 @@ const setKey = (v, from) => {
   document.querySelectorAll('.pg-ep').forEach((e) => e._r?.()); syncMine()
 }
 const LANGS = { curl: 'cURL', js: 'JavaScript (fetch)', py: 'Python (requests)', php: 'PHP (cURL)' }
-const snippets = (method, url, body, key) => {
+const snippets = (method, url, body, key, form) => {
+  if (form) return formSnippets(method, url, key, form)
   const h = { 'x-api-key': key || 'KEY_KAMU', ...(body ? { 'Content-Type': 'application/json' } : {}) }
   const hc = Object.entries(h).map(([k, v]) => ` \\\n  --header '${k}: ${v}'`).join('')
   const hp = Object.entries(h).map(([k, v]) => `    '${k}: ${v}'`).join(',\n')
@@ -29,17 +30,31 @@ const snippets = (method, url, body, key) => {
   }
 }
 
+/* Contoh kode untuk endpoint unggah file (multipart/form-data). form = { files: {field: namaFile}, fields: {field: nilai} } */
+const formSnippets = (method, url, key, { files, fields }) => {
+  const k = key || 'KEY_KAMU', fe = Object.entries(files), te = Object.entries(fields)
+  return {
+    curl: `curl -X ${method} '${url}' \\\n  --header 'x-api-key: ${k}'${fe.map(([n, f]) => ` \\\n  --form '${n}=@"${f}"'`).join('')}${te.map(([n, v]) => ` \\\n  --form '${n}=${v}'`).join('')}`,
+    js: `const form = new FormData()\n${fe.map(([n]) => `form.append('${n}', fileInput.files[0])   // <input type="file">`).join('\n')}\n${te.map(([n, v]) => `form.append('${n}', '${v}')`).join('\n')}\n\nconst res = await fetch('${url}', {\n  method: '${method}',\n  headers: { 'x-api-key': '${k}' },\n  body: form\n})\nconsole.log(await res.json())`,
+    py: `import requests\n\nr = requests.${method.toLowerCase()}('${url}',\n    headers={'x-api-key': '${k}'},\n    files={${fe.map(([n, f]) => `'${n}': open('${f}', 'rb')`).join(', ')}},\n    data=${JSON.stringify(fields)})\nprint(r.json())`,
+    php: `<?php\n$ch = curl_init('${url}');\ncurl_setopt_array($ch, [\n  CURLOPT_CUSTOMREQUEST => '${method}',\n  CURLOPT_RETURNTRANSFER => true,\n  CURLOPT_HTTPHEADER => ['x-api-key: ${k}'],\n  CURLOPT_POSTFIELDS => [\n${[...fe.map(([n, f]) => `    '${n}' => new CURLFile('${f}')`), ...te.map(([n, v]) => `    '${n}' => '${v}'`)].join(',\n')}\n  ],\n]);\necho curl_exec($ch);`,
+  }
+}
+
 function card(path, method, d, tag) {
   const el = document.createElement('div'); el.className = 'pg-ep'
   const params = (d.parameters || []).filter((p) => p.name !== 'apikey'), bodyProps = d.requestBody?.content?.['application/json']?.schema
   const access = d['x-access'] || (d['x-premium'] ? 'premium' : 'free'), paid = access !== 'free', offline = d['x-status'] === 'OFFLINE'
-  const bodyKeys = Object.keys(bodyProps?.properties || {}), bodyReq = bodyProps?.required || []
-  const chips = [`<span class="chip">x-api-key</span>`, ...params.map((p) => `<span class="chip ${p.required ? '' : 'opt'}">${esc(p.name)}</span>`), ...bodyKeys.map((k) => `<span class="chip ${bodyReq.includes(k) ? '' : 'opt'}">${esc(k)}</span>`)]
+  const formSchema = d.requestBody?.content?.['multipart/form-data']?.schema, formProps = formSchema?.properties || {}, formKeys = Object.keys(formProps), formReq = formSchema?.required || []
+  const bodyKeys = formKeys.length ? [] : Object.keys(bodyProps?.properties || {}), bodyReq = bodyProps?.required || []
+  const isFile = (k) => formProps[k]?.format === 'binary'
+  const chips = [`<span class="chip">x-api-key</span>`, ...params.map((p) => `<span class="chip ${p.required ? '' : 'opt'}">${esc(p.name)}</span>`), ...bodyKeys.map((k) => `<span class="chip ${bodyReq.includes(k) ? '' : 'opt'}">${esc(k)}</span>`), ...formKeys.map((k) => `<span class="chip ${formReq.includes(k) ? '' : 'opt'}">${esc(k)}</span>`)]
   const m = method.toLowerCase()
   el._txt = `${path} ${d.summary || ''} ${d.description || ''} ${tag}`.toLowerCase()
   /* contoh nilai asli (bukan sekadar nama/tipe) dipakai untuk menampilkan Full URL & contoh kode saat kolom masih kosong */
   const realEx = (ph, name) => (ph && ph !== name && !['string', 'number', 'integer', 'boolean', 'object', 'array'].includes(String(ph)) ? String(ph) : '')
   const field = (name, label, extra, ph, req, kind) => `<div><div class="lbl"><span>${esc(label)}${req ? ' <em>*</em>' : ''}</span><span>${esc(extra)}</span></div><input data-k="${esc(name)}" data-in="${kind}" data-ex="${esc(realEx(ph, name))}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false"></div>`
+  const fileField = (name, req) => `<div><div class="lbl"><span>${esc(name)}${req ? ' <em>*</em>' : ''}</span><span>form</span></div><input type="file" class="pg-file" data-k="${esc(name)}" data-in="form" data-file></div>`
   el.innerHTML = `<button class="hd" data-hd><span class="mt ${m}">${esc(method.toUpperCase())}</span><span class="p">${esc(path)}</span>${access === 'vip' ? '<span class="tag2">vip</span>' : access === 'premium' ? '<span class="tag2">premium</span>' : access === 'owner' ? '<span class="tag2">owner</span>' : ''}${offline ? '<span class="tag2" style="color:var(--bad);border-color:var(--bad)">offline</span>' : ''}<span class="chev">${ico('chev')}</span></button>
   <div class="pg-b"><div class="in">
     ${d.summary || d.description ? `<p class="desc">${esc(d.summary || '')}${d.summary && d.description ? ' · ' : ''}${esc(d.description || '')}</p>` : ''}
@@ -48,7 +63,8 @@ function card(path, method, d, tag) {
       <input data-k="apikey" data-in="header" placeholder="arvo_xxxxxxxx (wajib)" autocomplete="off" spellcheck="false" value="${esc(savedKey)}"></div>
     ${params.map((p) => field(p.name, p.name, p.in, p.example ?? p.schema?.example ?? p.schema?.default ?? p.schema?.type ?? p.name, p.required, p.in)).join('')}
     ${bodyKeys.map((k) => field(k, k, 'body', bodyProps.properties[k].example ?? k, bodyReq.includes(k), 'body')).join('')}
-    ${d.requestBody && !bodyKeys.length ? `<div><div class="lbl"><span>Body</span><span>JSON</span></div><textarea data-body rows="4" placeholder='{ "key": "value" }' spellcheck="false"></textarea></div>` : ''}
+    ${formKeys.map((k) => isFile(k) ? fileField(k, formReq.includes(k)) : field(k, k, 'form', formProps[k].example ?? k, formReq.includes(k), 'form')).join('')}
+    ${d.requestBody && !bodyKeys.length && !formKeys.length ? `<div><div class="lbl"><span>Body</span><span>JSON</span></div><textarea data-body rows="4" placeholder='{ "key": "value" }' spellcheck="false"></textarea></div>` : ''}
     <div><div class="lbl"><span>Pilih contoh kode</span><button class="ib" data-cc aria-label="Salin kode" hidden>${ico('copy')}</button></div>
       <select data-lang><option value="">Pilih</option>${Object.entries(LANGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
       <div class="cbox" data-code style="margin-top:8px" hidden><pre></pre></div></div>
@@ -66,22 +82,24 @@ function card(path, method, d, tag) {
   q('[data-mine]').hidden = !acct() || savedKey === acct()
   /* query (apikey di depan, mirip betabotz) dan body dipisah */
   const build = (show = false) => {
-    let p = path; const qs = new URLSearchParams(), bd = {}
+    let p = path; const qs = new URLSearchParams(), bd = {}, fields = {}, files = {}, picked = {}
     el.querySelectorAll('[data-k]').forEach((i) => {
+      if ('file' in i.dataset) { picked[i.dataset.k] = i.files[0] || null; files[i.dataset.k] = i.files[0]?.name || (show ? 'file.jpg' : ''); return }
       const v = i.value.trim() || (show && i.dataset.in !== 'header' ? i.dataset.ex || '' : ''); if (!v) return
       if (i.dataset.in === 'header') return
       if (i.dataset.in === 'path') p = p.replace(`{${i.dataset.k}}`, encodeURIComponent(v))
       else if (i.dataset.in === 'body') bd[i.dataset.k] = v
+      else if (i.dataset.in === 'form') fields[i.dataset.k] = v
       else qs.append(i.dataset.k, v)
     })
     const raw = q('[data-body]')?.value.trim()
     const rel = p + (qs.toString() ? '?' + qs : '')
     const k = keyEl.value.trim(), full = location.origin + p + '?' + [`apikey=${encodeURIComponent(k || 'KEY_KAMU')}`, qs.toString()].filter(Boolean).join('&')
-    return { rel, url: location.origin + rel, full, body: raw || (Object.keys(bd).length ? JSON.stringify(bd) : ''), key: keyEl.value.trim() }
+    return { rel, url: location.origin + rel, full, body: raw || (Object.keys(bd).length ? JSON.stringify(bd) : ''), key: keyEl.value.trim(), form: formKeys.length ? { files, fields, picked } : null }
   }
   const showCode = () => {
     const l = q('[data-lang]').value, box = q('[data-code]'); box.hidden = !l; q('[data-cc]').hidden = !l
-    if (l) { const { url, body, key } = build(true); box.querySelector('pre').textContent = snippets(method.toUpperCase(), url, body, key)[l] }
+    if (l) { const { url, body, key, form } = build(true); box.querySelector('pre').textContent = snippets(method.toUpperCase(), url, body, key, form)[l] }
   }
   el._r = () => {
     const { rel, full, key } = build(true); q('[data-ru]').textContent = rel; q('[data-fu]').textContent = full
@@ -100,11 +118,19 @@ function card(path, method, d, tag) {
     else if ('cc' in b.dataset) navigator.clipboard.writeText(q('[data-code] pre').textContent).then(() => flash(b))
     else if ('cr' in b.dataset) { if (last) navigator.clipboard.writeText(last).then(() => flash(b, 'Tersalin')) }
     else if ('run' in b.dataset) {
-      const { url, body, key } = build(), out = q('[data-out]'), meta = q('[data-meta]')
-      const headers = { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(key ? { 'x-api-key': key } : {}) }
+      const { url, body, key, form } = build(), out = q('[data-out]'), meta = q('[data-meta]')
+      let payload = body || undefined
+      if (form) {
+        const missing = formKeys.find((k) => isFile(k) && formReq.includes(k) && !form.picked[k])
+        if (missing) { out.innerHTML = '<pre></pre>'; out.querySelector('pre').textContent = `Pilih file untuk kolom "${missing}" dulu.`; meta.innerHTML = '<b class="err">Belum lengkap</b>'; last = ''; return }
+        payload = new FormData()
+        for (const [n, f] of Object.entries(form.picked)) if (f) payload.append(n, f)
+        for (const [n, v] of Object.entries(form.fields)) payload.append(n, v)   /* Content-Type multipart + boundary diisi browser */
+      }
+      const headers = { ...(body && !form ? { 'Content-Type': 'application/json' } : {}), ...(key ? { 'x-api-key': key } : {}) }
       b.disabled = true; b.innerHTML = '<i class="spin"></i> Menjalankan…'; const t0 = performance.now()
       try {
-        const r = await fetch(url, { method: method.toUpperCase(), headers, body: method.toLowerCase() === 'get' ? undefined : body || undefined })
+        const r = await fetch(url, { method: method.toUpperCase(), headers, body: method.toLowerCase() === 'get' ? undefined : payload })
         const ct = r.headers.get('content-type') || '', ms = Math.round(performance.now() - t0)
         if (ct.startsWith('image/')) { const u = URL.createObjectURL(await r.blob()); out.innerHTML = `<img src="${u}" alt="response" style="max-width:100%;display:block;margin:12px auto;border-radius:8px">`; last = url }
         else { const txt = await r.text(); let shown = txt; try { shown = JSON.stringify(JSON.parse(txt), null, 2) } catch {} ; out.innerHTML = '<pre></pre>'; out.querySelector('pre').textContent = shown; last = shown }
