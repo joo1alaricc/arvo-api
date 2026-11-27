@@ -335,12 +335,18 @@ admin.post('/code-endpoints', async (c) => {
 /* Sinkronisasi src/api/index.js dengan file yang benar-benar ada di src/api/<kategori>/. { apply: false } = hanya cek (dry-run); { apply: true } = commit satu kali. */
 admin.post('/code-endpoints/sync', async (c) => {
     const apply = (await body(c)).apply === true
-    const tree = await ghTree(c.env); if (tree.ok === false) return send(c, tree)
-    const idx = await ghGet(c.env, 'src/api/index.js'); if (idx.ok === false) return send(c, idx)
+    const [tree, idx] = await Promise.all([ghTree(c.env), ghGet(c.env, 'src/api/index.js')])   /* paralel, bukan berurutan */
+    if (tree.ok === false) return send(c, tree)
+    if (idx.ok === false) return send(c, idx)
     if (!idx.exists) return send(c, fail(404, 'no_index', 'src/api/index.js tidak ada di repo.'))
+    const idxSrc = b64ToText(idx.content)
     const present = Object.keys(tree.files).map((p) => p.match(SYNC_FILE_RE)).filter(Boolean).map((m) => `${m[1]}/${m[2]}.js`)
-    const read = async (file) => { const g = await ghGet(c.env, 'src/api/' + file); return g.ok === false || !g.exists ? null : exportPairs(b64ToText(g.content)) }
-    const r = await syncIndex(b64ToText(idx.content), present, read, { canRemove: !tree.truncated })
+    const readOne = async (file) => { const g = await ghGet(c.env, 'src/api/' + file); return g.ok === false || !g.exists ? null : exportPairs(b64ToText(g.content)) }
+    /* file yang belum diimpor dibaca sekaligus (dulu satu per satu, tiap file = 1 panggilan GitHub berurutan = lama) */
+    const imported = new Set([...idxSrc.matchAll(/from\s*'\.\/([\w-]+\/[\w-]+\.js)'/g)].map((m) => m[1]))
+    const pre = new Map(await Promise.all(present.filter((f) => !imported.has(f)).map(async (f) => [f, await readOne(f)])))
+    const read = async (file) => (pre.has(file) ? pre.get(file) : readOne(file))
+    const r = await syncIndex(idxSrc, present, read, { canRemove: !tree.truncated })
     if (!r.ok) return send(c, fail(422, 'index_unknown', r.message))
     const info = { total: present.length, added: r.added, removed: r.removed, repaired: r.repaired, skipped: r.skipped, truncated: !!tree.truncated }
     if (!apply || !r.changed) return c.json({ ok: true, applied: false, changed: r.changed, ...info })
