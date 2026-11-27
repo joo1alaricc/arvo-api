@@ -64,6 +64,9 @@ export class StoreDO extends DurableObject {
                 uuid TEXT, identifier TEXT, status TEXT DEFAULT 'active', created_at INTEGER, expires_at INTEGER, order_id TEXT);
             CREATE UNIQUE INDEX IF NOT EXISTS ptero_servers_o ON ptero_servers(order_id);
             CREATE INDEX IF NOT EXISTS ptero_servers_u ON ptero_servers(user_id,status);`)
+        this.sql.exec(`CREATE TABLE IF NOT EXISTS uploads(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, key TEXT UNIQUE, name TEXT, size INTEGER, mime TEXT, created_at INTEGER, expires_at INTEGER);
+            CREATE INDEX IF NOT EXISTS uploads_u ON uploads(user_id,created_at);`)
+        try { this.sql.exec('ALTER TABLE uploads ADD COLUMN expires_at INTEGER') } catch {}   /* kosong = permanen */
         /* DB lama bisa punya tabel orders dengan skema berbeda (CREATE IF NOT EXISTS tidak mengubahnya): lengkapi kolom yang kurang */
         this.ensureCols('orders', { user_id: 'INTEGER', plan: 'TEXT', days: 'INTEGER', amount: 'INTEGER', code: 'INTEGER', total: 'INTEGER', status: 'TEXT', ip: 'TEXT',
             created_at: 'INTEGER', expires_at: 'INTEGER', paid_at: 'INTEGER' },
@@ -1068,4 +1071,12 @@ export class StoreDO extends DurableObject {
         this.saveSetting('site_content', v)
         return { ok: true, ...v }
     }
+    /* Tools › Uploader (isi file ada di KV, di sini hanya metadata; expires_at kosong = permanen) */
+    uploadUsage(uid, now) { const r = this.q('SELECT COUNT(*) n, COALESCE(SUM(size),0) bytes FROM uploads WHERE user_id=? AND (expires_at IS NULL OR expires_at>?)', uid, now)[0]; return { n: r.n, bytes: r.bytes } }
+    addUpload(uid, key, name, size, mime, now, exp) { return this.sql.exec('INSERT INTO uploads(user_id,key,name,size,mime,created_at,expires_at) VALUES(?,?,?,?,?,?,?) RETURNING id', uid, key, name, size, mime, now, exp).one().id }
+    listUploads(uid, now) { return this.q('SELECT id,key,name,size,mime,created_at,expires_at FROM uploads WHERE user_id=? AND (expires_at IS NULL OR expires_at>?) ORDER BY id DESC LIMIT 500', uid, now) }
+    getUpload(id) { return this.q('SELECT id,user_id,key FROM uploads WHERE id=?', id)[0] || null }
+    setUploadExpiry(id, exp) { this.sql.exec('UPDATE uploads SET expires_at=? WHERE id=?', exp, id); return { ok: true } }
+    delUpload(id) { this.sql.exec('DELETE FROM uploads WHERE id=?', id); return { ok: true } }
+    purgeUploads(now) { return this.sql.exec('DELETE FROM uploads WHERE expires_at IS NOT NULL AND expires_at<=?', now).rowsWritten }
 }
