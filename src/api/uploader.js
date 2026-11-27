@@ -45,40 +45,62 @@ const rid = (n = 6) => [...crypto.getRandomValues(new Uint8Array(n))].map((x) =>
 const err = (c, status, error, message) => c.json({ ok: false, error, message, status }, status)
 const num = (v, d) => { const n = parseInt(v, 10); return n > 0 ? n : d }
 const MIN_TTL = 60, MAX_TTL = 365 * 86400   /* KV: kedaluwarsa minimal 60 detik */
-const parseTtl = (v) => { if (v == null || v === '' || v === '0') return 0; const n = parseInt(v, 10); return n >= MIN_TTL && n <= MAX_TTL ? n : -1 }
+const UNIT = { s: 1, m: 60, h: 3600, d: 86400, w: 604800, y: 31536000 }
+/* Masa berlaku -> detik. Kosong/0/permanent = 0 (permanen), tidak valid = -1. Menerima 3600, "3600", "30m", "12h", "7d", "2w", "1y". */
+export const ttlOf = (v) => {
+    if (v === null || v === undefined || v === '') return 0
+    const t = String(v).trim().toLowerCase()
+    if (['0', 'permanent', 'permanen', 'forever', 'never'].includes(t)) return 0
+    const m = /^(\d+)\s*([smhdwy]?)$/.exec(t)
+    if (!m) return -1
+    const n = parseInt(m[1], 10) * UNIT[m[2] || 's']
+    return n >= MIN_TTL && n <= MAX_TTL ? n : -1
+}
+const parseTtl = ttlOf
 const base = (c) => (c.env.CDN_BASE ? c.env.CDN_BASE.replace(/\/+$/, '') : new URL(c.req.url).origin + '/f')
 const urlOf = (c, key) => base(c) + '/' + key
 const cleanName = (n) => String(n || 'file').replace(/[\u0000-\u001f<>"\\/]/g, '').slice(0, 100) || 'file'
 
-/* POST /api/tools/upload?name=foto.jpg&ttl=86400  (ttl detik; kosong/0 = permanen). Body = isi file mentah. */
-uploader.post('/', async (c) => {
-    if (!c.env.UPLOADS) return err(c, 503, 'not_configured', 'Penyimpanan KV belum dikonfigurasi (binding UPLOADS).')
-    const u = c.get('user'), s = store(c)
-    const max = Math.min(25, num(c.env.UPLOAD_MAX_MB, 25)) * 1048576, maxFiles = num(c.env.UPLOAD_MAX_FILES, 200), maxTotal = num(c.env.UPLOAD_MAX_TOTAL_MB, 200) * 1048576
-    const len = parseInt(c.req.header('content-length') || '0', 10)
-    if (!len) return err(c, 411, 'length_required', 'File kosong atau ukuran tidak diketahui.')
-    if (len > max) return err(c, 413, 'too_large', `File terlalu besar (maks ${max / 1048576} MB).`)
-    const name = cleanName(c.req.query('name')), ext = (name.split('.').pop() || '').toLowerCase()
-    const t = name.includes('.') ? TYPES[ext] : null
-    if (!t) return err(c, 415, 'bad_type', 'Tipe file tidak didukung. Boleh: gambar, video, audio, PDF, Word/Excel/PowerPoint, zip/rar/7z, dan teks.')
-    const ttl = parseTtl(c.req.query('ttl'))
-    if (ttl < 0) return err(c, 400, 'bad_ttl', 'Masa berlaku harus antara 1 menit dan 365 hari, atau kosong untuk permanen.')
-    const now = Date.now(), q = await s.uploadUsage(u.id, now)
-    if (q.n >= maxFiles) return err(c, 429, 'quota', `Kuota penuh (maks ${maxFiles} file aktif). Hapus file lama dulu.`)
-    if (q.bytes + len > maxTotal) return err(c, 429, 'quota', `Kuota penyimpanan penuh (maks ${maxTotal / 1048576} MB). Hapus file lama dulu.`)
-    const buf = await c.req.arrayBuffer()
-    if (!buf.byteLength || buf.byteLength > max) return err(c, 413, 'too_large', `File terlalu besar (maks ${max / 1048576} MB).`)
-    if (!t[1](new Uint8Array(buf, 0, Math.min(buf.byteLength, 16)), buf)) return err(c, 415, 'bad_content', `Isi file tidak cocok dengan ekstensi .${ext}.`)
+export const limitsOf = (c) => ({
+    max: Math.min(25, num(c.env.UPLOAD_MAX_MB, 25)) * 1048576, maxFiles: num(c.env.UPLOAD_MAX_FILES, 200), maxTotal: num(c.env.UPLOAD_MAX_TOTAL_MB, 200) * 1048576,
+})
+export const mimeExt = (mime) => { const m = String(mime || '').split(';')[0].trim().toLowerCase(); return Object.keys(TYPES).find((k) => TYPES[k][0] === m) || '' }
+
+/* Inti penyimpanan (dipakai halaman Uploader DAN endpoint API /api/upload): cek tipe, isi file, kuota, simpan ke KV + database.
+ * ttl = detik (0 = permanen), sudah divalidasi pemanggil lewat ttlOf. Mengembalikan { ok:true, data } atau { ok:false, status, error, message }. */
+export const saveFile = async (c, uid, rawName, buf, ttl) => {
+    const bad = (status, error, message) => ({ ok: false, status, error, message })
+    if (!c.env.UPLOADS) return bad(503, 'not_configured', 'Penyimpanan KV belum dikonfigurasi (binding UPLOADS).')
+    const { max, maxFiles, maxTotal } = limitsOf(c), s = store(c)
+    const name = cleanName(rawName), ext = (name.split('.').pop() || '').toLowerCase(), t = name.includes('.') ? TYPES[ext] : null
+    if (!t) return bad(415, 'bad_type', 'Tipe file tidak didukung. Boleh: gambar, video, audio, PDF, Word/Excel/PowerPoint, zip/rar/7z, dan teks.')
+    if (!buf.byteLength || buf.byteLength > max) return bad(413, 'too_large', `File kosong atau terlalu besar (maks ${max / 1048576} MB).`)
+    const now = Date.now(), q = await s.uploadUsage(uid, now)
+    if (q.n >= maxFiles) return bad(429, 'quota', `Kuota penuh (maks ${maxFiles} file aktif). Hapus file lama dulu.`)
+    if (q.bytes + buf.byteLength > maxTotal) return bad(429, 'quota', `Kuota penyimpanan penuh (maks ${maxTotal / 1048576} MB). Hapus file lama dulu.`)
+    if (!t[1](new Uint8Array(buf, 0, Math.min(buf.byteLength, 16)), buf)) return bad(415, 'bad_content', `Isi file tidak cocok dengan ekstensi .${ext}.`)
     let key = ''
     for (let i = 0; i < 5; i++) {
         key = `${rid()}.${ext}`
         if ((await c.env.UPLOADS.get(key, 'stream')) === null) break
-        if (i === 4) return err(c, 500, 'id_collision', 'Gagal membuat ID unik, coba lagi.')
+        if (i === 4) return bad(500, 'id_collision', 'Gagal membuat ID unik, coba lagi.')
     }
     const expires = ttl ? now + ttl * 1000 : null
     await c.env.UPLOADS.put(key, buf, { ...(ttl ? { expirationTtl: ttl } : {}), metadata: { n: name, m: t[0], s: buf.byteLength, i: t[2], e: expires } })
-    const id = await s.addUpload(u.id, key, name, buf.byteLength, t[0], now, expires)
-    return c.json({ ok: true, id, key, name, size: buf.byteLength, mime: t[0], expires_at: expires, url: urlOf(c, key) })
+    const id = await s.addUpload(uid, key, name, buf.byteLength, t[0], now, expires)
+    return { ok: true, data: { id, key, name, size: buf.byteLength, mime: t[0], expires_at: expires, url: urlOf(c, key) } }
+}
+
+/* POST /api/tools/upload?name=foto.jpg&ttl=86400  (ttl detik; kosong/0 = permanen). Body = isi file mentah. */
+uploader.post('/', async (c) => {
+    const { max } = limitsOf(c)
+    const len = parseInt(c.req.header('content-length') || '0', 10)
+    if (!len) return err(c, 411, 'length_required', 'File kosong atau ukuran tidak diketahui.')
+    if (len > max) return err(c, 413, 'too_large', `File terlalu besar (maks ${max / 1048576} MB).`)
+    const ttl = parseTtl(c.req.query('ttl'))
+    if (ttl < 0) return err(c, 400, 'bad_ttl', 'Masa berlaku harus antara 1 menit dan 365 hari, atau kosong untuk permanen.')
+    const r = await saveFile(c, c.get('user').id, c.req.query('name'), await c.req.arrayBuffer(), ttl)
+    return r.ok ? c.json({ ok: true, ...r.data }) : err(c, r.status, r.error, r.message)
 })
 
 uploader.get('/list', async (c) => {
