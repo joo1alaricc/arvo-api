@@ -13,6 +13,12 @@ const UploadBodySchema = z.object({
     expired: z.union([z.string(), z.number()]).optional().openapi({ example: '3600', description: 'Masa berlaku: detik atau 30m, 12h, 7d, 2w, 1y. 0 = permanen. Default 30d. (Nama lama "ttl" masih diterima.)' }),
 })
 
+/* Dicantumkan agar gerbang media-type menerima multipart; isinya tetap dibaca handler (formData). */
+const FormSchema = z.object({
+    file: z.any().openapi({ type: 'string', format: 'binary', description: 'File yang diunggah (maks 25 MB).' }),
+    expired: z.union([z.string(), z.number()]).optional().openapi({ example: '3600', description: 'Masa berlaku: detik atau 30m, 12h, 7d, 2w, 1y. 0 = permanen. Default 30d.' }),
+})
+
 export const uploadRoute = createRoute({
     method: 'post',
     path: '/api/upload',
@@ -27,7 +33,11 @@ export const uploadRoute = createRoute({
         { name: 'file', type: 'file', required: true, description: 'File yang diunggah (maks 25 MB).' },
         { name: 'expired', required: false, example: '3600', description: 'Masa berlaku: detik atau 30m, 12h, 7d, 2w, 1y. 0 = permanen. Kosong = 30 hari.' },
     ],
-    request: { body: { required: false, content: { 'application/json': { schema: UploadBodySchema } } } },
+    request: { body: { required: false, content: {
+        'application/json': { schema: UploadBodySchema },
+        'multipart/form-data': { schema: FormSchema },
+        'application/octet-stream': { schema: z.any().openapi({ type: 'string', format: 'binary', description: 'Body mentah file (sertakan ?name=foto.jpg).' }) },
+    } } },
     responses: {
         200: {
             content: { 'application/json': { schema: z.object({
