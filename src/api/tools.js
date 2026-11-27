@@ -593,7 +593,7 @@ tools.post('/netflix-token/generate', async (c) => {
     })
 })
 
-/* Uploader: Premium 1 ke atas (atau admin). Berkas disimpan di R2, lihat uploader.js. */
+/* Uploader: Premium 1 ke atas (atau admin). Berkas disimpan di KV, lihat uploader.js. */
 tools.use('/upload', adminOrPlan(1))
 tools.use('/upload/*', adminOrPlan(1))
 tools.route('/upload', uploader)
