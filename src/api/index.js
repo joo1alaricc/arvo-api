@@ -18,6 +18,7 @@ import { mediafireRoute as downloaderMediafireRoute, mediafireHandler as downloa
 import { pinterestRoute as downloaderPinterestRoute, pinterestHandler as downloaderPinterestHandler } from './downloader/pinterest.js'
 import { spotifyRoute as downloaderSpotifyRoute, spotifyHandler as downloaderSpotifyHandler } from './downloader/spotify.js'
 import { twitterRoute as downloaderTwitterRoute, twitterHandler as downloaderTwitterHandler } from './downloader/twitter.js'
+import { uploadRoute, uploadHandler } from './upload.js'
 import { claudeRoute as aiClaudeRoute, claudeHandler as aiClaudeHandler } from './ai/claude.js'
 import { copilotRoute as aiCopilotRoute, copilotHandler as aiCopilotHandler } from './ai/copilot.js'
 
@@ -41,6 +42,7 @@ const BUILTIN = [
     [downloaderTwitterRoute, downloaderTwitterHandler],
     [aiClaudeRoute, aiClaudeHandler],
     [aiCopilotRoute, aiCopilotHandler],
+    [uploadRoute, uploadHandler],
 ]
 
 export const BUILTIN_PATHS = BUILTIN.map(([r]) => r.path)
