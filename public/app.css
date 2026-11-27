@@ -255,3 +255,5 @@ svg.i.gi{stroke:none}
 /* ---------- ikon sub bab: monokrom ikut tema (putih di gelap, hitam di terang), tanpa warna biru/hijau/kuning/merah ---------- */
 .ico,.ico.green,.ico.amber,.ico.red,.ico.mut,.tile .ico,.stat .ico,.ck-id .ico{color:var(--tx);background:color-mix(in srgb,var(--tx) 9%,transparent)}
 .card-h svg{color:var(--tx)}
+
+.pg-b input.pg-file{padding:7px 9px;cursor:pointer;color:var(--mut)}.pg-b input.pg-file::file-selector-button{margin-right:10px;padding:6px 12px;border:1px solid var(--line);border-radius:7px;background:color-mix(in srgb,var(--mut) 12%,var(--bg));color:var(--tx);font:inherit;font-size:13px;cursor:pointer}
