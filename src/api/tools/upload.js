@@ -2,7 +2,7 @@
 import { createRoute, z } from '@hono/zod-openapi'
 import { upstreamFetch } from '../utils/upstream.js'
 import { store } from '../utils/session.js'
-import { saveFile, ttlOf, limitsOf, mimeExt } from './uploader.js'
+import { saveFile, ttlOf, limitsOf, mimeExt } from '../uploader.js'
 
 const AUTHOR = 'Arvo - Endpoint'
 const DEFAULT_TTL = 30 * 86400   /* tanpa parameter ttl: 30 hari (kirim ttl=0 untuk permanen) */
