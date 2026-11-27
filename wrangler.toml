@@ -64,7 +64,7 @@ binding = "CF_VERSION_METADATA"
 # KV untuk Uploader (gratis, tanpa kartu). Buat namespace: npx wrangler kv namespace create UPLOADS, lalu tempel id-nya di bawah.
 [[kv_namespaces]]
 binding = "UPLOADS"
-id = "4eed98ac8a45499aa24a36bbf4a90724q"
+id = "4eed98ac8a45499aa24a36bbf4a90724"
 
 [[durable_objects.bindings]]
 name = "RATE_LIMITER"
