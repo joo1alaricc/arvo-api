@@ -5,12 +5,12 @@ import { store } from '../../utils/session.js'
 import { saveFile, ttlOf, limitsOf, mimeExt } from '../uploader.js'
 
 const AUTHOR = 'Arvo - Endpoint'
-const DEFAULT_TTL = 30 * 86400   /* tanpa parameter ttl: 30 hari (kirim ttl=0 untuk permanen) */
+const DEFAULT_TTL = 30 * 86400   /* tanpa parameter expired: 30 hari (kirim expired=0 untuk permanen) */
 
 const UploadBodySchema = z.object({
     url: z.string().optional().openapi({ example: 'https://example.com/foto.jpg', description: 'URL file yang diunggah ulang ke CDN Arvo. Kosongkan kalau mengirim file langsung (multipart field "file").' }),
     name: z.string().optional().openapi({ example: 'foto.jpg', description: 'Nama file (menentukan ekstensi). Opsional kalau URL sudah berekstensi.' }),
-    ttl: z.union([z.string(), z.number()]).optional().openapi({ example: '7d', description: 'Masa berlaku: detik atau 30m, 12h, 7d, 2w, 1y. 0 = permanen. Default 30d.' }),
+    expired: z.union([z.string(), z.number()]).optional().openapi({ example: '3600', description: 'Masa berlaku: detik atau 30m, 12h, 7d, 2w, 1y. 0 = permanen. Default 30d. (Nama lama "ttl" masih diterima.)' }),
 })
 
 export const uploadRoute = createRoute({
@@ -22,6 +22,11 @@ export const uploadRoute = createRoute({
     'x-status': 'ONLINE',
     'x-premium': true,
     'x-access': 'premium',
+    /* Tampilan Playground: pilih file (multipart) + expired. Hanya dokumentasi; validator tetap JSON saja agar file besar tidak diparse dua kali. */
+    'x-form': [
+        { name: 'file', type: 'file', required: true, description: 'File yang diunggah (maks 25 MB).' },
+        { name: 'expired', required: false, example: '3600', description: 'Masa berlaku: detik atau 30m, 12h, 7d, 2w, 1y. 0 = permanen. Kosong = 30 hari.' },
+    ],
     request: { body: { required: false, content: { 'application/json': { schema: UploadBodySchema } } } },
     responses: {
         200: {
@@ -67,17 +72,17 @@ export const uploadHandler = async (c) => {
     const fail = (status, message) => c.json({ status: false, author: AUTHOR, message }, status)
     const { max } = limitsOf(c)
     const q = c.req.query(), ct = (c.req.header('content-type') || '').toLowerCase()
-    let name = q.name, ttlRaw = q.ttl, url = q.url, buf = null
+    let name = q.name, ttlRaw = q.expired ?? q.ttl, url = q.url, buf = null
     try {
         if (ct.includes('multipart/form-data')) {
             if (parseInt(c.req.header('content-length') || '0', 10) > max + 65536) return fail(413, `File terlalu besar (maks ${max / 1048576} MB).`)
             const f = await c.req.formData(), file = f.get('file')
             if (!file || typeof file === 'string') return fail(400, 'Field "file" wajib berisi file.')
-            name = String(f.get('name') || file.name || name || ''); ttlRaw = f.get('ttl') ?? ttlRaw; url = null
+            name = String(f.get('name') || file.name || name || ''); ttlRaw = f.get('expired') ?? f.get('ttl') ?? ttlRaw; url = null
             buf = await file.arrayBuffer()
         } else if (ct.includes('application/json')) {
             const b = await c.req.json().catch(() => ({}))
-            url = b.url ?? url; name = b.name ?? name; ttlRaw = b.ttl ?? ttlRaw
+            url = b.url ?? url; name = b.name ?? name; ttlRaw = b.expired ?? b.ttl ?? ttlRaw
         } else if (!url) {
             if (parseInt(c.req.header('content-length') || '0', 10) > max) return fail(413, `File terlalu besar (maks ${max / 1048576} MB).`)
             buf = await c.req.arrayBuffer()
@@ -85,7 +90,7 @@ export const uploadHandler = async (c) => {
     } catch { return fail(400, 'Body permintaan tidak bisa dibaca.') }
 
     const ttl = ttlRaw == null || ttlRaw === '' ? DEFAULT_TTL : ttlOf(ttlRaw)
-    if (ttl < 0) return fail(400, 'ttl harus antara 1 menit dan 365 hari (contoh: 30m, 12h, 7d, 1y), atau 0 untuk permanen.')
+    if (ttl < 0) return fail(400, 'expired harus antara 1 menit dan 365 hari (contoh: 30m, 12h, 7d, 1y), atau 0 untuk permanen.')
     if (!buf) {
         if (!url) return fail(400, 'Kirim file (multipart field "file", atau body mentah dengan ?name=) atau JSON {"url": "..."}.')
         const r = await fetchRemote(url, max)
