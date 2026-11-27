@@ -70,6 +70,7 @@ const WA_PATH = 'M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.
 const IG_SHAPES = '<rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.6" cy="6.4" r="1.3" fill="currentColor"/>'
 
 const NI = {
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
   bag: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>', list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   play: '<circle cx="12" cy="12" r="10"/><path d="m10 8 6 4-6 4z"/>', help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
   login: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>', chev: '<path d="m9 6 6 6-6 6"/>',
@@ -96,9 +97,9 @@ const ni = (n) => `<svg viewBox="0 0 24 24" aria-hidden="true">${NI[n]}</svg>`
 const DR_GROUPS = [   /* [judul grup, ikon, [[href, label, ikon], ...]] */
   ['Utama', 'compass', [['/', 'Beranda', 'home'], ['/dashboard.html', 'Dashboard', 'grid'], ['/#paket', 'Paket', 'bag'], ['/#cara', 'Cara kerja', 'list'], ['/#faq', 'FAQ', 'help']]],
   ['Developer', 'code', [['/playground.html', 'Playground', 'play']]],
-  ['Tools', 'tool', [['/am', 'Aktivasi AM', 'bolt'], ['/netflix', 'Netflix Token Generator', 'key'], ['/smm', 'Layanan SMM', 'trend'], ['/otp', 'Layanan OTP', 'msg'], ['/pterodactyl', 'Panel Pterodactyl', 'server']]],
+  ['Tools', 'tool', [['/am', 'Aktivasi AM', 'bolt'], ['/uploader', 'Uploader', 'upload'], ['/netflix', 'Netflix Token Generator', 'key'], ['/smm', 'Layanan SMM', 'trend'], ['/otp', 'Layanan OTP', 'msg'], ['/pterodactyl', 'Panel Pterodactyl', 'server']]],
 ]
-const LINKS = [['/dashboard.html', 'Dashboard', 'grid'], ['/#paket', 'Paket', 'bag'], ['/#cara', 'Cara kerja', 'list'], ['/playground.html', 'Playground', 'play'], ['/am', 'Aktivasi AM', 'bolt'], ['/netflix', 'Netflix Token', 'key'], ['/smm', 'Layanan SMM', 'trend'], ['/otp', 'Layanan OTP', 'msg'], ['/#faq', 'FAQ', 'help']]
+const LINKS = [['/dashboard.html', 'Dashboard', 'grid'], ['/#paket', 'Paket', 'bag'], ['/#cara', 'Cara kerja', 'list'], ['/playground.html', 'Playground', 'play'], ['/am', 'Aktivasi AM', 'bolt'], ['/uploader', 'Uploader', 'upload'], ['/netflix', 'Netflix Token', 'key'], ['/smm', 'Layanan SMM', 'trend'], ['/otp', 'Layanan OTP', 'msg'], ['/#faq', 'FAQ', 'help']]
 
 /* header & footer dipakai semua halaman */
 document.body.insertAdjacentHTML('afterbegin', `<header class="nav"><div class="wrap nav-in">
