@@ -15,6 +15,7 @@ import { billing, paymentWebhook, btzCallback } from './api/billing.js'
 import { auth } from './api/auth.js'
 import { admin } from './api/admin.js'
 import { tools } from './api/tools.js'
+import { serveFile } from './api/uploader.js'
 import { prettyPrint } from './utils/pretty.js'
 import { dynamicHandler, mergeSpec } from './api/dynamic.js'
 import { BUILTIN_PATHS, builtinInfo } from './api/index.js'
@@ -28,6 +29,17 @@ const INTERNAL_RE = /^\/api\/(catalog|dashboard|site-content|services|ui|pv)\/?$
 
 const createApp = () => {
     const app = new OpenAPIHono()
+
+    /* File Uploader (KV): dijawab PALING AWAL, sebelum header CSP/shield, supaya PDF & media tampil normal.
+     * Dua jalur: host CDN_BASE (mis. cloud.arvo-api.my.id/<kode>.<ext>) dan /f/<kode>.<ext> di domain utama. */
+    app.use('*', async (c, next) => {
+        let cdnHost = ''; try { cdnHost = c.env.CDN_BASE ? new URL(c.env.CDN_BASE).host : '' } catch {}
+        const onCdn = !!cdnHost && new URL(c.req.url).host === cdnHost
+        const m = (onCdn ? /^\/([A-Za-z0-9]{4,16}\.[a-z0-9]{1,5})$/ : /^\/f\/([A-Za-z0-9]{4,16}\.[a-z0-9]{1,5})$/).exec(c.req.path)
+        if (m && c.req.method === 'GET') return serveFile(c, m[1])
+        if (onCdn) return new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } })
+        await next()
+    })
 
     /* COOP default Hono = same-origin; itu memutus komunikasi popup Google Sign-In. allow-popups tetap aman. */
     app.use('*', secureHeaders({
@@ -215,6 +227,7 @@ export default {
     },
     /* Cron (wrangler.toml > triggers): suspend server yang habis masa aktif, hapus setelah masa tenggang, ulangi pembuatan yang gagal. */
     async scheduled(event, env, ctx) {
+        ctx.waitUntil(env.STORE.get(env.STORE.idFromName('main')).purgeUploads(Date.now()).catch((e) => console.error('[uploads] purge gagal', e)))   /* bersihkan metadata upload yang sudah kedaluwarsa (file di KV terhapus otomatis) */
         ctx.waitUntil(pteroSweep(env).then((r) => console.log('[ptero] sweep', JSON.stringify(r))).catch((e) => console.error('[ptero] sweep gagal', e)))
     },
 }
