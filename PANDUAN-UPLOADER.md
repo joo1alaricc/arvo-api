@@ -17,11 +17,11 @@ Respons sukses:
 ttl: detik atau 30m, 12h, 7d, 2w, 1y; 0 = permanen; tanpa ttl = 30 hari.
 
 # 1) Kirim file (multipart)
-curl -X POST "https://arvo-api.my.id/api/upload" -H "x-api-key: KEY_KAMU" -F "file=@foto.jpg" -F "ttl=7d"
+curl -X POST "https://arvo-api.my.id/api/upload" -H "x-api-key: KEY_KAMU" -F "file=@foto.jpg" -F "expired=7d"
 # 2) Body mentah
-curl -X POST "https://arvo-api.my.id/api/upload?name=foto.jpg&ttl=0" -H "x-api-key: KEY_KAMU" --data-binary @foto.jpg
+curl -X POST "https://arvo-api.my.id/api/upload?name=foto.jpg&expired=0" -H "x-api-key: KEY_KAMU" --data-binary @foto.jpg
 # 3) Unggah ulang dari URL
-curl -X POST "https://arvo-api.my.id/api/upload" -H "x-api-key: KEY_KAMU" -H "Content-Type: application/json" -d '{"url":"https://example.com/a.jpg","ttl":"30d"}'
+curl -X POST "https://arvo-api.my.id/api/upload" -H "x-api-key: KEY_KAMU" -H "Content-Type: application/json" -d '{"url":"https://example.com/a.jpg","expired":"30d"}'
 
 ## Catatan Sinkronisasi Endpoint
 - File endpoint WAJIB ada di `src/api/<kategori>/<slug>.js` supaya terdeteksi. Endpoint upload sekarang di `src/api/tools/upload.js`
