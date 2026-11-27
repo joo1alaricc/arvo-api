@@ -22,3 +22,9 @@ curl -X POST "https://arvo-api.my.id/api/upload" -H "x-api-key: KEY_KAMU" -F "fi
 curl -X POST "https://arvo-api.my.id/api/upload?name=foto.jpg&ttl=0" -H "x-api-key: KEY_KAMU" --data-binary @foto.jpg
 # 3) Unggah ulang dari URL
 curl -X POST "https://arvo-api.my.id/api/upload" -H "x-api-key: KEY_KAMU" -H "Content-Type: application/json" -d '{"url":"https://example.com/a.jpg","ttl":"30d"}'
+
+## Catatan Sinkronisasi Endpoint
+- File endpoint WAJIB ada di `src/api/<kategori>/<slug>.js` supaya terdeteksi. Endpoint upload sekarang di `src/api/tools/upload.js`
+  (sebelumnya `src/api/upload.js`, di luar folder kategori, jadi Sinkronisasi tidak pernah melihatnya).
+- Alamat publiknya tetap `POST /api/upload` (bukan /api/tools/upload, karena itu dipakai halaman Uploader yang login lewat sesi).
+- Sinkronisasi hanya mengubah `src/api/index.js` di GitHub. Endpoint baru aktif setelah deploy selesai.
