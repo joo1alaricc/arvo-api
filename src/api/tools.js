@@ -3,6 +3,7 @@ import { store, requireUser } from '../utils/session.js'
 import { services } from '../utils/services.js'
 import { loadCfg, btzCreate, btzCancel, btzQr, httpsOnly, settleBtzDeposit } from '../utils/btzpay.js'
 import { ptero } from './pterodactyl.js'
+import { uploader } from './uploader.js'
 
 /* Tools: fitur tambahan khusus member berbayar. Saat ini: Aktivasi AM (/api/tools/am/*).
  * Kunci layanan (CUPZ_API_KEY) hanya ada di server (wrangler secret), tidak pernah dikirim ke browser. */
@@ -591,3 +592,8 @@ tools.post('/netflix-token/generate', async (c) => {
         },
     })
 })
+
+/* Uploader: Premium 1 ke atas (atau admin). Berkas disimpan di R2, lihat uploader.js. */
+tools.use('/upload', adminOrPlan(1))
+tools.use('/upload/*', adminOrPlan(1))
+tools.route('/upload', uploader)
