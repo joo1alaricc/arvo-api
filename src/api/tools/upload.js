@@ -1,7 +1,7 @@
 // @arvo-endpoint {"category":"tools","slug":"upload","name":"Upload File","mode":"full"}
 import { createRoute, z } from '@hono/zod-openapi'
-import { upstreamFetch } from '../utils/upstream.js'
-import { store } from '../utils/session.js'
+import { upstreamFetch } from '../../utils/upstream.js'
+import { store } from '../../utils/session.js'
 import { saveFile, ttlOf, limitsOf, mimeExt } from '../uploader.js'
 
 const AUTHOR = 'Arvo - Endpoint'
