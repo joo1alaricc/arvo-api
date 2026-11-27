@@ -34,7 +34,7 @@ const METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIO
 
 /* Rute yang memakai cookie sesi / data akun: tanpa CORS terbuka dan wajib same-origin untuk method yang mengubah data. */
 export const UPLOAD_MAX = 25 * 1024 * 1024
-export const UPLOAD_RE = /^\/api\/tools\/ptero\/s\/\d{1,9}\/upload$/
+export const UPLOAD_RE = /^\/api\/tools\/(ptero\/s\/\d{1,9}\/upload|upload)$/
 export const PRIVATE_RE = /^\/api\/(auth|admin|billing|tools)(\/|$)/
 /* Dipanggil server lain (Google, payment gateway): bukan dari browser kita, jangan diblokir cek Origin / limit. */
 const MACHINE_RE = /^(\/callback|\/webhook|\/api\/billing\/webhook|\/api\/billing\/btzpay\/callback|\/api\/auth\/google\/callback)\/?$/
